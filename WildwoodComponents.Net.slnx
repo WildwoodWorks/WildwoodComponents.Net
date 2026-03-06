@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="WildwoodComponents.Blazor/WildwoodComponents.Blazor.csproj" />
+  <Project Path="WildwoodComponents.Razor/WildwoodComponents.Razor.csproj" />
+  <Project Path="WildwoodComponents.Shared/WildwoodComponents.Shared.csproj" />
+  <Project Path="WildwoodComponentsTestSuiteBlazor/WildwoodComponentsTestSuiteBlazor.csproj" />
+</Solution>
