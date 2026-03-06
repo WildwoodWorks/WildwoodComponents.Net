@@ -1,0 +1,153 @@
+@page "/test/token-registration"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Registration
+@using WildwoodComponents.Blazor.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="Token Registration" ComponentName="TokenRegistrationComponent" IconClass="fas fa-key"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">App ID</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Token (pre-fill)</label>
+            <input class="form-control form-control-sm" @bind="token" placeholder="Optional registration token" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Default Pricing Model ID</label>
+            <input class="form-control form-control-sm" @bind="defaultPricingModelId" placeholder="Optional" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Redirect URL</label>
+            <input class="form-control form-control-sm" @bind="redirectUrl" placeholder="Optional post-login redirect" />
+        </div>
+        <hr class="my-2" />
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="allowTokenReg" @bind="allowTokenRegistration" />
+            <label class="form-check-label" for="allowTokenReg">Allow Token Registration</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="allowOpenReg" @bind="allowOpenRegistration" />
+            <label class="form-check-label" for="allowOpenReg">Allow Open Registration</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="requireToken" @bind="requireToken" />
+            <label class="form-check-label" for="requireToken">Require Token</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="autoLogin" @bind="autoLogin" />
+            <label class="form-check-label" for="autoLogin">Auto Login After Registration</label>
+        </div>
+    </Settings>
+    <Component>
+        <div style="max-width: 600px; margin: 0 auto;">
+            <TokenRegistrationComponent AppId="@appId"
+                                        Token="@token"
+                                        AllowTokenRegistration="@allowTokenRegistration"
+                                        AllowOpenRegistration="@allowOpenRegistration"
+                                        RequireToken="@requireToken"
+                                        DefaultPricingModelId="@defaultPricingModelId"
+                                        AutoLogin="@autoLogin"
+                                        RedirectUrl="@redirectUrl"
+                                        OnRegistrationSuccess="HandleRegistrationSuccess"
+                                        OnAutoLoginSuccess="HandleAutoLoginSuccess"
+                                        OnError="HandleError"
+                                        OnCancel="HandleCancel" />
+        </div>
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string appId = "";
+    private string? token;
+    private bool allowTokenRegistration = true;
+    private bool allowOpenRegistration = false;
+    private bool requireToken = true;
+    private string? defaultPricingModelId;
+    private bool autoLogin = true;
+    private string? redirectUrl;
+
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        LifecycleTracker.TrackInitialized("TokenRegistrationComponent");
+        AddEvent("TokenRegistrationComponent initialized");
+        await Task.CompletedTask;
+    }
+
+    private void ApplySettings()
+    {
+        AddEvent($"Settings applied - AppId: {appId}, TokenReg: {allowTokenRegistration}, OpenReg: {allowOpenRegistration}, AutoLogin: {autoLogin}");
+        StateHasChanged();
+    }
+
+    private void ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        token = null;
+        allowTokenRegistration = true;
+        allowOpenRegistration = false;
+        requireToken = true;
+        defaultPricingModelId = null;
+        autoLogin = true;
+        redirectUrl = null;
+        AddEvent("Settings reset to defaults");
+        StateHasChanged();
+    }
+
+    private void HandleRegistrationSuccess(TokenRegistrationComponent.RegistrationSuccessEventArgs args)
+    {
+        LifecycleTracker.TrackCallback("TokenRegistrationComponent", "OnRegistrationSuccess",
+            $"UserId: {args.UserId}, Email: {args.Email}");
+        AddEvent($"Registration SUCCESS - UserId: {args.UserId}, Email: {args.Email}, Payment: {args.RequiresPaymentSetup}");
+    }
+
+    private async Task HandleAutoLoginSuccess(AuthenticationResponse response)
+    {
+        LifecycleTracker.TrackCallback("TokenRegistrationComponent", "OnAutoLoginSuccess",
+            $"User: {response.FirstName} {response.LastName}");
+        AddEvent($"Auto-login SUCCESS - User: {response.FirstName} {response.LastName}, Email: {response.Email}");
+
+        if (!string.IsNullOrEmpty(response.JwtToken))
+        {
+            await StateStorage.SetAuthTokenAsync(response.JwtToken);
+            AddEvent("JWT token stored in circuit state");
+        }
+    }
+
+    private void HandleError(string error)
+    {
+        LifecycleTracker.TrackCallback("TokenRegistrationComponent", "OnError", error);
+        AddEvent($"ERROR - {error}");
+    }
+
+    private void HandleCancel()
+    {
+        LifecycleTracker.TrackCallback("TokenRegistrationComponent", "OnCancel");
+        AddEvent("Registration cancelled by user");
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
