@@ -1,0 +1,186 @@
+@page "/test/messaging"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Messaging
+@using WildwoodComponents.Blazor.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="SecureMessagingComponent Test" ComponentName="SecureMessagingComponent" IconClass="fas fa-comments"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">CompanyAppId</label>
+            <input class="form-control form-control-sm" @bind="companyAppId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">CurrentUserId</label>
+            <input class="form-control form-control-sm" @bind="currentUserId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">API Base URL</label>
+            <input class="form-control form-control-sm" @bind="apiBaseUrl" />
+        </div>
+        <hr class="my-2" />
+        <h6 class="small fw-bold">Feature Toggles</h6>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="enableEncryption" id="chkEncryption" />
+            <label class="form-check-label small" for="chkEncryption">Enable Encryption</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="enableFileUploads" id="chkFiles" />
+            <label class="form-check-label small" for="chkFiles">Enable File Uploads</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="enableReactions" id="chkReactions" />
+            <label class="form-check-label small" for="chkReactions">Enable Reactions</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="enableTypingIndicators" id="chkTyping" />
+            <label class="form-check-label small" for="chkTyping">Enable Typing Indicators</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="enableReadReceipts" id="chkRead" />
+            <label class="form-check-label small" for="chkRead">Enable Read Receipts</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="enableNotifications" id="chkNotif" />
+            <label class="form-check-label small" for="chkNotif">Enable Notifications</label>
+        </div>
+        <div class="mb-2 mt-2">
+            <label class="form-label">Max Message Length</label>
+            <input class="form-control form-control-sm" type="number" @bind="maxMessageLength" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Messages Per Page</label>
+            <input class="form-control form-control-sm" type="number" @bind="messagesPerPage" />
+        </div>
+    </Settings>
+    <Component>
+        <div style="height: 500px;">
+            <SecureMessagingComponent CompanyAppId="@companyAppId"
+                                     CurrentUserId="@currentUserId"
+                                     Settings="@GetMessagingSettings()"
+                                     OnMessageSent="HandleMessageSent"
+                                     OnMessageReceived="HandleMessageReceived"
+                                     OnThreadCreated="HandleThreadCreated"
+                                     OnThreadSelected="HandleThreadSelected"
+                                     OnError="HandleError" />
+        </div>
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string companyAppId = "";
+    private string currentUserId = "";
+    private string apiBaseUrl = "";
+    private bool enableEncryption = true;
+    private bool enableFileUploads = true;
+    private bool enableReactions = true;
+    private bool enableTypingIndicators = true;
+    private bool enableReadReceipts = true;
+    private bool enableNotifications = true;
+    private int maxMessageLength = 2000;
+    private int messagesPerPage = 50;
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        companyAppId = Configuration["WildwoodAPI:AppId"] ?? "";
+        apiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "";
+        var token = await StateStorage.GetItemAsync("wildwood_auth_token") ?? "";
+        LifecycleTracker.TrackInitialized("SecureMessagingComponent");
+    }
+
+    private SecureMessagingSettings GetMessagingSettings()
+    {
+        return new SecureMessagingSettings
+        {
+            ApiBaseUrl = apiBaseUrl,
+            CompanyAppId = companyAppId,
+            EnableEncryption = enableEncryption,
+            EnableFileUploads = enableFileUploads,
+            EnableReactions = enableReactions,
+            EnableTypingIndicators = enableTypingIndicators,
+            EnableReadReceipts = enableReadReceipts,
+            EnableNotifications = enableNotifications,
+            MaxMessageLength = maxMessageLength,
+            MessagesPerPage = messagesPerPage,
+            AutoScrollToBottom = true
+        };
+    }
+
+    private void HandleMessageSent(SecureMessage message)
+    {
+        var preview = message.Content.Length > 50 ? message.Content.Substring(0, 50) + "..." : message.Content;
+        var msg = $"Message sent: {preview}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("SecureMessagingComponent", "OnMessageSent", msg);
+        StateHasChanged();
+    }
+
+    private void HandleMessageReceived(SecureMessage message)
+    {
+        var preview = message.Content.Length > 50 ? message.Content.Substring(0, 50) + "..." : message.Content;
+        var msg = $"Message received from {message.SenderName}: {preview}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("SecureMessagingComponent", "OnMessageReceived", msg);
+        StateHasChanged();
+    }
+
+    private void HandleThreadCreated(MessageThread thread)
+    {
+        var msg = $"Thread created: {thread.Subject} ({thread.Participants.Count} participants)";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("SecureMessagingComponent", "OnThreadCreated", msg);
+        StateHasChanged();
+    }
+
+    private void HandleThreadSelected(MessageThread thread)
+    {
+        var msg = $"Thread selected: {thread.Subject}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("SecureMessagingComponent", "OnThreadSelected", msg);
+        StateHasChanged();
+    }
+
+    private void HandleError(ComponentErrorEventArgs args)
+    {
+        var msg = $"Error: {args.Exception.Message}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackError("SecureMessagingComponent", args.Exception.Message);
+        StateHasChanged();
+    }
+
+    private void ApplySettings() { StateHasChanged(); }
+
+    private void ResetSettings()
+    {
+        companyAppId = Configuration["WildwoodAPI:AppId"] ?? "";
+        apiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "";
+        currentUserId = "";
+        enableEncryption = true;
+        enableFileUploads = true;
+        enableReactions = true;
+        enableTypingIndicators = true;
+        enableReadReceipts = true;
+        enableNotifications = true;
+        maxMessageLength = 2000;
+        messagesPerPage = 50;
+        events.Clear();
+        StateHasChanged();
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
