@@ -1,0 +1,199 @@
+@page "/test/ai-chat"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.AI
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@inject IAIService AIService
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="AI Chat" ComponentName="AIChatComponent" IconClass="fas fa-robot"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">Configuration ID</label>
+            <input class="form-control form-control-sm" @bind="configurationId" placeholder="Auto-selects first available" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Auth Token</label>
+            <input type="password" class="form-control form-control-sm" @bind="authToken" />
+        </div>
+        <hr class="my-2" />
+        <h6 class="small fw-bold">AIChatSettings</h6>
+        <div class="mb-2">
+            <label class="form-label">API Base URL</label>
+            <input class="form-control form-control-sm" @bind="settings.ApiBaseUrl" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Placeholder Text</label>
+            <input class="form-control form-control-sm" @bind="settings.PlaceholderText" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Welcome Message</label>
+            <input class="form-control form-control-sm" @bind="settings.WelcomeMessage" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Max Message Length</label>
+            <input type="number" class="form-control form-control-sm" @bind="settings.MaxMessageLength" />
+        </div>
+        <hr class="my-2" />
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="enableSessions" @bind="settings.EnableSessions" />
+            <label class="form-check-label" for="enableSessions">Enable Sessions</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="autoLoadRecent" @bind="settings.AutoLoadRecentSession" />
+            <label class="form-check-label" for="autoLoadRecent">Auto Load Recent Session</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="showTokenUsage" @bind="settings.ShowTokenUsage" />
+            <label class="form-check-label" for="showTokenUsage">Show Token Usage</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="autoScroll" @bind="settings.AutoScroll" />
+            <label class="form-check-label" for="autoScroll">Auto Scroll</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="showDebugInfo" @bind="settings.ShowDebugInfo" />
+            <label class="form-check-label" for="showDebugInfo">Show Debug Info</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="showConfigSelector" @bind="settings.ShowConfigurationSelector" />
+            <label class="form-check-label" for="showConfigSelector">Show Config Selector</label>
+        </div>
+        <hr class="my-2" />
+        <h6 class="small fw-bold">Speech Features</h6>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="enableSTT" @bind="settings.EnableSpeechToText" />
+            <label class="form-check-label" for="enableSTT">Enable Speech-to-Text</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="enableTTS" @bind="settings.EnableTextToSpeech" />
+            <label class="form-check-label" for="enableTTS">Enable Text-to-Speech</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="useServerTTS" @bind="settings.UseServerTTS" />
+            <label class="form-check-label" for="useServerTTS">Use Server TTS</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="enableFileUpload" @bind="settings.EnableFileUpload" />
+            <label class="form-check-label" for="enableFileUpload">Enable File Upload</label>
+        </div>
+    </Settings>
+    <Component>
+        <div style="height: 600px;">
+            <AIChatComponent ConfigurationId="@configurationId"
+                             AuthToken="@authToken"
+                             Settings="@settings"
+                             OnMessageSent="HandleMessageSent"
+                             OnMessageReceived="HandleMessageReceived"
+                             OnSessionCreated="HandleSessionCreated"
+                             OnSessionEnded="HandleSessionEnded"
+                             OnAuthenticationFailed="HandleAuthenticationFailed" />
+        </div>
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string configurationId = "";
+    private string authToken = "";
+    private AIChatSettings settings = new();
+
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        authToken = await StateStorage.GetItemAsync("wildwood_auth_token") ?? "";
+        settings.ApiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "https://localhost:7046/api";
+
+        // Apply auth token to AI service
+        if (!string.IsNullOrEmpty(authToken))
+        {
+            AIService.SetAuthToken(authToken);
+        }
+        if (!string.IsNullOrEmpty(settings.ApiBaseUrl))
+        {
+            AIService.SetApiBaseUrl(settings.ApiBaseUrl);
+        }
+
+        LifecycleTracker.TrackInitialized("AIChatComponent");
+        AddEvent("AIChatComponent initialized");
+    }
+
+    private void ApplySettings()
+    {
+        if (!string.IsNullOrEmpty(authToken))
+        {
+            AIService.SetAuthToken(authToken);
+        }
+        if (!string.IsNullOrEmpty(settings.ApiBaseUrl))
+        {
+            AIService.SetApiBaseUrl(settings.ApiBaseUrl);
+        }
+        AddEvent($"Settings applied - ConfigId: {configurationId}, API: {settings.ApiBaseUrl}, Sessions: {settings.EnableSessions}");
+        StateHasChanged();
+    }
+
+    private void ResetSettings()
+    {
+        configurationId = "";
+        authToken = "";
+        settings = new AIChatSettings
+        {
+            ApiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "https://localhost:7046/api"
+        };
+        AddEvent("Settings reset to defaults");
+        StateHasChanged();
+    }
+
+    private void HandleMessageSent(AIMessage message)
+    {
+        LifecycleTracker.TrackCallback("AIChatComponent", "OnMessageSent", $"Role: {message.Role}");
+        var preview = message.Content.Length > 60 ? message.Content[..60] + "..." : message.Content;
+        AddEvent($"Message SENT - [{message.Role}] {preview}");
+    }
+
+    private void HandleMessageReceived(AIMessage message)
+    {
+        LifecycleTracker.TrackCallback("AIChatComponent", "OnMessageReceived", $"Tokens: {message.TokenCount}");
+        var preview = message.Content.Length > 60 ? message.Content[..60] + "..." : message.Content;
+        AddEvent($"Message RECEIVED - [{message.Role}] Tokens: {message.TokenCount} - {preview}");
+    }
+
+    private void HandleSessionCreated(AISession session)
+    {
+        LifecycleTracker.TrackCallback("AIChatComponent", "OnSessionCreated", $"Id: {session.Id}");
+        AddEvent($"Session CREATED - Id: {session.Id}, Name: {session.Name}");
+    }
+
+    private void HandleSessionEnded(AISession session)
+    {
+        LifecycleTracker.TrackCallback("AIChatComponent", "OnSessionEnded", $"Id: {session.Id}");
+        AddEvent($"Session ENDED - Id: {session.Id}, Name: {session.Name}");
+    }
+
+    private void HandleAuthenticationFailed()
+    {
+        LifecycleTracker.TrackCallback("AIChatComponent", "OnAuthenticationFailed");
+        AddEvent("Authentication FAILED - token may be expired or invalid");
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
