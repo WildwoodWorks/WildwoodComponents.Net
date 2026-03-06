@@ -1,0 +1,126 @@
+@page "/test/ai-chat-demo"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.AI
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@inject IAIService AIService
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="AI Chat Demo" ComponentName="AIChatDemo" IconClass="fas fa-robot"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">API Base URL</label>
+            <input class="form-control form-control-sm" @bind="apiBaseUrl" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Configuration ID</label>
+            <input class="form-control form-control-sm" @bind="configurationId" placeholder="Auto-selects first available" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Auth Token</label>
+            <input type="password" class="form-control form-control-sm" @bind="authToken" />
+        </div>
+        <hr class="my-2" />
+        <h6 class="small fw-bold">Feature Toggles</h6>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="demoEnableSessions" @bind="enableSessions" />
+            <label class="form-check-label" for="demoEnableSessions">Enable Sessions</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="demoShowTokens" @bind="showTokenUsage" />
+            <label class="form-check-label" for="demoShowTokens">Show Token Usage</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="demoAutoScroll" @bind="autoScroll" />
+            <label class="form-check-label" for="demoAutoScroll">Auto Scroll</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="demoDebugInfo" @bind="showDebugInfo" />
+            <label class="form-check-label" for="demoDebugInfo">Show Debug Info</label>
+        </div>
+    </Settings>
+    <Component>
+        @* AIChatDemo is a self-contained demo page that includes its own
+           configuration panel, theme customization, event log, and the embedded
+           AIChatComponent. We render it here to test the full demo flow. *@
+        <AIChatDemo />
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string apiBaseUrl = "";
+    private string configurationId = "";
+    private string authToken = "";
+    private bool enableSessions = true;
+    private bool showTokenUsage = true;
+    private bool autoScroll = true;
+    private bool showDebugInfo = false;
+
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        apiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "https://localhost:7046/api";
+        authToken = await StateStorage.GetItemAsync("wildwood_auth_token") ?? "";
+
+        if (!string.IsNullOrEmpty(authToken))
+        {
+            AIService.SetAuthToken(authToken);
+        }
+        if (!string.IsNullOrEmpty(apiBaseUrl))
+        {
+            AIService.SetApiBaseUrl(apiBaseUrl);
+        }
+
+        LifecycleTracker.TrackInitialized("AIChatDemo");
+        AddEvent("AIChatDemo initialized");
+    }
+
+    private void ApplySettings()
+    {
+        if (!string.IsNullOrEmpty(authToken))
+        {
+            AIService.SetAuthToken(authToken);
+        }
+        if (!string.IsNullOrEmpty(apiBaseUrl))
+        {
+            AIService.SetApiBaseUrl(apiBaseUrl);
+        }
+        AddEvent($"Settings applied - API: {apiBaseUrl}, ConfigId: {configurationId}, Sessions: {enableSessions}");
+        StateHasChanged();
+    }
+
+    private void ResetSettings()
+    {
+        apiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "https://localhost:7046/api";
+        configurationId = "";
+        authToken = "";
+        enableSessions = true;
+        showTokenUsage = true;
+        autoScroll = true;
+        showDebugInfo = false;
+        AddEvent("Settings reset to defaults");
+        StateHasChanged();
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
