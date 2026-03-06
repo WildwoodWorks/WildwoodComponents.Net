@@ -1,0 +1,385 @@
+@page "/auth-demo"
+@using WildwoodComponents.Blazor.Components.Authentication
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inject IAuthenticationService AuthService
+@inject ILocalStorageService LocalStorage
+
+<div class="container-fluid p-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">Authentication Component Demo</h1>
+
+            <!-- Configuration Panel -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Authentication Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="authApiUrl" class="form-label">API Base URL</label>
+                                <input @bind="apiBaseUrl" id="authApiUrl" class="form-control" placeholder="https://localhost:7001/api" />
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="appId" class="form-label">Application ID</label>
+                                <input @bind="appId" id="appId" class="form-control" placeholder="Your application ID" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label class="form-label">Authentication Features</label>
+                                <div class="form-check">
+                                    <input @bind="showSocialProviders" class="form-check-input" type="checkbox" id="showSocial">
+                                    <label class="form-check-label" for="showSocial">Show Social Providers</label>
+                                </div>
+                                <div class="form-check">
+                                    <input @bind="showLicenseToken" class="form-check-input" type="checkbox" id="showLicense">
+                                    <label class="form-check-label" for="showLicense">Show License Token Field</label>
+                                </div>
+                                <div class="form-check">
+                                    <input @bind="enableCaptcha" class="form-check-input" type="checkbox" id="enableCaptcha">
+                                    <label class="form-check-label" for="enableCaptcha">Enable CAPTCHA</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <button @onclick="ApplyConfiguration" class="btn btn-primary">Apply Configuration</button>
+                            <button @onclick="LoadSampleConfig" class="btn btn-secondary ms-2">Load Sample Config</button>
+                            @if (!string.IsNullOrEmpty(configStatus))
+                            {
+                                <div class="alert alert-info mt-3" role="alert">
+                                    @configStatus
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current User Status -->
+            @if (currentUser != null)
+            {
+                <div class="card mb-4">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">✅ Authenticated User</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Name:</strong> @currentUser.FirstName @currentUser.LastName</p>
+                                <p><strong>Email:</strong> @currentUser.Email</p>
+                                <p><strong>User ID:</strong> @currentUser.UserId</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Company:</strong> @(currentUser.CompanyId ?? "None")</p>
+                                <p><strong>Roles:</strong> @(currentUser.Roles.Any() ? string.Join(", ", currentUser.Roles) : "None")</p>
+                                <p><strong>2FA Required:</strong> @(currentUser.RequiresTwoFactor ? "Yes" : "No")</p>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12">
+                                <button @onclick="Logout" class="btn btn-outline-danger">Logout</button>
+                                <button @onclick="RefreshToken" class="btn btn-outline-primary ms-2">Refresh Token</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Authentication Component -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Authentication Component</h5>
+                </div>
+                <div class="card-body">
+                    <div style="max-width: 500px; margin: 0 auto;">
+                        <AuthenticationComponent 
+                            AppId="@appId"
+                            ShowSocialProviders="@showSocialProviders"
+                            ShowLicenseToken="@showLicenseToken"
+                            OnAuthenticationSuccess="@OnAuthenticated"
+                            OnAuthenticationError="@OnAuthError" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Event Log -->
+            @if (authEventLog.Any())
+            {
+                <div class="card mt-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Authentication Event Log</h5>
+                        <button @onclick="ClearAuthEventLog" class="btn btn-sm btn-outline-secondary">Clear</button>
+                    </div>
+                    <div class="card-body">
+                        <div style="max-height: 300px; overflow-y: auto;">
+                            @foreach (var logEntry in authEventLog.OrderByDescending(e => e.Timestamp))
+                            {
+                                <div class="border-bottom pb-2 mb-2">
+                                    <strong>@logEntry.Timestamp.ToString("HH:mm:ss")</strong> - 
+                                    <span class="badge bg-@GetLogLevelClass(logEntry.Level)">@logEntry.Level</span>
+                                    <div class="mt-1">@logEntry.Message</div>
+                                    @if (!string.IsNullOrEmpty(logEntry.Details))
+                                    {
+                                        <small class="text-muted">@logEntry.Details</small>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Available Social Providers -->
+            @if (availableProviders.Any())
+            {
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Available Social Providers</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            @foreach (var provider in availableProviders)
+                            {
+                                <div class="col-md-3 mb-3">
+                                    <div class="card">
+                                        <div class="card-body text-center">
+                                            <div class="mb-2">
+                                                @if (!string.IsNullOrEmpty(provider.Icon))
+                                                {
+                                                    <i class="@provider.Icon fa-2x"></i>
+                                                }
+                                                else
+                                                {
+                                                    <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                        @provider.Name.Substring(0, 1).ToUpper()
+                                                    </div>
+                                                }
+                                            </div>
+                                            <h6 class="card-title">@provider.DisplayName</h6>
+                                            <small class="text-muted">@(provider.IsEnabled ? "Enabled" : "Disabled")</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private string apiBaseUrl = "https://localhost:7046/api";
+    private string appId = "TrailForecast";
+    private bool showSocialProviders = true;
+    private bool showLicenseToken = false;
+    private bool enableCaptcha = false;
+    private string configStatus = string.Empty;
+
+    private AuthenticationResponse? currentUser = null;
+    private List<AuthProvider> availableProviders = new();
+    private List<AuthLogEntry> authEventLog = new();
+
+    protected override async Task OnInitializedAsync()
+    {        // Load saved settings
+        apiBaseUrl = await LocalStorage.GetItemAsync<string>("auth-demo-api-url") ?? apiBaseUrl;
+        appId = await LocalStorage.GetItemAsync<string>("auth-demo-app-id") ?? appId;
+        
+        var savedSocialProviders = await LocalStorage.GetItemAsync<bool?>("auth-demo-social");
+        showSocialProviders = savedSocialProviders ?? showSocialProviders;
+        
+        var savedLicenseToken = await LocalStorage.GetItemAsync<bool?>("auth-demo-license");
+        showLicenseToken = savedLicenseToken ?? showLicenseToken;
+
+        // Check if user is already authenticated
+        var savedUser = await LocalStorage.GetItemAsync<AuthenticationResponse>("current-user");
+        if (savedUser != null && !string.IsNullOrEmpty(savedUser.JwtToken))
+        {
+            currentUser = savedUser;
+            AddAuthLogEntry("info", "Restored previous authentication session");
+        }
+
+        // Subscribe to authentication events
+        AuthService.OnAuthenticationChanged += OnAuthenticationStateChanged;
+        AuthService.OnLogout += OnLogoutStateChanged;
+    }
+
+    private async Task ApplyConfiguration()
+    {
+        try
+        {
+            // Save settings
+            await LocalStorage.SetItemAsync("auth-demo-api-url", apiBaseUrl);
+            await LocalStorage.SetItemAsync("auth-demo-app-id", appId);
+            await LocalStorage.SetItemAsync("auth-demo-social", showSocialProviders);
+            await LocalStorage.SetItemAsync("auth-demo-license", showLicenseToken);
+
+            configStatus = "✅ Configuration applied successfully";
+            AddAuthLogEntry("info", $"Configuration applied - API: {apiBaseUrl}, App: {appId}");
+
+            // Load available providers
+            await LoadAvailableProviders();
+        }
+        catch (Exception ex)
+        {
+            configStatus = $"❌ Configuration failed: {ex.Message}";
+            AddAuthLogEntry("error", "Configuration failed", ex.Message);
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task LoadSampleConfig()
+    {
+        apiBaseUrl = "https://localhost:7046/api";
+        appId = "TrailForecast";
+        showSocialProviders = true;
+        showLicenseToken = false;
+        enableCaptcha = false;
+
+        configStatus = "Sample configuration loaded. Click 'Apply Configuration' to test.";
+        AddAuthLogEntry("info", "Sample configuration loaded");
+        StateHasChanged();
+    }
+
+    private async Task LoadAvailableProviders()
+    {
+        try
+        {
+            availableProviders = await AuthService.GetAvailableProvidersAsync();
+            AddAuthLogEntry("info", $"Loaded {availableProviders.Count} social providers");
+        }
+        catch (Exception ex)
+        {
+            AddAuthLogEntry("error", "Failed to load social providers", ex.Message);
+        }
+    }
+
+    private async Task OnAuthenticated(AuthenticationResponse response)
+    {
+        currentUser = response;
+        await LocalStorage.SetItemAsync("current-user", response);
+        
+        AddAuthLogEntry("success", 
+            $"User authenticated: {response.FirstName} {response.LastName}",
+            $"Email: {response.Email}, Company: {response.CompanyId ?? "None"}");
+        
+        StateHasChanged();
+    }
+
+    private void OnAuthError(string error)
+    {
+        AddAuthLogEntry("error", "Authentication error", error);
+    }
+
+    private async Task Logout()
+    {
+        try
+        {
+            await AuthService.LogoutAsync();
+            currentUser = null;
+            await LocalStorage.RemoveItemAsync("current-user");
+            AddAuthLogEntry("info", "User logged out");
+        }
+        catch (Exception ex)
+        {
+            AddAuthLogEntry("error", "Logout failed", ex.Message);
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task RefreshToken()
+    {
+        try
+        {
+            var success = await AuthService.RefreshTokenAsync();
+            if (success)
+            {
+                AddAuthLogEntry("success", "Token refreshed successfully");
+            }
+            else
+            {
+                AddAuthLogEntry("warning", "Token refresh failed - may need to login again");
+            }
+        }
+        catch (Exception ex)
+        {
+            AddAuthLogEntry("error", "Token refresh error", ex.Message);
+        }
+    }
+
+    private void OnAuthenticationStateChanged(AuthenticationResponse response)
+    {
+        InvokeAsync(async () =>
+        {
+            currentUser = response;
+            await LocalStorage.SetItemAsync("current-user", response);
+            StateHasChanged();
+        });
+    }
+
+    private void OnLogoutStateChanged()
+    {
+        InvokeAsync(async () =>
+        {
+            currentUser = null;
+            await LocalStorage.RemoveItemAsync("current-user");
+            StateHasChanged();
+        });
+    }
+
+    private void AddAuthLogEntry(string level, string message, string? details = null)
+    {
+        authEventLog.Add(new AuthLogEntry
+        {
+            Timestamp = DateTime.Now,
+            Level = level,
+            Message = message,
+            Details = details
+        });
+
+        // Keep only last 50 entries
+        if (authEventLog.Count > 50)
+        {
+            authEventLog.RemoveAt(0);
+        }
+
+        StateHasChanged();
+    }
+
+    private void ClearAuthEventLog()
+    {
+        authEventLog.Clear();
+        StateHasChanged();
+    }
+
+    private string GetLogLevelClass(string level) => level switch
+    {
+        "error" => "danger",
+        "warning" => "warning",
+        "success" => "success",
+        "info" => "primary",
+        _ => "secondary"
+    };
+
+    public void Dispose()
+    {
+        AuthService.OnAuthenticationChanged -= OnAuthenticationStateChanged;
+        AuthService.OnLogout -= OnLogoutStateChanged;
+    }
+
+    public class AuthLogEntry
+    {
+        public DateTime Timestamp { get; set; }
+        public string Level { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string? Details { get; set; }
+    }
+}
