@@ -1,0 +1,347 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inherits BaseWildwoodComponent
+@inject IPaymentService PaymentService
+
+<div class="@GetRootCssClasses() payment-component">
+    <div class="payment-form-container">
+        @if (!string.IsNullOrEmpty(ErrorMessage) && EnableErrorHandling)
+        {
+            <div class="alert alert-danger alert-dismissible">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                @ErrorMessage
+                <button type="button" class="btn-close" @onclick="ClearError"></button>
+            </div>
+        }
+
+        @if (IsLoading && ShowLoadingStates)
+        {
+            <div class="payment-loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Processing payment...</span>
+                </div>
+                <p class="mt-2">@(loadingMessage ?? "Processing your payment...")</p>
+            </div>
+        }
+        else if (paymentResult != null && paymentResult.IsSuccess)
+        {
+            <div class="payment-success">
+                <div class="success-icon">
+                    <i class="bi bi-check-circle-fill text-success"></i>
+                </div>
+                <h4>Payment Successful!</h4>
+                <p>Transaction ID: <strong>@paymentResult.TransactionId</strong></p>
+                <p>Amount: <strong>@FormatAmount(Amount, Currency)</strong></p>
+                @if (OnPaymentSuccess.HasDelegate)
+                {
+                    <button class="btn btn-primary" @onclick="() => OnPaymentSuccess.InvokeAsync(paymentResult)">
+                        Continue
+                    </button>
+                }
+            </div>
+        }
+        else
+        {
+            <EditForm Model="paymentRequest" OnValidSubmit="ProcessPaymentAsync">
+                <DataAnnotationsValidator />
+                
+                <div class="payment-header">
+                    <h4>Payment Details</h4>
+                    <div class="amount-display">
+                        <span class="amount">@FormatAmount(Amount, Currency)</span>
+                    </div>
+                </div>
+
+                <div class="payment-methods">
+                    <h5>Payment Method</h5>
+                    <div class="payment-method-selector">
+                        @foreach (var method in AvailablePaymentMethods)
+                        {
+                            <label class="payment-method-option">
+                                <input type="radio" name="paymentMethod" value="@method" 
+                                       @onchange="() => SelectPaymentMethod(method)" 
+                                       checked="@(SelectedPaymentMethod == method)" />
+                                <div class="method-content">
+                                    <i class="@GetPaymentMethodIcon(method)"></i>
+                                    <span>@GetPaymentMethodLabel(method)</span>
+                                </div>
+                            </label>
+                        }
+                    </div>
+                </div>
+
+                @if (SelectedPaymentMethod == PaymentMethod.CreditCard)
+                {
+                    <div class="credit-card-form">
+                        <div class="form-group mb-3">
+                            <label for="cardNumber" class="form-label">Card Number</label>
+                            <InputText @bind-Value="paymentRequest.CardNumber" 
+                                       id="cardNumber" 
+                                       class="form-control" 
+                                       placeholder="1234 5678 9012 3456"
+                                       maxlength="19" />
+                            <ValidationMessage For="() => paymentRequest.CardNumber" />
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="expiryDate" class="form-label">Expiry Date</label>
+                                    <InputText @bind-Value="paymentRequest.ExpiryDate" 
+                                               id="expiryDate" 
+                                               class="form-control" 
+                                               placeholder="MM/YY"
+                                               maxlength="5" />
+                                    <ValidationMessage For="() => paymentRequest.ExpiryDate" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="cvv" class="form-label">CVV</label>
+                                    <InputText @bind-Value="paymentRequest.CVV" 
+                                               id="cvv" 
+                                               class="form-control" 
+                                               placeholder="123"
+                                               maxlength="4" />
+                                    <ValidationMessage For="() => paymentRequest.CVV" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label for="cardholderName" class="form-label">Cardholder Name</label>
+                            <InputText @bind-Value="paymentRequest.CardholderName" 
+                                       id="cardholderName" 
+                                       class="form-control" 
+                                       placeholder="John Doe" />
+                            <ValidationMessage For="() => paymentRequest.CardholderName" />
+                        </div>
+                    </div>
+                }
+                else if (SelectedPaymentMethod == PaymentMethod.BankTransfer)
+                {
+                    <div class="bank-transfer-info">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Bank transfer instructions will be provided after confirmation.
+                        </div>
+                    </div>
+                }
+                else if (SelectedPaymentMethod == PaymentMethod.DigitalWallet)
+                {
+                    <div class="digital-wallet-options">
+                        <button type="button" class="btn btn-outline-primary wallet-btn">
+                            <i class="bi bi-paypal"></i> PayPal
+                        </button>
+                        <button type="button" class="btn btn-outline-primary wallet-btn">
+                            <i class="bi bi-apple"></i> Apple Pay
+                        </button>
+                        <button type="button" class="btn btn-outline-primary wallet-btn">
+                            <i class="bi bi-google"></i> Google Pay
+                        </button>
+                    </div>
+                }
+
+                <div class="billing-address" @attributes="AdditionalAttributes">
+                    <h5>Billing Address</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="firstName" class="form-label">First Name</label>
+                                <InputText @bind-Value="paymentRequest.BillingAddress.FirstName" 
+                                           id="firstName" 
+                                           class="form-control" />
+                                <ValidationMessage For="() => paymentRequest.BillingAddress.FirstName" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="lastName" class="form-label">Last Name</label>
+                                <InputText @bind-Value="paymentRequest.BillingAddress.LastName" 
+                                           id="lastName" 
+                                           class="form-control" />
+                                <ValidationMessage For="() => paymentRequest.BillingAddress.LastName" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label for="address" class="form-label">Address</label>
+                        <InputText @bind-Value="paymentRequest.BillingAddress.Street" 
+                                   id="address" 
+                                   class="form-control" />
+                        <ValidationMessage For="() => paymentRequest.BillingAddress.Street" />
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="city" class="form-label">City</label>
+                                <InputText @bind-Value="paymentRequest.BillingAddress.City" 
+                                           id="city" 
+                                           class="form-control" />
+                                <ValidationMessage For="() => paymentRequest.BillingAddress.City" />
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label for="state" class="form-label">State</label>
+                                <InputText @bind-Value="paymentRequest.BillingAddress.State" 
+                                           id="state" 
+                                           class="form-control" />
+                                <ValidationMessage For="() => paymentRequest.BillingAddress.State" />
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label for="zipCode" class="form-label">ZIP Code</label>
+                                <InputText @bind-Value="paymentRequest.BillingAddress.ZipCode" 
+                                           id="zipCode" 
+                                           class="form-control" />
+                                <ValidationMessage For="() => paymentRequest.BillingAddress.ZipCode" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="payment-actions">
+                    <button type="submit" class="btn btn-primary btn-lg w-100" disabled="@IsLoading">
+                        @if (IsLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Pay @FormatAmount(Amount, Currency)
+                    </button>
+                    
+                    @if (OnCancel.HasDelegate)
+                    {
+                        <button type="button" class="btn btn-link mt-2" @onclick="CancelPaymentAsync">
+                            Cancel
+                        </button>
+                    }
+                </div>
+            </EditForm>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public decimal Amount { get; set; }
+    [Parameter] public string Currency { get; set; } = "USD";
+    [Parameter] public string MerchantId { get; set; } = string.Empty;
+    [Parameter] public string OrderId { get; set; } = string.Empty;
+    [Parameter] public List<PaymentMethod> AvailablePaymentMethods { get; set; } = new() { PaymentMethod.CreditCard };
+    [Parameter] public PaymentMethod SelectedPaymentMethod { get; set; } = PaymentMethod.CreditCard;
+    [Parameter] public bool RequireBillingAddress { get; set; } = true;
+    [Parameter] public EventCallback<PaymentResult> OnPaymentSuccess { get; set; }
+    [Parameter] public EventCallback<PaymentResult> OnPaymentFailure { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private PaymentRequest paymentRequest = new();
+    private PaymentResult? paymentResult;
+    private string? loadingMessage;
+
+    protected override async Task OnComponentInitializedAsync()
+    {
+        paymentRequest.Amount = Amount;
+        paymentRequest.Currency = Currency;
+        paymentRequest.MerchantId = MerchantId;
+        paymentRequest.OrderId = OrderId;
+        paymentRequest.PaymentMethod = SelectedPaymentMethod;
+    }
+
+    private async Task ProcessPaymentAsync()
+    {
+        await ExecuteAsync(async () =>
+        {
+            loadingMessage = "Validating payment details...";
+            StateHasChanged();
+
+            // Validate payment request
+            if (!ValidatePaymentRequest())
+            {
+                throw new WildwoodComponents.Blazor.Models.ValidationException("Please fill in all required fields");
+            }
+
+            loadingMessage = "Processing payment...";
+            StateHasChanged();
+
+            // Process payment through service
+            paymentResult = await PaymentService.ProcessPaymentAsync(paymentRequest);
+
+            if (paymentResult.IsSuccess)
+            {
+                await OnPaymentSuccess.InvokeAsync(paymentResult);
+            }
+            else
+            {
+                await OnPaymentFailure.InvokeAsync(paymentResult);
+                throw new PaymentException(paymentResult.ErrorMessage ?? "Payment failed");
+            }
+        }, "Processing payment");
+    }
+
+    private async Task CancelPaymentAsync()
+    {
+        await ExecuteAsync(async () =>
+        {
+            await OnCancel.InvokeAsync();
+        }, "Canceling payment");
+    }
+
+    private void SelectPaymentMethod(PaymentMethod method)
+    {
+        SelectedPaymentMethod = method;
+        paymentRequest.PaymentMethod = method;
+        StateHasChanged();
+    }
+
+    private bool ValidatePaymentRequest()
+    {
+        if (SelectedPaymentMethod == PaymentMethod.CreditCard)
+        {
+            return !string.IsNullOrEmpty(paymentRequest.CardNumber) &&
+                   !string.IsNullOrEmpty(paymentRequest.ExpiryDate) &&
+                   !string.IsNullOrEmpty(paymentRequest.CVV) &&
+                   !string.IsNullOrEmpty(paymentRequest.CardholderName);
+        }
+
+        return true;
+    }
+
+    private string GetPaymentMethodIcon(PaymentMethod method)
+    {
+        return method switch
+        {
+            PaymentMethod.CreditCard => "bi bi-credit-card",
+            PaymentMethod.BankTransfer => "bi bi-bank",
+            PaymentMethod.DigitalWallet => "bi bi-wallet2",
+            PaymentMethod.Cryptocurrency => "bi bi-currency-bitcoin",
+            _ => "bi bi-credit-card"
+        };
+    }
+
+    private string GetPaymentMethodLabel(PaymentMethod method)
+    {
+        return method switch
+        {
+            PaymentMethod.CreditCard => "Credit/Debit Card",
+            PaymentMethod.BankTransfer => "Bank Transfer",
+            PaymentMethod.DigitalWallet => "Digital Wallet",
+            PaymentMethod.Cryptocurrency => "Cryptocurrency",
+            _ => method.ToString()
+        };
+    }
+
+    private string FormatAmount(decimal amount, string currency)
+    {
+        return currency.ToUpperInvariant() switch
+        {
+            "USD" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-US")),
+            "EUR" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("de-DE")),
+            "GBP" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-GB")),
+            _ => $"{currency} {amount:N2}"
+        };
+    }
+}
