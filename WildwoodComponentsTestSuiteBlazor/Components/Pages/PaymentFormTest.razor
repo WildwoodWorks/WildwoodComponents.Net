@@ -1,0 +1,139 @@
+@page "/test/payment-form"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Payment
+@using WildwoodComponents.Blazor.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="PaymentFormComponent Test" ComponentName="PaymentFormComponent" IconClass="fas fa-credit-card"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">Amount</label>
+            <input class="form-control form-control-sm" type="number" step="0.01" @bind="amount" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Currency</label>
+            <select class="form-select form-select-sm" @bind="currency">
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+            </select>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">MerchantId</label>
+            <input class="form-control form-control-sm" @bind="merchantId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">OrderId</label>
+            <input class="form-control form-control-sm" @bind="orderId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Payment Method</label>
+            <select class="form-select form-select-sm" @bind="selectedPaymentMethod">
+                <option value="@PaymentMethod.CreditCard">Credit Card</option>
+                <option value="@PaymentMethod.BankTransfer">Bank Transfer</option>
+                <option value="@PaymentMethod.DigitalWallet">Digital Wallet</option>
+            </select>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="requireBillingAddress" id="chkBilling" />
+            <label class="form-check-label small" for="chkBilling">Require Billing Address</label>
+        </div>
+    </Settings>
+    <Component>
+        <PaymentFormComponent Amount="@amount"
+                              Currency="@currency"
+                              MerchantId="@merchantId"
+                              OrderId="@orderId"
+                              SelectedPaymentMethod="@selectedPaymentMethod"
+                              AvailablePaymentMethods="@availablePaymentMethods"
+                              RequireBillingAddress="@requireBillingAddress"
+                              OnPaymentSuccess="HandlePaymentSuccess"
+                              OnPaymentFailure="HandlePaymentFailure"
+                              OnCancel="HandleCancel"
+                              OnError="HandleError" />
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private decimal amount = 29.99m;
+    private string currency = "USD";
+    private string merchantId = "";
+    private string orderId = "";
+    private PaymentMethod selectedPaymentMethod = PaymentMethod.CreditCard;
+    private bool requireBillingAddress = true;
+    private List<PaymentMethod> availablePaymentMethods = new()
+    {
+        PaymentMethod.CreditCard,
+        PaymentMethod.BankTransfer,
+        PaymentMethod.DigitalWallet
+    };
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        merchantId = Configuration["WildwoodAPI:MerchantId"] ?? "";
+        LifecycleTracker.TrackInitialized("PaymentFormComponent");
+    }
+
+    private void HandlePaymentSuccess(PaymentResult result)
+    {
+        var msg = $"Payment succeeded - Transaction: {result.TransactionId}, Amount: {amount} {currency}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("PaymentFormComponent", "OnPaymentSuccess", msg);
+        StateHasChanged();
+    }
+
+    private void HandlePaymentFailure(PaymentResult result)
+    {
+        var msg = $"Payment failed - Error: {result.ErrorMessage}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("PaymentFormComponent", "OnPaymentFailure", msg);
+        StateHasChanged();
+    }
+
+    private void HandleCancel()
+    {
+        var msg = "Payment cancelled by user";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("PaymentFormComponent", "OnCancel", msg);
+        StateHasChanged();
+    }
+
+    private void HandleError(ComponentErrorEventArgs args)
+    {
+        var msg = $"Error: {args.Exception.Message}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackError("PaymentFormComponent", args.Exception.Message);
+        StateHasChanged();
+    }
+
+    private void ApplySettings() { StateHasChanged(); }
+
+    private void ResetSettings()
+    {
+        amount = 29.99m;
+        currency = "USD";
+        merchantId = Configuration["WildwoodAPI:MerchantId"] ?? "";
+        orderId = "";
+        selectedPaymentMethod = PaymentMethod.CreditCard;
+        requireBillingAddress = true;
+        events.Clear();
+        StateHasChanged();
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
