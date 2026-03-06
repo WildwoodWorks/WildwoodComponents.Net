@@ -1,0 +1,196 @@
+.ww-disclaimer-container {
+    font-family: var(--ww-font-family, inherit);
+    color: var(--ww-text-color, #333);
+}
+
+.ww-disclaimer-loading {
+    text-align: center;
+    padding: 2rem;
+}
+
+.ww-disclaimer-empty {
+    text-align: center;
+    padding: 2rem;
+    color: var(--ww-text-muted, #666);
+}
+
+.ww-disclaimer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.ww-disclaimer-item {
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius, 0.375rem);
+    padding: 1rem;
+    background: var(--ww-card-bg, #fff);
+}
+
+.ww-disclaimer-item.ww-required {
+    border-left: 3px solid var(--ww-primary-color, #0d6efd);
+}
+
+.ww-disclaimer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.ww-disclaimer-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--ww-heading-color, #212529);
+}
+
+.ww-disclaimer-meta {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.ww-disclaimer-type,
+.ww-disclaimer-version {
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 0.25rem;
+    background: var(--ww-badge-bg, #e9ecef);
+    color: var(--ww-badge-color, #495057);
+}
+
+.ww-badge {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 0.25rem;
+    font-weight: 600;
+}
+
+.ww-badge-required {
+    background: var(--ww-danger-bg, #f8d7da);
+    color: var(--ww-danger-color, #842029);
+}
+
+.ww-badge-updated {
+    background: var(--ww-warning-bg, #fff3cd);
+    color: var(--ww-warning-color, #664d03);
+}
+
+.ww-disclaimer-changes {
+    background: var(--ww-info-bg, #cff4fc);
+    color: var(--ww-info-color, #055160);
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.25rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+}
+
+.ww-disclaimer-content {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 0.75rem;
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: 0.25rem;
+    background: var(--ww-content-bg, #f8f9fa);
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.ww-disclaimer-accept {
+    margin-top: 0.5rem;
+}
+
+.ww-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.ww-checkbox-label input[type="checkbox"] {
+    width: 1.1rem;
+    height: 1.1rem;
+    cursor: pointer;
+}
+
+.ww-disclaimer-error {
+    color: var(--ww-danger-color, #dc3545);
+    background: var(--ww-danger-bg, #f8d7da);
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.25rem;
+    margin: 0.75rem 0;
+    font-size: 0.875rem;
+}
+
+.ww-disclaimer-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--ww-border-color, #dee2e6);
+}
+
+.ww-btn {
+    padding: 0.5rem 1.25rem;
+    border: none;
+    border-radius: var(--ww-border-radius, 0.375rem);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: opacity 0.15s;
+}
+
+.ww-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.ww-btn-primary {
+    background: var(--ww-primary-color, #0d6efd);
+    color: #fff;
+}
+
+.ww-btn-primary:hover:not(:disabled) {
+    opacity: 0.9;
+}
+
+.ww-btn-secondary {
+    background: var(--ww-secondary-color, #6c757d);
+    color: #fff;
+}
+
+.ww-btn-secondary:hover:not(:disabled) {
+    opacity: 0.9;
+}
+
+.ww-spinner, .ww-spinner-sm {
+    display: inline-block;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    border-top-color: currentColor;
+    animation: ww-spin 0.6s linear infinite;
+}
+
+.ww-spinner {
+    width: 2rem;
+    height: 2rem;
+}
+
+.ww-spinner-sm {
+    width: 1rem;
+    height: 1rem;
+}
+
+@keyframes ww-spin {
+    to { transform: rotate(360deg); }
+}
