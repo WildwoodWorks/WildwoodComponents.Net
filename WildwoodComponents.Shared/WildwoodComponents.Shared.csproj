@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>WildwoodComponents.Shared</RootNamespace>
+
+    <!-- Package Metadata -->
+    <PackageId>WildwoodComponents.Shared</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Wildwood Development Team</Authors>
+    <Company>Wildwood</Company>
+    <Product>WildwoodComponents.Shared</Product>
+    <Description>Shared DTOs and models used by both WildwoodComponents (Blazor) and WildwoodComponents.Razor (Razor Pages) libraries.</Description>
+    <PackageTags>wildwood;shared;models;dto</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+</Project>
