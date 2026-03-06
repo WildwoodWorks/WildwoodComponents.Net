@@ -1,0 +1,94 @@
+@page "/test/authentication-demo"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Authentication
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="Authentication Demo" ComponentName="AuthenticationDemo" IconClass="fas fa-shield-alt"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">API Base URL</label>
+            <input class="form-control form-control-sm" @bind="apiBaseUrl" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">App ID</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2 form-check">
+            <input type="checkbox" class="form-check-input" id="showSocialProviders" @bind="showSocialProviders" />
+            <label class="form-check-label" for="showSocialProviders">Show Social Providers</label>
+        </div>
+        <div class="mb-2 form-check">
+            <input type="checkbox" class="form-check-input" id="showLicenseToken" @bind="showLicenseToken" />
+            <label class="form-check-label" for="showLicenseToken">Show License Token</label>
+        </div>
+        <div class="mb-2 form-check">
+            <input type="checkbox" class="form-check-input" id="enableCaptcha" @bind="enableCaptcha" />
+            <label class="form-check-label" for="enableCaptcha">Enable CAPTCHA</label>
+        </div>
+    </Settings>
+    <Component>
+        @* AuthenticationDemo is a self-contained demo page that includes
+           its own configuration panel, user status display, and the embedded
+           AuthenticationComponent. We render it here to test the full demo flow. *@
+        <AuthenticationDemo />
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string apiBaseUrl = "";
+    private string appId = "";
+    private bool showSocialProviders = true;
+    private bool showLicenseToken = false;
+    private bool enableCaptcha = false;
+
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        apiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "https://localhost:7046/api";
+        LifecycleTracker.TrackInitialized("AuthenticationDemo");
+        AddEvent("AuthenticationDemo initialized");
+        await Task.CompletedTask;
+    }
+
+    private void ApplySettings()
+    {
+        AddEvent($"Settings applied - API: {apiBaseUrl}, App: {appId}, Social: {showSocialProviders}, Captcha: {enableCaptcha}");
+        StateHasChanged();
+    }
+
+    private void ResetSettings()
+    {
+        apiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "https://localhost:7046/api";
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        showSocialProviders = true;
+        showLicenseToken = false;
+        enableCaptcha = false;
+        AddEvent("Settings reset to defaults");
+        StateHasChanged();
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
