@@ -1,0 +1,157 @@
+@page "/test/notification-toast"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Notifications
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@inject INotificationService NotificationService
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="Notification Toast" ComponentName="NotificationToastComponent" IconClass="fas fa-bell"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">Max Notifications</label>
+            <input type="number" class="form-control form-control-sm" @bind="maxNotifications" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Default Duration (ms)</label>
+            <input type="number" class="form-control form-control-sm" @bind="defaultDuration" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Position</label>
+            <select class="form-select form-select-sm" @bind="position">
+                <option value="@NotificationPosition.TopRight">Top Right</option>
+                <option value="@NotificationPosition.TopLeft">Top Left</option>
+                <option value="@NotificationPosition.BottomRight">Bottom Right</option>
+                <option value="@NotificationPosition.BottomLeft">Bottom Left</option>
+            </select>
+        </div>
+        <div class="mb-2 form-check">
+            <input type="checkbox" class="form-check-input" id="autoDismiss" @bind="autoDismiss" />
+            <label class="form-check-label" for="autoDismiss">Auto Dismiss</label>
+        </div>
+        <hr class="my-2" />
+        <h6 class="small fw-bold">Test Controls</h6>
+        <div class="mb-2">
+            <label class="form-label">Title</label>
+            <input class="form-control form-control-sm" @bind="testTitle" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Message</label>
+            <input class="form-control form-control-sm" @bind="testMessage" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Type</label>
+            <select class="form-select form-select-sm" @bind="testType">
+                <option value="@NotificationType.Info">Info</option>
+                <option value="@NotificationType.Success">Success</option>
+                <option value="@NotificationType.Warning">Warning</option>
+                <option value="@NotificationType.Error">Error</option>
+            </select>
+        </div>
+        <div class="mb-2">
+            <button class="btn btn-sm btn-primary" @onclick="SendTestNotification">Send Test Notification</button>
+        </div>
+    </Settings>
+    <Component>
+        <NotificationToastComponent @ref="toastComponent"
+                                    MaxNotifications="@maxNotifications"
+                                    DefaultDuration="@defaultDuration"
+                                    Position="@position"
+                                    AutoDismiss="@autoDismiss"
+                                    OnActionClicked="HandleActionClicked"
+                                    OnNotificationDismissed="HandleNotificationDismissed" />
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private NotificationToastComponent? toastComponent;
+    private int maxNotifications = 5;
+    private int defaultDuration = 5000;
+    private NotificationPosition position = NotificationPosition.TopRight;
+    private bool autoDismiss = true;
+
+    private string testTitle = "Test Notification";
+    private string testMessage = "This is a test notification message.";
+    private NotificationType testType = NotificationType.Info;
+
+    private List<EventEntry> events = new();
+
+    protected override void OnInitialized()
+    {
+        LifecycleTracker.TrackInitialized("NotificationToastComponent");
+    }
+
+    private void ApplySettings()
+    {
+        AddEvent("Settings applied");
+        StateHasChanged();
+    }
+
+    private void ResetSettings()
+    {
+        maxNotifications = 5;
+        defaultDuration = 5000;
+        position = NotificationPosition.TopRight;
+        autoDismiss = true;
+        AddEvent("Settings reset to defaults");
+        StateHasChanged();
+    }
+
+    private async Task SendTestNotification()
+    {
+        if (toastComponent != null)
+        {
+            await toastComponent.ShowNotificationAsync(testTitle, testMessage, testType);
+            AddEvent($"Sent notification: [{testType}] {testTitle}");
+        }
+        else
+        {
+            // Fall back to the notification service
+            var notification = new ToastNotification
+            {
+                Id = Guid.NewGuid().ToString(),
+                Title = testTitle,
+                Message = testMessage,
+                Type = testType,
+                Timestamp = DateTime.Now,
+                IsVisible = true,
+                IsDismissible = true
+            };
+            await NotificationService.ShowAsync(notification);
+            AddEvent($"Sent notification via service: [{testType}] {testTitle}");
+        }
+    }
+
+    private void HandleActionClicked(NotificationActionArgs args)
+    {
+        LifecycleTracker.TrackCallback("NotificationToastComponent", "OnActionClicked", $"Action: {args.ActionText}");
+        AddEvent($"Action clicked: {args.ActionText} (NotificationId: {args.NotificationId})");
+    }
+
+    private void HandleNotificationDismissed(string notificationId)
+    {
+        LifecycleTracker.TrackCallback("NotificationToastComponent", "OnNotificationDismissed", notificationId);
+        AddEvent($"Notification dismissed: {notificationId}");
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
