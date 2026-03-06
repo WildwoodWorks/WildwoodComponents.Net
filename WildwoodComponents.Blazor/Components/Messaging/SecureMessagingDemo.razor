@@ -1,0 +1,163 @@
+@page "/messaging-demo"
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Messaging
+@using WildwoodComponents.Blazor.Models
+@inject ISecureMessagingService MessagingService
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h2>Secure Messaging Demo</h2>
+            <p class="text-muted">This is a demonstration of the WildwoodComponents Secure Messaging functionality.</p>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-12">
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-warning">
+                    @errorMessage
+                </div>
+            }
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-12" style="height: 600px;">
+            <SecureMessagingComponent 
+                CompanyAppId="@companyAppId"
+                CurrentUserId="@currentUserId"
+                Settings="@messagingSettings"
+                OnMessageSent="HandleMessageSent"
+                OnMessageReceived="HandleMessageReceived"
+                OnError="@HandleError"
+                OnThreadCreated="HandleThreadCreated"
+                OnThreadSelected="HandleThreadSelected" />
+        </div>
+    </div>
+    
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Demo Information</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Client App ID:</strong> @companyAppId</p>
+                    <p><strong>Current User ID:</strong> @currentUserId</p>
+                    <p><strong>API Base URL:</strong> @messagingSettings.ApiBaseUrl</p>
+                    <p><strong>Features Enabled:</strong></p>
+                    <ul>
+                        <li>Encryption: @(messagingSettings.EnableEncryption ? "✅" : "❌")</li>
+                        <li>File Uploads: @(messagingSettings.EnableFileUploads ? "✅" : "❌")</li>
+                        <li>Reactions: @(messagingSettings.EnableReactions ? "✅" : "❌")</li>
+                        <li>Typing Indicators: @(messagingSettings.EnableTypingIndicators ? "✅" : "❌")</li>
+                        <li>Read Receipts: @(messagingSettings.EnableReadReceipts ? "✅" : "❌")</li>
+                        <li>Notifications: @(messagingSettings.EnableNotifications ? "✅" : "❌")</li>
+                    </ul>
+                    
+                    @if (lastActivity != null)
+                    {
+                        <div class="mt-3">
+                            <h6>Last Activity:</h6>
+                            <p>@lastActivity</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string companyAppId = "trail-forecast-demo";
+    private string currentUserId = "demo-user-123";
+    private string? errorMessage;
+    private string? lastActivity;
+    
+    private SecureMessagingSettings messagingSettings = new()
+    {
+        ApiBaseUrl = "https://localhost:7046/api",
+        EnableEncryption = true,
+        EnableFileUploads = true,
+        EnableReactions = true,
+        EnableTypingIndicators = true,
+        EnableReadReceipts = true,
+        EnableNotifications = true,
+        AutoScrollToBottom = true,
+        MaxFileSize = 10485760, // 10MB
+        MaxMessageLength = 2000,
+        MessagesPerPage = 50,
+        Theme = new ComponentTheme
+        {
+            PrimaryColor = "#2563eb",
+            SecondaryColor = "#64748b",
+            SuccessColor = "#10b981",
+            WarningColor = "#f59e0b",
+            DangerColor = "#ef4444",
+            InfoColor = "#06b6d4",
+            LightColor = "#f8fafc",
+            DarkColor = "#1e293b",
+            FontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            BorderRadius = "8px",
+            BoxShadow = "0 1px 3px 0 rgba(0, 0, 0, 0.1)"
+        },
+        Notifications = new NotificationSettings
+        {
+            DesktopNotifications = true,
+            SoundNotifications = true,
+            VibrateOnMobile = true,
+            NotificationSound = "default"
+        }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Set up the messaging service with demo credentials
+            // In a real app, you would get these from authentication
+            MessagingService.SetApiBaseUrl(messagingSettings.ApiBaseUrl);
+            // MessagingService.SetAuthToken("your-auth-token-here");
+            
+            messagingSettings.CompanyAppId = companyAppId;
+            lastActivity = "Demo initialized successfully";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to initialize messaging demo: {ex.Message}";
+        }
+    }
+
+    private async Task HandleMessageSent(SecureMessage message)
+    {
+        lastActivity = $"Message sent: {message.Content.Substring(0, Math.Min(50, message.Content.Length))}...";
+        StateHasChanged();
+    }
+
+    private async Task HandleMessageReceived(SecureMessage message)
+    {
+        lastActivity = $"Message received from {message.SenderName}: {message.Content.Substring(0, Math.Min(50, message.Content.Length))}...";
+        StateHasChanged();
+    }
+
+    private async Task HandleError(ComponentErrorEventArgs errorArgs)
+    {
+        errorMessage = errorArgs.Exception.Message;
+        lastActivity = $"Error occurred: {errorArgs.Exception.Message}";
+        StateHasChanged();
+    }
+
+    private async Task HandleThreadCreated(MessageThread thread)
+    {
+        lastActivity = $"Thread created: {thread.Subject}";
+        StateHasChanged();
+    }
+
+    private async Task HandleThreadSelected(MessageThread thread)
+    {
+        lastActivity = $"Thread selected: {thread.Subject}";
+        StateHasChanged();
+    }
+}
