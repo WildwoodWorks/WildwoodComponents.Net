@@ -1,0 +1,110 @@
+@page "/test/messaging-demo"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Messaging
+@using WildwoodComponents.Blazor.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="SecureMessagingDemo Test" ComponentName="SecureMessagingDemo" IconClass="fas fa-comments"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">CompanyAppId</label>
+            <input class="form-control form-control-sm" @bind="companyAppId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">CurrentUserId</label>
+            <input class="form-control form-control-sm" @bind="currentUserId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">API Base URL</label>
+            <input class="form-control form-control-sm" @bind="apiBaseUrl" />
+        </div>
+        <hr class="my-2" />
+        <h6 class="small fw-bold">Feature Toggles</h6>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="enableEncryption" id="chkDemoEncryption" />
+            <label class="form-check-label small" for="chkDemoEncryption">Enable Encryption</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="enableFileUploads" id="chkDemoFiles" />
+            <label class="form-check-label small" for="chkDemoFiles">Enable File Uploads</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="enableReactions" id="chkDemoReactions" />
+            <label class="form-check-label small" for="chkDemoReactions">Enable Reactions</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="enableTypingIndicators" id="chkDemoTyping" />
+            <label class="form-check-label small" for="chkDemoTyping">Enable Typing Indicators</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="enableReadReceipts" id="chkDemoRead" />
+            <label class="form-check-label small" for="chkDemoRead">Enable Read Receipts</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="enableNotifications" id="chkDemoNotif" />
+            <label class="form-check-label small" for="chkDemoNotif">Enable Notifications</label>
+        </div>
+    </Settings>
+    <Component>
+        <div style="height: 600px;">
+            <SecureMessagingDemo />
+        </div>
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string companyAppId = "";
+    private string currentUserId = "";
+    private string apiBaseUrl = "";
+    private bool enableEncryption = true;
+    private bool enableFileUploads = true;
+    private bool enableReactions = true;
+    private bool enableTypingIndicators = true;
+    private bool enableReadReceipts = true;
+    private bool enableNotifications = true;
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        companyAppId = Configuration["WildwoodAPI:AppId"] ?? "";
+        apiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "";
+        LifecycleTracker.TrackInitialized("SecureMessagingDemo");
+        events.Insert(0, new EventEntry(DateTime.Now, "SecureMessagingDemo page initialized. This demo component is self-contained with its own settings and event handling."));
+    }
+
+    private void ApplySettings()
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, "Settings applied (note: SecureMessagingDemo manages its own internal state)"));
+        StateHasChanged();
+    }
+
+    private void ResetSettings()
+    {
+        companyAppId = Configuration["WildwoodAPI:AppId"] ?? "";
+        apiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "";
+        currentUserId = "";
+        enableEncryption = true;
+        enableFileUploads = true;
+        enableReactions = true;
+        enableTypingIndicators = true;
+        enableReadReceipts = true;
+        enableNotifications = true;
+        events.Clear();
+        StateHasChanged();
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
