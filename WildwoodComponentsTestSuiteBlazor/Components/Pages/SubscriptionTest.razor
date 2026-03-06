@@ -1,0 +1,142 @@
+@page "/test/subscription"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Subscription
+@using WildwoodComponents.Blazor.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="SubscriptionComponent Test" ComponentName="SubscriptionComponent" IconClass="fas fa-sync-alt"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">AppId</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Customer ID</label>
+            <input class="form-control form-control-sm" @bind="customerId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Customer Email</label>
+            <input class="form-control form-control-sm" @bind="customerEmail" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Currency</label>
+            <select class="form-select form-select-sm" @bind="currency">
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+            </select>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Title</label>
+            <input class="form-control form-control-sm" @bind="title" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Subtitle</label>
+            <input class="form-control form-control-sm" @bind="subtitle" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Annual Discount (%)</label>
+            <input class="form-control form-control-sm" type="number" @bind="annualDiscount" />
+        </div>
+        <hr class="my-2" />
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="showBillingToggle" id="chkSubBilling" />
+            <label class="form-check-label small" for="chkSubBilling">Show Billing Toggle</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="requireBillingAddress" id="chkSubReqBilling" />
+            <label class="form-check-label small" for="chkSubReqBilling">Require Billing Address</label>
+        </div>
+    </Settings>
+    <Component>
+        <SubscriptionComponent AppId="@appId"
+                               CustomerId="@customerId"
+                               CustomerEmail="@customerEmail"
+                               Currency="@currency"
+                               Title="@title"
+                               Subtitle="@subtitle"
+                               ShowBillingToggle="@showBillingToggle"
+                               AnnualDiscount="@annualDiscount"
+                               RequireBillingAddress="@requireBillingAddress"
+                               OnSubscriptionSuccess="HandleSubscriptionSuccess"
+                               OnSubscriptionCancelled="HandleSubscriptionCancelled"
+                               OnError="HandleError" />
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string appId = "";
+    private string customerId = "";
+    private string customerEmail = "";
+    private string currency = "USD";
+    private string title = "Choose Your Plan";
+    private string subtitle = "Select the plan that best fits your needs";
+    private bool showBillingToggle = true;
+    private int annualDiscount = 20;
+    private bool requireBillingAddress = false;
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        var token = await StateStorage.GetItemAsync("wildwood_auth_token") ?? "";
+        LifecycleTracker.TrackInitialized("SubscriptionComponent");
+    }
+
+    private void HandleSubscriptionSuccess(SubscriptionComponent.SubscriptionSuccessEventArgs args)
+    {
+        var msg = $"Subscription success - Plan: {args.PlanName}, ID: {args.SubscriptionId}, Billing: {args.BillingCycle}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("SubscriptionComponent", "OnSubscriptionSuccess", msg);
+        StateHasChanged();
+    }
+
+    private void HandleSubscriptionCancelled(string subscriptionId)
+    {
+        var msg = $"Subscription cancelled - ID: {subscriptionId}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("SubscriptionComponent", "OnSubscriptionCancelled", msg);
+        StateHasChanged();
+    }
+
+    private void HandleError(ComponentErrorEventArgs args)
+    {
+        var msg = $"Error: {args.Exception.Message}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackError("SubscriptionComponent", args.Exception.Message);
+        StateHasChanged();
+    }
+
+    private void ApplySettings() { StateHasChanged(); }
+
+    private void ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        customerId = "";
+        customerEmail = "";
+        currency = "USD";
+        title = "Choose Your Plan";
+        subtitle = "Select the plan that best fits your needs";
+        showBillingToggle = true;
+        annualDiscount = 20;
+        requireBillingAddress = false;
+        events.Clear();
+        StateHasChanged();
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
