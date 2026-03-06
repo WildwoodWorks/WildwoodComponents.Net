@@ -1,0 +1,1418 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Registration
+@inherits BaseWildwoodComponent
+@inject IAuthenticationService AuthService
+@inject ICaptchaService CaptchaService
+@inject IJSRuntime JS
+
+<div class="@GetRootCssClasses()">
+    <div class="auth-card">
+        <div class="auth-header">
+            <h2 class="auth-title">@GetTitle()</h2>
+            @if (!string.IsNullOrEmpty(ErrorMessage))
+            {
+                <div class="alert alert-danger">
+                    @if (ShouldShowDetailedErrors())
+                    {
+                        <h6><i class="fas fa-exclamation-triangle"></i> Authentication Failed</h6>
+                        <div class="error-details">
+                            @if (ErrorMessage.Contains("\n"))
+                            {
+                                @foreach (var line in ErrorMessage.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)))
+                                {
+                                    <div class="error-line">@line</div>
+                                }
+                            }
+                            else
+                            {
+                                <div>@ErrorMessage</div>
+                            }
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i> 
+                                This detailed error information is shown to help with debugging. 
+                                Please check the WildwoodAPI server connection and configuration.
+                            </small>
+                        </div>
+                    }
+                    else
+                    {
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>Authentication failed. Please check your credentials and try again.</span>
+                    }
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(_successMessage))
+            {
+                <div class="alert alert-success">@_successMessage</div>
+            }
+        </div>
+
+        <div class="auth-body">
+            @if (IsLoading && ShowLoadingStates)
+            {
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                    <span>Processing...</span>
+                </div>
+            }
+            else if (_authConfig?.IsEnabled == false)
+            {
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Authentication is currently disabled for this application.
+                </div>
+            }
+            else if (!_authConfig?.AllowLocalAuth == true && !_availableProviders?.Any() == true)
+            {
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    No authentication methods are currently available for this application.
+                </div>
+            }
+            else if (_showPasswordReset)
+            {
+                <!-- Password Reset Mode - After login with temporary password -->
+                <div class="password-reset-section">
+                    <div class="password-reset-header">
+                        <i class="fas fa-key"></i>
+                        <h3>Password Reset Required</h3>
+                        <p>You logged in with a temporary password. Please create a new password to continue.</p>
+                    </div>
+
+                    <EditForm Model="@_resetModel" OnSubmit="@HandlePasswordReset">
+                        <div class="form-group">
+                            <label for="newPassword">New Password</label>
+                            <div class="password-input-container">
+                                <InputText id="newPassword" type="@(_showNewPassword ? "text" : "password")"
+                                    @bind-Value="_resetModel.NewPassword" class="form-control" placeholder="Enter new password" />
+                                <button type="button" class="password-toggle" @onclick="ToggleNewPasswordVisibility">
+                                    <i class="@(_showNewPassword ? "fas fa-eye-slash" : "fas fa-eye")"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="confirmPassword">Confirm New Password</label>
+                            <div class="password-input-container">
+                                <InputText id="confirmPassword" type="@(_showConfirmPassword ? "text" : "password")"
+                                    @bind-Value="_resetModel.ConfirmPassword" class="form-control" placeholder="Confirm new password" />
+                                <button type="button" class="password-toggle" @onclick="ToggleConfirmPasswordVisibility">
+                                    <i class="@(_showConfirmPassword ? "fas fa-eye-slash" : "fas fa-eye")"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(_passwordRequirements))
+                        {
+                            <div class="password-requirements">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle"></i> @_passwordRequirements
+                                </small>
+                            </div>
+                        }
+
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary btn-block" disabled="@IsLoading">
+                                @if (IsLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    <span class="sr-only">Processing...</span>
+                                }
+                                else
+                                {
+                                    <text>Set New Password</text>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            }
+            else if (_showDisclaimers && _pendingDisclaimers != null)
+            {
+                <!-- Disclaimer Acceptance Mode -->
+                <WildwoodComponents.Blazor.Components.Disclaimer.DisclaimerComponent
+                    AppId="@AppId"
+                    UserId="@_pendingAuthResponse?.Id"
+                    Mode="login"
+                    PendingDisclaimers="@_pendingDisclaimers"
+                    ShowCancelButton="true"
+                    OnDisclaimersAccepted="HandleDisclaimersAccepted"
+                    OnDisclaimersCancelled="HandleDisclaimersCancelled"
+                    OnError="HandleDisclaimerError" />
+            }
+            else if (_showForgotPassword)
+            {
+                <!-- Forgot Password Mode -->
+                <div class="forgot-password-section">
+                    <div class="forgot-password-header">
+                        <i class="fas fa-envelope"></i>
+                        <h3>Reset Your Password</h3>
+                        <p>Enter your email address and we'll send you a temporary password.</p>
+                    </div>
+
+                    <EditForm Model="@_forgotPasswordModel" OnSubmit="@HandleForgotPasswordSubmit">
+                        <div class="form-group">
+                            <label for="forgotEmail">Email Address</label>
+                            <InputText id="forgotEmail" type="email"
+                                @bind-Value="_forgotPasswordModel.Email" class="form-control"
+                                placeholder="Enter your email address" />
+                        </div>
+
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary btn-block" disabled="@IsLoading">
+                                @if (IsLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    <span class="sr-only">Processing...</span>
+                                }
+                                else
+                                {
+                                    <text>Send Reset Email</text>
+                                }
+                            </button>
+                        </div>
+
+                        <div class="form-group text-center">
+                            <button type="button" class="btn-link" @onclick="CancelForgotPassword">
+                                <i class="fas fa-arrow-left"></i> Back to Sign In
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            }
+            else if (_showTwoFactor)
+            {
+                <!-- Two-Factor Authentication Mode -->
+                <div class="two-factor-section">
+                    <div class="two-factor-header">
+                        <i class="fas fa-shield-alt"></i>
+                        <h3>Verify Your Identity</h3>
+                        @if (_showRecoveryCodeInput)
+                        {
+                            <p>Enter one of your recovery codes to sign in.</p>
+                        }
+                        else if (_selectedTwoFactorMethod?.ProviderType == "TwoFactorEmail")
+                        {
+                            <p>We've sent a verification code to @(_twoFactorMaskedDestination ?? "your email").</p>
+                        }
+                        else
+                        {
+                            <p>Enter the 6-digit code from your authenticator app.</p>
+                        }
+                    </div>
+
+                    @if (_availableTwoFactorMethods?.Count > 1 && !_showRecoveryCodeInput)
+                    {
+                        <div class="form-group">
+                            <label>Verification Method</label>
+                            <div class="two-factor-methods">
+                                @foreach (var method in _availableTwoFactorMethods)
+                                {
+                                    <button type="button"
+                                        class="btn @(_selectedTwoFactorMethod?.ProviderType == method.ProviderType ? "btn-primary" : "btn-outline-secondary")"
+                                        @onclick="() => SelectTwoFactorMethod(method)">
+                                        <i class="@method.Icon"></i>
+                                        @method.Name
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (_showRecoveryCodeInput)
+                    {
+                        <div class="form-group">
+                            <label for="recoveryCode">Recovery Code</label>
+                            <input id="recoveryCode" type="text"
+                                @bind="_recoveryCode" class="form-control recovery-code-input"
+                                placeholder="XXXX-XXXX-XXXX"
+                                maxlength="14" />
+                        </div>
+
+                        <div class="form-group">
+                            <button type="button" class="btn btn-primary btn-block" @onclick="HandleRecoveryCodeSubmit" disabled="@IsLoading">
+                                @if (IsLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    <span class="sr-only">Verifying...</span>
+                                }
+                                else
+                                {
+                                    <text>Verify Recovery Code</text>
+                                }
+                            </button>
+                        </div>
+
+                        <div class="form-group text-center">
+                            <button type="button" class="btn-link" @onclick="() => _showRecoveryCodeInput = false">
+                                <i class="fas fa-arrow-left"></i> Back to verification code
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="form-group">
+                            <label for="twoFactorCode">Verification Code</label>
+                            <input id="twoFactorCode" type="text"
+                                @bind="_twoFactorCode" class="form-control verification-code-input"
+                                placeholder="000000"
+                                maxlength="6"
+                                inputmode="numeric"
+                                pattern="[0-9]*" />
+                        </div>
+
+                        <div class="form-group form-check">
+                            <input type="checkbox" id="rememberDevice" @bind="_rememberDevice" class="form-check-input" />
+                            <label class="form-check-label" for="rememberDevice">Trust this device for 30 days</label>
+                        </div>
+
+                        <div class="form-group">
+                            <button type="button" class="btn btn-primary btn-block" @onclick="HandleTwoFactorSubmit" disabled="@IsLoading">
+                                @if (IsLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    <span class="sr-only">Verifying...</span>
+                                }
+                                else
+                                {
+                                    <text>Verify</text>
+                                }
+                            </button>
+                        </div>
+
+                        @if (_selectedTwoFactorMethod?.ProviderType == "TwoFactorEmail")
+                        {
+                            <div class="form-group text-center">
+                                <button type="button" class="btn-link" @onclick="ResendTwoFactorCode" disabled="@IsLoading">
+                                    <i class="fas fa-redo"></i> Resend code
+                                </button>
+                            </div>
+                        }
+
+                        <div class="form-group text-center">
+                            <button type="button" class="btn-link" @onclick="() => _showRecoveryCodeInput = true">
+                                <i class="fas fa-key"></i> Use a recovery code instead
+                            </button>
+                        </div>
+                    }
+
+                    <div class="form-group text-center">
+                        <button type="button" class="btn-link" @onclick="CancelTwoFactor">
+                            <i class="fas fa-arrow-left"></i> Back to Sign In
+                        </button>
+                    </div>
+                </div>
+            }
+            else if (!_isLogin)
+            {
+                <!-- Registration Mode - Use TokenRegistrationComponent -->
+                <TokenRegistrationComponent
+                    AppId="@AppId"
+                    AllowTokenRegistration="@(_authConfig?.AllowTokenRegistration ?? false)"
+                    AllowOpenRegistration="@(_authConfig?.AllowOpenRegistration ?? false)"
+                    DefaultPricingModelId="@_authConfig?.DefaultPricingModelId"
+                    AutoLogin="true"
+                    OnAutoLoginSuccess="HandleRegistrationAutoLoginSuccess"
+                    OnRegistrationSuccess="HandleRegistrationSuccess"
+                    OnError="HandleRegistrationError"
+                    OnCancel="HandleRegistrationCancel" />
+            }
+            else
+            {
+                <!-- Login Mode -->
+                <EditForm Model="@_model" OnSubmit="@HandleSubmit">
+
+                    @if (_authConfig?.AllowLocalAuth != false)
+                    {
+                        <div class="form-group">
+                            <label for="username">Username</label>
+                            <InputText id="username" @bind-Value="_model.Username" class="form-control"
+                                placeholder="Enter your username" />
+                            <ValidationMessage For="() => _model.Username" />
+                        </div>
+
+                        @if (ShowPasswordField && _authConfig?.AllowLocalAuth != false)
+                        {
+                            <div class="form-group">
+                                <label for="password">Password</label>
+                                <div class="password-input-container">
+                                    <InputText id="password" type="@(_showPassword ? "text" : "password")"
+                                        @bind-Value="_model.Password" class="form-control" placeholder="Enter your password" />
+                                    <button type="button" class="password-toggle" @onclick="TogglePasswordVisibility">
+                                        <i class="@(_showPassword ? "fas fa-eye-slash" : "fas fa-eye")"></i>
+                                    </button>
+                                </div>
+                                <ValidationMessage For="() => _model.Password" />
+                            </div>
+                        }
+
+                        <div class="form-group form-check">
+                            <InputCheckbox id="rememberMe" @bind-Value="_model.RememberMe" class="form-check-input" />
+                            <label class="form-check-label" for="rememberMe">Remember me</label>
+                        </div>
+
+                        @if (ShouldShowCaptcha())
+                        {
+                            <div class="form-group">
+                                <div id="captcha-container-@ComponentId"></div>
+                            </div>
+                        }
+
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary btn-block">
+                                @if (IsLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    <span class="sr-only">Processing...</span>
+                                }
+                                else
+                                {
+                                    <text>Sign In</text>
+                                }
+                            </button>
+                        </div>
+                    }
+                </EditForm>
+
+                @if (_availableProviders?.Any() == true || _passkeyEnabled)
+                {
+                    <div class="auth-divider">
+                        <span>or</span>
+                    </div>
+
+                    <div class="social-auth-providers">
+                        @* Passkey button - shown first if enabled *@
+                        @if (_passkeyEnabled && _webAuthnSupported)
+                        {
+                            <button type="button" class="btn btn-outline-primary social-btn passkey-btn"
+                                @onclick="HandlePasskeyLogin" disabled="@IsLoading">
+                                <i class="fas fa-fingerprint"></i>
+                                Sign in with Passkey
+                            </button>
+                        }
+
+                        @foreach (var provider in _availableProviders?.Where(p => IsProviderAllowed(p) && !p.Name.Equals("Passkey", StringComparison.OrdinalIgnoreCase)) ?? Enumerable.Empty<AuthProvider>())
+                        {
+                            @if (provider.Name.Equals("Email", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <button type="button" class="btn btn-outline-secondary social-btn"
+                                    @onclick="() => HandleEmailProviderClick()" disabled="@IsLoading">
+                                    <i class="@provider.Icon"></i>
+                                    Sign in with @provider.DisplayName
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-outline-secondary social-btn"
+                                    @onclick="() => HandleSocialAuth(provider)" disabled="@IsLoading">
+                                    <i class="@provider.Icon"></i>
+                                    Sign in with @provider.DisplayName
+                                </button>
+                            }
+                        }
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="auth-footer">
+            @if (_authConfig?.AllowLocalAuth != false && !_showPasswordReset && !_showForgotPassword)
+            {
+                <p>
+                    @if (_isLogin)
+                    {
+                        @if (_authConfig?.AllowTokenRegistration == true ||
+                             _authConfig?.AllowOpenRegistration == true)
+                        {
+                            <span>Don't have an account? </span>
+                            <button type="button" class="btn-link" @onclick="() => ToggleMode()">Sign up</button>
+                        }
+                        else if (_authConfig != null &&
+                                 !_authConfig.AllowTokenRegistration &&
+                                 !_authConfig.AllowOpenRegistration)
+                        {
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                Registration is currently disabled for this application.
+                            </small>
+                        }
+                        else if (_authConfig == null)
+                        {
+                            <small class="text-muted">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                Loading authentication configuration...
+                            </small>
+                        }
+                    }
+                    else
+                    {
+                        <span>Already have an account? </span>
+                        <button type="button" class="btn-link" @onclick="() => ToggleMode()">Sign in</button>
+                    }
+                </p>
+
+                @if (_isLogin && _authConfig?.AllowPasswordReset == true)
+                {
+                    <p>
+                        <button type="button" class="btn-link" @onclick="HandleForgotPassword">Forgot your password?</button>
+                    </p>
+                }
+                else if (_isLogin && _authConfig != null && !_authConfig.AllowPasswordReset)
+                {
+                    <p>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i>
+                            Password reset is not available for this application.
+                        </small>
+                    </p>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? AppId { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public bool ShowPasswordField { get; set; } = true;
+    [Parameter] public bool ShowDetailedErrors { get; set; } = true;
+    [Parameter] public EventCallback<AuthenticationResponse> OnAuthenticationSuccess { get; set; }
+    [Parameter] public EventCallback<string> OnAuthenticationError { get; set; }
+    [Parameter] public List<AuthProvider>? AvailableProviders { get; set; }
+    [Parameter] public CaptchaConfiguration? CaptchaConfig { get; set; }
+    [Parameter] public AuthenticationConfiguration? AuthConfig { get; set; }
+
+    private bool _isLogin = true;
+    private bool _showPassword = false;
+    private bool _showPasswordReset = false;
+    private bool _showNewPassword = false;
+    private bool _showConfirmPassword = false;
+    private bool _showForgotPassword = false;
+    private string _successMessage = "";
+    private string _passwordRequirements = "";
+    private AuthenticationResponse? _pendingAuthResponse;
+
+    // Passkey/WebAuthn support
+    private bool _passkeyEnabled = false;
+    private bool _webAuthnSupported = false;
+    private bool _showPasskeyRegistration = false;
+
+    // Disclaimer acceptance support
+    private bool _showDisclaimers = false;
+    private List<PendingDisclaimerModel>? _pendingDisclaimers;
+
+    // Two-Factor Authentication support
+    private bool _showTwoFactor = false;
+    private bool _showRecoveryCodeInput = false;
+    private string _twoFactorCode = "";
+    private string _recoveryCode = "";
+    private bool _rememberDevice = false;
+    private TwoFactorMethodInfo? _selectedTwoFactorMethod;
+    private List<TwoFactorMethodInfo>? _availableTwoFactorMethods;
+    private string? _twoFactorSessionId;
+    private int? _twoFactorExpiresIn;
+    private string? _twoFactorMaskedDestination;
+
+    private LoginRequest _model = new();
+    private PasswordResetModel _resetModel = new();
+    private ForgotPasswordModel _forgotPasswordModel = new();
+    private List<AuthProvider>? _availableProviders;
+    private CaptchaConfiguration? _captchaConfig;
+    private AuthenticationConfiguration? _authConfig;
+
+    private class PasswordResetModel
+    {
+        public string NewPassword { get; set; } = string.Empty;
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
+    private class ForgotPasswordModel
+    {
+        public string Email { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Gets the title to display, using the custom Title parameter if provided,
+    /// otherwise falling back to the default based on current mode.
+    /// </summary>
+    private string GetTitle()
+    {
+        if (_showDisclaimers)
+        {
+            return "Accept Disclaimers";
+        }
+        if (_showTwoFactor)
+        {
+            return "Two-Factor Authentication";
+        }
+        if (_showPasswordReset)
+        {
+            return "Reset Password";
+        }
+        if (_showForgotPassword)
+        {
+            return "Forgot Password";
+        }
+        if (!string.IsNullOrEmpty(Title))
+        {
+            return Title;
+        }
+        return _isLogin ? "Sign In" : "Create Account";
+    }
+
+    protected override async Task OnComponentInitializedAsync()
+    {
+        _availableProviders = AvailableProviders;
+        _captchaConfig = CaptchaConfig;
+        _authConfig = AuthConfig;
+
+        if (!string.IsNullOrEmpty(AppId))
+        {
+            _model.AppId = AppId;
+        }
+
+        // Load authentication configuration first if not provided
+        if (_authConfig == null && !string.IsNullOrEmpty(AppId))
+        {
+            _authConfig = await ExecuteAsync(async () => 
+                await AuthService.GetAuthenticationConfigurationAsync(AppId), 
+                "Loading authentication configuration");
+        }
+
+        // Load app-specific providers if not provided and AppId is available
+        if (_availableProviders == null)
+        {
+            _availableProviders = await ExecuteAsync(async () =>
+            {
+                if (!string.IsNullOrEmpty(AppId))
+                {
+                    return await AuthService.GetAvailableProvidersAsync(AppId);
+                }
+                else
+                {
+                    return await AuthService.GetAvailableProvidersAsync();
+                }
+            }, "Loading authentication providers");
+        }
+
+        // Load captcha config if not provided  
+        if (_captchaConfig == null)
+        {
+            _captchaConfig = await ExecuteAsync(async () => 
+                await AuthService.GetCaptchaConfigurationAsync(AppId ?? ""), 
+                "Loading captcha configuration");
+        }
+
+        // Apply authentication configuration settings
+        ApplyAuthenticationSettings();
+        
+        // Apply default provider settings
+        ApplyDefaultProviderSettings();
+    }
+
+    protected override async Task OnComponentFirstRenderAsync()
+    {
+        if (_captchaConfig?.IsEnabled == true)
+        {
+            await InitializeCaptcha();
+        }
+
+        // Check WebAuthn browser support
+        try
+        {
+            _webAuthnSupported = await JS.InvokeAsync<bool>("webauthnIsSupported");
+        }
+        catch
+        {
+            _webAuthnSupported = false;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        // Clear any previous messages
+        _successMessage = "";
+        ClearError();
+        
+        // Manual validation for login
+        if (string.IsNullOrWhiteSpace(_model.Username))
+        {
+            await HandleErrorAsync(new InvalidOperationException("Username is required."), "Validation");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_model.Password))
+        {
+            await HandleErrorAsync(new InvalidOperationException("Password is required."), "Validation");
+            return;
+        }
+        
+        // Check if authentication is enabled
+        if (_authConfig?.IsEnabled == false)
+        {
+            await HandleErrorAsync(new InvalidOperationException("Authentication is currently disabled for this application."), "Authentication disabled");
+            return;
+        }
+
+        await ExecuteAsync(async () =>
+        {
+            // Get captcha response if enabled and required for this operation
+            if (ShouldShowCaptcha())
+            {
+                var captchaResponse = await GetCaptchaResponse();
+                if (string.IsNullOrEmpty(captchaResponse))
+                {
+                    throw new InvalidOperationException("Please complete the captcha verification.");
+                }
+
+                _model.CaptchaResponse = captchaResponse;
+            }
+
+            // Set required Platform and DeviceInfo fields for login
+            _model.Platform = await GetPlatformAsync();
+            _model.DeviceInfo = await GetDeviceInfoAsync();
+
+            // Try to get trusted device token from localStorage for 2FA bypass
+            try
+            {
+                _model.TrustedDeviceToken = await JS.InvokeAsync<string>("localStorage.getItem", "trustedDeviceToken");
+            }
+            catch
+            {
+                // Ignore errors - token is optional
+                _model.TrustedDeviceToken = null;
+            }
+
+            var response = await AuthService.LoginAsync(_model);
+
+            // Check if two-factor authentication is required
+            if (response.RequiresTwoFactor)
+            {
+                _pendingAuthResponse = response;
+                _showTwoFactor = true;
+                _twoFactorSessionId = response.TwoFactorSessionId;
+                _availableTwoFactorMethods = response.AvailableTwoFactorMethods;
+                _twoFactorExpiresIn = response.TwoFactorSessionExpiresIn;
+                _twoFactorCode = "";
+                _recoveryCode = "";
+                _showRecoveryCodeInput = false;
+
+                // Select the default method if available
+                if (_availableTwoFactorMethods?.Any() == true)
+                {
+                    _selectedTwoFactorMethod = _availableTwoFactorMethods.FirstOrDefault(m =>
+                        m.ProviderType == response.DefaultTwoFactorMethod) ?? _availableTwoFactorMethods.First();
+
+                    // If email 2FA is selected, automatically send the code
+                    if (_selectedTwoFactorMethod?.ProviderType == "TwoFactorEmail")
+                    {
+                        var sendResult = await AuthService.SendTwoFactorCodeAsync(_twoFactorSessionId ?? "");
+                        if (sendResult.Success)
+                        {
+                            _twoFactorMaskedDestination = sendResult.MaskedDestination;
+                        }
+                    }
+                }
+
+                StateHasChanged();
+                return;
+            }
+
+            // Check if password reset is required (temporary password was used)
+            if (response.RequiresPasswordReset)
+            {
+                _pendingAuthResponse = response;
+                _showPasswordReset = true;
+                _resetModel = new PasswordResetModel();
+
+                // Load password requirements for display
+                if (!string.IsNullOrEmpty(AppId))
+                {
+                    _passwordRequirements = await AuthService.GetPasswordRequirementsAsync(AppId);
+                }
+
+                StateHasChanged();
+                return;
+            }
+
+            // Check if disclaimer acceptance is required
+            if (response.RequiresDisclaimerAcceptance && response.PendingDisclaimers?.Any() == true)
+            {
+                _pendingAuthResponse = response;
+                _pendingDisclaimers = response.PendingDisclaimers;
+                _showDisclaimers = true;
+                StateHasChanged();
+                return;
+            }
+
+            await OnAuthenticationSuccess.InvokeAsync(response);
+            _successMessage = "Login successful!";
+        }, "Processing authentication");
+    }
+
+    private async Task HandleDisclaimersAccepted(List<DisclaimerAcceptanceResult> acceptances)
+    {
+        ClearError();
+
+        await ExecuteAsync(async () =>
+        {
+            // Call the acceptance API
+            var disclaimerService = DisclaimerServiceInstance;
+            if (disclaimerService != null && !string.IsNullOrEmpty(AppId))
+            {
+                var result = await disclaimerService.AcceptDisclaimersAsync(AppId, acceptances);
+                if (!result.Success)
+                {
+                    throw new InvalidOperationException(result.ErrorMessage ?? "Failed to record disclaimer acceptances. Please try again.");
+                }
+            }
+
+            // Continue with the auth flow
+            _showDisclaimers = false;
+            _pendingDisclaimers = null;
+
+            if (_pendingAuthResponse != null)
+            {
+                _pendingAuthResponse.RequiresDisclaimerAcceptance = false;
+                await OnAuthenticationSuccess.InvokeAsync(_pendingAuthResponse);
+                _successMessage = "Login successful!";
+            }
+
+            _pendingAuthResponse = null;
+        }, "Accepting disclaimers");
+    }
+
+    private void HandleDisclaimersCancelled()
+    {
+        _showDisclaimers = false;
+        _pendingDisclaimers = null;
+        _pendingAuthResponse = null;
+        ClearError();
+        StateHasChanged();
+    }
+
+    private async Task HandleDisclaimerError(string error)
+    {
+        await HandleErrorAsync(new InvalidOperationException(error), "Disclaimer acceptance");
+    }
+
+    [Inject] private IDisclaimerService? DisclaimerServiceInstance { get; set; }
+
+    private async Task HandlePasswordReset()
+    {
+        _successMessage = "";
+        ClearError();
+
+        // Validate passwords match
+        if (_resetModel.NewPassword != _resetModel.ConfirmPassword)
+        {
+            await HandleErrorAsync(new InvalidOperationException("Passwords do not match."), "Validation");
+            return;
+        }
+
+        // Validate password is not empty
+        if (string.IsNullOrWhiteSpace(_resetModel.NewPassword))
+        {
+            await HandleErrorAsync(new InvalidOperationException("New password is required."), "Validation");
+            return;
+        }
+
+        await ExecuteAsync(async () =>
+        {
+            // Call the password reset API
+            await AuthService.ResetPasswordAsync(_resetModel.NewPassword, _resetModel.ConfirmPassword, AppId ?? "");
+
+            // Password reset successful - now complete the authentication
+            _showPasswordReset = false;
+            _successMessage = "Password reset successful!";
+
+            if (_pendingAuthResponse != null)
+            {
+                // Update the response to indicate password reset is no longer required
+                _pendingAuthResponse.RequiresPasswordReset = false;
+                await OnAuthenticationSuccess.InvokeAsync(_pendingAuthResponse);
+            }
+
+            _pendingAuthResponse = null;
+            _resetModel = new PasswordResetModel();
+        }, "Resetting password");
+    }
+
+    private void ToggleNewPasswordVisibility()
+    {
+        _showNewPassword = !_showNewPassword;
+    }
+
+    private void ToggleConfirmPasswordVisibility()
+    {
+        _showConfirmPassword = !_showConfirmPassword;
+    }
+
+    protected override async Task OnComponentErrorAsync(Exception exception, string context)
+    {
+        // Send the detailed error message to the parent component
+        if (OnAuthenticationError.HasDelegate)
+        {
+            await OnAuthenticationError.InvokeAsync(exception.Message);
+        }
+
+        // Reset captcha if it failed
+        if (ShouldShowCaptcha())
+        {
+            await ResetCaptcha();
+        }
+    }
+
+    private async Task HandleSocialAuth(AuthProvider provider)
+    {
+        await ExecuteAsync(async () =>
+        {
+            var response = await AuthService.AuthenticateWithProviderAsync(provider.Name, AppId ?? "");
+
+            // Check if disclaimer acceptance is required
+            if (response.RequiresDisclaimerAcceptance && response.PendingDisclaimers?.Any() == true)
+            {
+                _pendingAuthResponse = response;
+                _pendingDisclaimers = response.PendingDisclaimers;
+                _showDisclaimers = true;
+                StateHasChanged();
+                return;
+            }
+
+            await OnAuthenticationSuccess.InvokeAsync(response);
+        }, $"Social authentication with {provider.Name}");
+    }
+
+    /// <summary>
+    /// Handles successful auto-login from TokenRegistrationComponent.
+    /// </summary>
+    private async Task HandleRegistrationAutoLoginSuccess(AuthenticationResponse authResponse)
+    {
+        // Check if disclaimer acceptance is required after registration auto-login
+        if (authResponse.RequiresDisclaimerAcceptance && authResponse.PendingDisclaimers?.Any() == true)
+        {
+            _pendingAuthResponse = authResponse;
+            _pendingDisclaimers = authResponse.PendingDisclaimers;
+            _showDisclaimers = true;
+            StateHasChanged();
+            return;
+        }
+
+        await OnAuthenticationSuccess.InvokeAsync(authResponse);
+    }
+
+    /// <summary>
+    /// Handles registration success event from TokenRegistrationComponent.
+    /// </summary>
+    private Task HandleRegistrationSuccess(TokenRegistrationComponent.RegistrationSuccessEventArgs args)
+    {
+        // Registration succeeded - auto-login will handle the rest
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Handles registration error from TokenRegistrationComponent.
+    /// </summary>
+    private async Task HandleRegistrationError(string errorMessage)
+    {
+        await OnAuthenticationError.InvokeAsync(errorMessage);
+    }
+
+    /// <summary>
+    /// Handles cancel from TokenRegistrationComponent - switches back to login mode.
+    /// </summary>
+    private void HandleRegistrationCancel()
+    {
+        _isLogin = true;
+        ClearError();
+        _successMessage = "";
+        StateHasChanged();
+    }
+
+    private void ToggleMode()
+    {
+        // Check if we're trying to switch to registration mode but it's not allowed
+        var registrationAllowed = _authConfig?.AllowTokenRegistration == true || _authConfig?.AllowOpenRegistration == true;
+        if (_isLogin && _authConfig != null && !registrationAllowed)
+        {
+            _ = HandleErrorAsync(new InvalidOperationException("Registration is not allowed for this application."), 
+                "Switching to registration mode");
+            return;
+        }
+
+        _isLogin = !_isLogin;
+        ClearError();
+        _successMessage = "";
+        
+        // Initialize login model with AppId
+        _model = new LoginRequest { AppId = AppId };
+        
+        StateHasChanged();
+    }
+
+    private void ApplyAuthenticationSettings()
+    {
+        if (_authConfig == null) return;
+
+        // Override ShowPasswordField based on configuration
+        if (!_authConfig.AllowLocalAuth)
+        {
+            ShowPasswordField = false;
+        }
+    }
+
+    private bool IsProviderAllowed(AuthProvider provider)
+    {
+        if (_authConfig == null) return true;
+
+        // If local auth is disabled and this is email/password
+        if (!_authConfig.AllowLocalAuth && 
+            provider.Name.Equals("Email", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // Check if provider is in the available list (already filtered for enabled)
+        return _availableProviders?.Any(p => p.Name.Equals(provider.Name, StringComparison.OrdinalIgnoreCase)) == true;
+    }
+
+    private void TogglePasswordVisibility()
+    {
+        _showPassword = !_showPassword;
+    }
+
+    private void HandleForgotPassword()
+    {
+        if (_authConfig?.AllowPasswordReset != true)
+        {
+            return;
+        }
+
+        // Show the forgot password form
+        _showForgotPassword = true;
+        _forgotPasswordModel = new ForgotPasswordModel();
+        ClearError();
+        _successMessage = "";
+        StateHasChanged();
+    }
+
+    private async Task HandleForgotPasswordSubmit()
+    {
+        ClearError();
+        _successMessage = "";
+
+        if (string.IsNullOrWhiteSpace(_forgotPasswordModel.Email))
+        {
+            await HandleErrorAsync(new InvalidOperationException("Please enter your email address."), "Validation");
+            return;
+        }
+
+        await ExecuteAsync(async () =>
+        {
+            await AuthService.RequestPasswordResetAsync(_forgotPasswordModel.Email, AppId ?? "");
+
+            // Show success message and switch back to login
+            _successMessage = "If an account exists with that email, you will receive a password reset email shortly.";
+            _showForgotPassword = false;
+            _forgotPasswordModel = new ForgotPasswordModel();
+            StateHasChanged();
+        }, "Requesting password reset");
+    }
+
+    private void CancelForgotPassword()
+    {
+        _showForgotPassword = false;
+        _forgotPasswordModel = new ForgotPasswordModel();
+        ClearError();
+        _successMessage = "";
+        StateHasChanged();
+    }
+
+    // ============================================
+    // Two-Factor Authentication Methods
+    // ============================================
+
+    private async Task SelectTwoFactorMethod(TwoFactorMethodInfo method)
+    {
+        _selectedTwoFactorMethod = method;
+        _twoFactorCode = "";
+        ClearError();
+
+        // If email 2FA is selected, send the code
+        if (method.ProviderType == "TwoFactorEmail" && !string.IsNullOrEmpty(_twoFactorSessionId))
+        {
+            await ExecuteAsync(async () =>
+            {
+                var result = await AuthService.SendTwoFactorCodeAsync(_twoFactorSessionId);
+                if (result.Success)
+                {
+                    _twoFactorMaskedDestination = result.MaskedDestination;
+                    _successMessage = $"Verification code sent to {result.MaskedDestination}";
+                }
+                else
+                {
+                    throw new InvalidOperationException(result.ErrorMessage ?? "Failed to send verification code");
+                }
+            }, "Sending verification code");
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task HandleTwoFactorSubmit()
+    {
+        ClearError();
+        _successMessage = "";
+
+        if (string.IsNullOrWhiteSpace(_twoFactorCode))
+        {
+            await HandleErrorAsync(new InvalidOperationException("Please enter the verification code."), "Validation");
+            return;
+        }
+
+        if (_twoFactorCode.Length != 6)
+        {
+            await HandleErrorAsync(new InvalidOperationException("Verification code must be 6 digits."), "Validation");
+            return;
+        }
+
+        await ExecuteAsync(async () =>
+        {
+            var request = new TwoFactorVerifyRequest
+            {
+                SessionId = _twoFactorSessionId ?? "",
+                Code = _twoFactorCode,
+                ProviderType = _selectedTwoFactorMethod?.ProviderType ?? "",
+                RememberDevice = _rememberDevice,
+                DeviceFingerprint = await GetDeviceInfoAsync(),
+                DeviceName = await GetPlatformAsync()
+            };
+
+            var result = await AuthService.VerifyTwoFactorCodeAsync(request);
+
+            if (result.Success && result.AuthResponse != null)
+            {
+                // Store trusted device token if provided
+                if (!string.IsNullOrEmpty(result.TrustedDeviceToken))
+                {
+                    // Store in local storage for future logins
+                    await JS.InvokeVoidAsync("localStorage.setItem", "trustedDeviceToken", result.TrustedDeviceToken);
+                }
+
+                // Check if password reset is still required
+                if (result.AuthResponse.RequiresPasswordReset)
+                {
+                    _pendingAuthResponse = result.AuthResponse;
+                    _showTwoFactor = false;
+                    _showPasswordReset = true;
+                    _resetModel = new PasswordResetModel();
+
+                    if (!string.IsNullOrEmpty(AppId))
+                    {
+                        _passwordRequirements = await AuthService.GetPasswordRequirementsAsync(AppId);
+                    }
+
+                    StateHasChanged();
+                    return;
+                }
+
+                // Check if disclaimer acceptance is required
+                if (result.AuthResponse.RequiresDisclaimerAcceptance && result.AuthResponse.PendingDisclaimers?.Any() == true)
+                {
+                    _pendingAuthResponse = result.AuthResponse;
+                    _pendingDisclaimers = result.AuthResponse.PendingDisclaimers;
+                    _showTwoFactor = false;
+                    _showDisclaimers = true;
+                    StateHasChanged();
+                    return;
+                }
+
+                _showTwoFactor = false;
+                await OnAuthenticationSuccess.InvokeAsync(result.AuthResponse);
+                _successMessage = "Login successful!";
+            }
+            else
+            {
+                throw new InvalidOperationException(result.ErrorMessage ?? "Verification failed. Please try again.");
+            }
+        }, "Verifying code");
+    }
+
+    private async Task HandleRecoveryCodeSubmit()
+    {
+        ClearError();
+        _successMessage = "";
+
+        if (string.IsNullOrWhiteSpace(_recoveryCode))
+        {
+            await HandleErrorAsync(new InvalidOperationException("Please enter a recovery code."), "Validation");
+            return;
+        }
+
+        await ExecuteAsync(async () =>
+        {
+            var result = await AuthService.VerifyTwoFactorRecoveryCodeAsync(
+                _twoFactorSessionId ?? "",
+                _recoveryCode.Replace("-", "").Trim(),
+                "web");
+
+            if (result.Success && result.AuthResponse != null)
+            {
+                // Check if password reset is still required
+                if (result.AuthResponse.RequiresPasswordReset)
+                {
+                    _pendingAuthResponse = result.AuthResponse;
+                    _showTwoFactor = false;
+                    _showPasswordReset = true;
+                    _resetModel = new PasswordResetModel();
+
+                    if (!string.IsNullOrEmpty(AppId))
+                    {
+                        _passwordRequirements = await AuthService.GetPasswordRequirementsAsync(AppId);
+                    }
+
+                    StateHasChanged();
+                    return;
+                }
+
+                // Check if disclaimer acceptance is required
+                if (result.AuthResponse.RequiresDisclaimerAcceptance && result.AuthResponse.PendingDisclaimers?.Any() == true)
+                {
+                    _pendingAuthResponse = result.AuthResponse;
+                    _pendingDisclaimers = result.AuthResponse.PendingDisclaimers;
+                    _showTwoFactor = false;
+                    _showRecoveryCodeInput = false;
+                    _showDisclaimers = true;
+                    StateHasChanged();
+                    return;
+                }
+
+                _showTwoFactor = false;
+                _showRecoveryCodeInput = false;
+                await OnAuthenticationSuccess.InvokeAsync(result.AuthResponse);
+                _successMessage = "Login successful! Note: One of your recovery codes has been used.";
+            }
+            else
+            {
+                throw new InvalidOperationException(result.ErrorMessage ?? "Invalid recovery code. Please try again.");
+            }
+        }, "Verifying recovery code");
+    }
+
+    private async Task ResendTwoFactorCode()
+    {
+        if (string.IsNullOrEmpty(_twoFactorSessionId))
+            return;
+
+        ClearError();
+        _successMessage = "";
+
+        await ExecuteAsync(async () =>
+        {
+            var result = await AuthService.SendTwoFactorCodeAsync(_twoFactorSessionId);
+            if (result.Success)
+            {
+                _twoFactorMaskedDestination = result.MaskedDestination;
+                _successMessage = $"New verification code sent to {result.MaskedDestination}";
+            }
+            else
+            {
+                throw new InvalidOperationException(result.ErrorMessage ?? "Failed to resend verification code");
+            }
+        }, "Resending verification code");
+    }
+
+    private void CancelTwoFactor()
+    {
+        _showTwoFactor = false;
+        _showRecoveryCodeInput = false;
+        _twoFactorCode = "";
+        _recoveryCode = "";
+        _twoFactorSessionId = null;
+        _selectedTwoFactorMethod = null;
+        _availableTwoFactorMethods = null;
+        _pendingAuthResponse = null;
+        ClearError();
+        _successMessage = "";
+        StateHasChanged();
+    }
+
+    private async Task InitializeCaptcha()
+    {
+        if (_captchaConfig?.ProviderType == "GoogleReCaptcha")
+        {
+            await ExecuteAsync(async () =>
+                await CaptchaService.InitializeGoogleRecaptchaAsync(_captchaConfig.SiteKey ?? "", $"captcha-container-{ComponentId}"),
+                "Initializing captcha");
+        }
+    }
+
+    private async Task<string?> GetCaptchaResponse()
+    {
+        if (_captchaConfig?.ProviderType == "GoogleReCaptcha")
+        {
+            return await CaptchaService.GetGoogleRecaptchaResponseAsync();
+        }
+        return null;
+    }
+
+    private async Task ResetCaptcha()
+    {
+        if (_captchaConfig?.ProviderType == "GoogleReCaptcha")
+        {
+            await CaptchaService.ResetGoogleRecaptchaAsync();
+        }
+    }
+
+    private void HandleEmailProviderClick()
+    {
+        // When email provider is clicked, we don't do OAuth
+        // Instead, we just ensure the email form is visible and focused
+        StateHasChanged();
+    }
+
+    private void ApplyDefaultProviderSettings()
+    {
+        if (_authConfig?.DefaultProvider == null || _availableProviders == null) return;
+
+        // Check if passkey provider is available
+        _passkeyEnabled = _availableProviders?.Any(p =>
+            p.Name.Equals("Passkey", StringComparison.OrdinalIgnoreCase)) == true;
+    }
+
+    /// <summary>
+    /// Handles passkey authentication using WebAuthn
+    /// </summary>
+    private async Task HandlePasskeyLogin()
+    {
+        _successMessage = "";
+        ClearError();
+
+        await ExecuteAsync(async () =>
+        {
+            if (string.IsNullOrEmpty(AppId))
+            {
+                throw new InvalidOperationException("AppId is required for passkey authentication.");
+            }
+
+            // Get authentication options from server
+            var options = await AuthService.GetPasskeyAuthenticationOptionsAsync(AppId);
+
+            // Call WebAuthn browser API via JS interop
+            var credential = await JS.InvokeAsync<System.Text.Json.JsonElement>("webauthnAuthenticate", options);
+
+            // Send assertion to server for verification
+            var response = await AuthService.VerifyPasskeyAuthenticationAsync(AppId, credential);
+
+            await OnAuthenticationSuccess.InvokeAsync(response);
+            _successMessage = "Passkey authentication successful!";
+        }, "Authenticating with passkey");
+    }
+
+    /// <summary>
+    /// Handles passkey registration after successful login
+    /// </summary>
+    private async Task RegisterPasskey()
+    {
+        _successMessage = "";
+        ClearError();
+
+        await ExecuteAsync(async () =>
+        {
+            if (string.IsNullOrEmpty(AppId))
+            {
+                throw new InvalidOperationException("AppId is required for passkey registration.");
+            }
+
+            // Get registration options from server
+            var options = await AuthService.GetPasskeyRegistrationOptionsAsync(AppId);
+
+            // Call WebAuthn browser API via JS interop
+            var credential = await JS.InvokeAsync<System.Text.Json.JsonElement>("webauthnRegister", options);
+
+            // Send credential to server to complete registration
+            await AuthService.CompletePasskeyRegistrationAsync(AppId, credential);
+
+            _showPasskeyRegistration = false;
+            _successMessage = "Passkey registered successfully! You can now sign in using your biometrics.";
+        }, "Registering passkey");
+    }
+
+    /// <summary>
+    /// Skip passkey registration prompt
+    /// </summary>
+    private void SkipPasskeyRegistration()
+    {
+        _showPasskeyRegistration = false;
+    }
+
+    private bool ShouldShowCaptcha()
+    {
+        if (_captchaConfig?.IsEnabled != true) return false;
+
+        // Check if captcha is required for login
+        return _captchaConfig.RequireForLogin;
+    }
+
+    /// <summary>
+    /// Determines whether to show detailed error messages.
+    /// Uses the configuration value if available, otherwise falls back to the parameter.
+    /// </summary>
+    private bool ShouldShowDetailedErrors()
+    {
+        // If configuration is loaded, use its value
+        if (_authConfig != null)
+        {
+            return _authConfig.ShowDetailedErrors;
+        }
+        
+        // Fall back to the parameter value
+        return ShowDetailedErrors;
+    }
+
+    private async Task<string> GetPlatformAsync()
+    {
+        // Detect platform based on user agent or environment
+        try
+        {
+            var userAgent = await JS.InvokeAsync<string>("eval", "navigator.userAgent");
+            
+            if (userAgent.Contains("Mobile") || userAgent.Contains("Android"))
+                return "Mobile";
+            else if (userAgent.Contains("iPad") || userAgent.Contains("iPhone"))
+                return "iOS";
+            else if (userAgent.Contains("Macintosh"))
+                return "macOS";
+            else if (userAgent.Contains("Windows"))
+                return "Windows";
+            else
+                return "Web";
+        }
+        catch
+        {
+            return "Web"; // Fallback
+        }
+    }
+
+    private async Task<string> GetDeviceInfoAsync()
+    {
+        // Get basic device information
+        try
+        {
+            var userAgent = await JS.InvokeAsync<string>("eval", "navigator.userAgent");
+            var platform = await JS.InvokeAsync<string>("eval", "navigator.platform");
+            
+            var deviceInfo = $"{platform} - {userAgent}";
+            return deviceInfo.Substring(0, Math.Min(200, deviceInfo.Length));
+        }
+        catch
+        {
+            return "Unknown Device"; // Fallback
+        }
+    }
+}
