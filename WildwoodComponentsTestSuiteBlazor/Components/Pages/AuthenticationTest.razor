@@ -1,0 +1,111 @@
+@page "/test/authentication"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Authentication
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="Authentication" ComponentName="AuthenticationComponent" IconClass="fas fa-shield-alt"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">App ID</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Title (optional)</label>
+            <input class="form-control form-control-sm" @bind="title" placeholder="Custom title" />
+        </div>
+        <div class="mb-2 form-check">
+            <input type="checkbox" class="form-check-input" id="showPasswordField" @bind="showPasswordField" />
+            <label class="form-check-label" for="showPasswordField">Show Password Field</label>
+        </div>
+        <div class="mb-2 form-check">
+            <input type="checkbox" class="form-check-input" id="showDetailedErrors" @bind="showDetailedErrors" />
+            <label class="form-check-label" for="showDetailedErrors">Show Detailed Errors</label>
+        </div>
+    </Settings>
+    <Component>
+        <div style="max-width: 480px; margin: 0 auto;">
+            <AuthenticationComponent AppId="@appId"
+                                     Title="@title"
+                                     ShowPasswordField="@showPasswordField"
+                                     ShowDetailedErrors="@showDetailedErrors"
+                                     OnAuthenticationSuccess="HandleAuthenticationSuccess"
+                                     OnAuthenticationError="HandleAuthenticationError" />
+        </div>
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string appId = "";
+    private string? title;
+    private bool showPasswordField = true;
+    private bool showDetailedErrors = true;
+
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        LifecycleTracker.TrackInitialized("AuthenticationComponent");
+        AddEvent("AuthenticationComponent initialized");
+        await Task.CompletedTask;
+    }
+
+    private void ApplySettings()
+    {
+        AddEvent($"Settings applied - AppId: {appId}, ShowPassword: {showPasswordField}, DetailedErrors: {showDetailedErrors}");
+        StateHasChanged();
+    }
+
+    private void ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        title = null;
+        showPasswordField = true;
+        showDetailedErrors = true;
+        AddEvent("Settings reset to defaults");
+        StateHasChanged();
+    }
+
+    private async Task HandleAuthenticationSuccess(AuthenticationResponse response)
+    {
+        LifecycleTracker.TrackCallback("AuthenticationComponent", "OnAuthenticationSuccess",
+            $"User: {response.FirstName} {response.LastName}");
+        AddEvent($"Authentication SUCCESS - User: {response.FirstName} {response.LastName}, Email: {response.Email}");
+
+        // Store the token so other test pages can use it
+        if (!string.IsNullOrEmpty(response.JwtToken))
+        {
+            await StateStorage.SetAuthTokenAsync(response.JwtToken);
+            AddEvent("JWT token stored in circuit state");
+        }
+    }
+
+    private void HandleAuthenticationError(string error)
+    {
+        LifecycleTracker.TrackCallback("AuthenticationComponent", "OnAuthenticationError", error);
+        AddEvent($"Authentication ERROR - {error}");
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
