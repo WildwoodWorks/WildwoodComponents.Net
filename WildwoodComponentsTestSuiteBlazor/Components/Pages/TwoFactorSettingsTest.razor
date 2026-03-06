@@ -1,0 +1,95 @@
+@page "/test/two-factor"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Security
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="Two-Factor Settings" ComponentName="TwoFactorSettingsComponent" IconClass="fas fa-lock"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">App ID</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Auth Token</label>
+            <input type="password" class="form-control form-control-sm" @bind="authToken" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">API Base URL</label>
+            <input class="form-control form-control-sm" @bind="apiBaseUrl" />
+        </div>
+    </Settings>
+    <Component>
+        <div style="max-width: 700px; margin: 0 auto;">
+            <TwoFactorSettingsComponent AppId="@appId"
+                                        AuthToken="@authToken"
+                                        ApiBaseUrl="@apiBaseUrl"
+                                        OnTwoFactorError="HandleTwoFactorError"
+                                        OnStatusChanged="HandleStatusChanged" />
+        </div>
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string appId = "";
+    private string authToken = "";
+    private string apiBaseUrl = "";
+
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        apiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "https://localhost:7046/api";
+        authToken = await StateStorage.GetItemAsync("wildwood_auth_token") ?? "";
+        LifecycleTracker.TrackInitialized("TwoFactorSettingsComponent");
+        AddEvent("TwoFactorSettingsComponent initialized");
+    }
+
+    private void ApplySettings()
+    {
+        AddEvent($"Settings applied - AppId: {appId}, API: {apiBaseUrl}, Token: {(string.IsNullOrEmpty(authToken) ? "(empty)" : "(set)")}");
+        StateHasChanged();
+    }
+
+    private void ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        apiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "https://localhost:7046/api";
+        authToken = "";
+        AddEvent("Settings reset to defaults");
+        StateHasChanged();
+    }
+
+    private void HandleTwoFactorError(string error)
+    {
+        LifecycleTracker.TrackCallback("TwoFactorSettingsComponent", "OnTwoFactorError", error);
+        AddEvent($"2FA ERROR - {error}");
+    }
+
+    private void HandleStatusChanged()
+    {
+        LifecycleTracker.TrackCallback("TwoFactorSettingsComponent", "OnStatusChanged");
+        AddEvent("2FA status changed (enabled/disabled/method updated)");
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
