@@ -1,0 +1,111 @@
+@page "/test/ai-flow"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.AI
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="AIFlowComponent Test" ComponentName="AIFlowComponent" IconClass="fas fa-project-diagram"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">AppId</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">FlowId</label>
+            <input class="form-control form-control-sm" @bind="flowId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">AuthToken</label>
+            <input class="form-control form-control-sm" @bind="authToken" type="password" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">API Base URL</label>
+            <input class="form-control form-control-sm" @bind="apiBaseUrl" />
+        </div>
+    </Settings>
+    <Component>
+        <AIFlowComponent AppId="@appId"
+                         FlowId="@flowId"
+                         AuthToken="@authToken"
+                         ApiBaseUrl="@apiBaseUrl"
+                         OnExecutionCompleted="HandleExecutionCompleted"
+                         OnExecutionFailed="HandleExecutionFailed"
+                         OnAuthenticationFailed="HandleAuthenticationFailed"
+                         OnError="HandleError" />
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string appId = "";
+    private string flowId = "";
+    private string authToken = "";
+    private string apiBaseUrl = "";
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        apiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "";
+        authToken = await StateStorage.GetItemAsync("wildwood_auth_token") ?? "";
+        LifecycleTracker.TrackInitialized("AIFlowComponent");
+    }
+
+    private void HandleExecutionCompleted(FlowExecution execution)
+    {
+        var msg = $"Execution completed - Status: {execution.Status}, Duration: {execution.DurationMs}ms";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("AIFlowComponent", "OnExecutionCompleted", msg);
+        StateHasChanged();
+    }
+
+    private void HandleExecutionFailed(FlowExecution execution)
+    {
+        var msg = $"Execution failed - Status: {execution.Status}, Error: {execution.ErrorMessage}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("AIFlowComponent", "OnExecutionFailed", msg);
+        StateHasChanged();
+    }
+
+    private void HandleAuthenticationFailed()
+    {
+        var msg = "Authentication failed - token may be expired";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("AIFlowComponent", "OnAuthenticationFailed", msg);
+        StateHasChanged();
+    }
+
+    private void HandleError(ComponentErrorEventArgs args)
+    {
+        var msg = $"Error: {args.Exception.Message}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackError("AIFlowComponent", args.Exception.Message);
+        StateHasChanged();
+    }
+
+    private void ApplySettings() { StateHasChanged(); }
+
+    private void ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        apiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "";
+        flowId = "";
+        events.Clear();
+        StateHasChanged();
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
