@@ -1,0 +1,479 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inherits BaseWildwoodComponent
+@inject ISubscriptionService SubscriptionService
+
+<div class="@GetRootCssClasses() subscription-component">
+    @if (!string.IsNullOrEmpty(ErrorMessage) && EnableErrorHandling)
+    {
+        <div class="alert alert-danger alert-dismissible">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            @ErrorMessage
+            <button type="button" class="btn-close" @onclick="ClearError"></button>
+        </div>
+    }
+
+    @if (IsLoading && ShowLoadingStates)
+    {
+        <div class="subscription-loading text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading subscription plans...</span>
+            </div>
+            <p class="mt-2">@(loadingMessage ?? "Loading subscription options...")</p>
+        </div>
+    }
+    else if (currentSubscription != null && ShowCurrentSubscription)
+    {
+        <div class="current-subscription">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Current Subscription</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h6 class="subscription-plan">@currentSubscription.PlanName</h6>
+                            <p class="subscription-description">@currentSubscription.Description</p>
+                            <div class="subscription-details">
+                                <span class="badge bg-success me-2">@currentSubscription.Status</span>
+                                <small class="text-muted">
+                                    @if (currentSubscription.NextBillingDate.HasValue)
+                                    {
+                                        <span>Next billing: @currentSubscription.NextBillingDate.Value.ToString("MMM dd, yyyy")</span>
+                                    }
+                                </small>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="subscription-price">
+                                <span class="price">@FormatPrice(currentSubscription.Price, currentSubscription.Currency)</span>
+                                <span class="period">/@GetPeriodLabel(currentSubscription.BillingInterval)</span>
+                            </div>
+                            @if (AllowUpgrade && availablePlans.Any(p => p.Id != currentSubscription.PlanId))
+                            {
+                                <button class="btn btn-outline-primary btn-sm mt-2" @onclick="ShowUpgradeOptions">
+                                    Upgrade Plan
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    @if (currentSubscription.Features?.Any() == true)
+                    {
+                        <div class="subscription-features mt-3">
+                            <h6>Plan Features</h6>
+                            <ul class="list-unstyled">
+                                @foreach (var feature in currentSubscription.Features)
+                                {
+                                    <li>
+                                        <i class="bi bi-check-circle text-success me-2"></i>
+                                        @feature
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    <div class="subscription-actions mt-3">
+                        @if (AllowCancellation)
+                        {
+                            <button class="btn btn-outline-danger" @onclick="ShowCancellationDialog" disabled="@IsLoading">
+                                Cancel Subscription
+                            </button>
+                        }
+                        @if (AllowPause && currentSubscription.Status == SubscriptionStatus.Active)
+                        {
+                            <button class="btn btn-outline-warning ms-2" @onclick="PauseSubscriptionAsync" disabled="@IsLoading">
+                                Pause Subscription
+                            </button>
+                        }
+                        else if (AllowPause && currentSubscription.Status == SubscriptionStatus.Paused)
+                        {
+                            <button class="btn btn-outline-success ms-2" @onclick="ResumeSubscriptionAsync" disabled="@IsLoading">
+                                Resume Subscription
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (availablePlans.Any())
+    {
+        <div class="subscription-plans">
+            <div class="plans-header text-center mb-4">
+                <h3>Choose Your Plan</h3>
+                @if (!string.IsNullOrEmpty(PlanDescription))
+                {
+                    <p class="text-muted">@PlanDescription</p>
+                }
+            </div>
+
+            @if (ShowBillingToggle && availablePlans.Any(p => p.BillingInterval == BillingInterval.Monthly) && 
+                 availablePlans.Any(p => p.BillingInterval == BillingInterval.Yearly))
+            {
+                <div class="billing-toggle text-center mb-4">
+                    <div class="btn-group" role="group">
+                        <input type="radio" class="btn-check" name="billing" id="monthly" 
+                               checked="@(selectedBillingInterval == BillingInterval.Monthly)"
+                               @onchange="() => ToggleBillingInterval(BillingInterval.Monthly)" />
+                        <label class="btn btn-outline-primary" for="monthly">Monthly</label>
+
+                        <input type="radio" class="btn-check" name="billing" id="yearly"
+                               checked="@(selectedBillingInterval == BillingInterval.Yearly)"
+                               @onchange="() => ToggleBillingInterval(BillingInterval.Yearly)" />
+                        <label class="btn btn-outline-primary" for="yearly">
+                            Yearly 
+                            @if (GetYearlyDiscount() > 0)
+                            {
+                                <span class="badge bg-success ms-1">@(GetYearlyDiscount())% off</span>
+                            }
+                        </label>
+                    </div>
+                </div>
+            }
+
+            <div class="row">
+                @foreach (var plan in GetFilteredPlans())
+                {
+                    <div class="col-lg-4 col-md-6 mb-4">
+                        <div class="card plan-card @(plan.IsRecommended ? "recommended" : "")">
+                            @if (plan.IsRecommended)
+                            {
+                                <div class="recommended-badge">
+                                    <span class="badge bg-primary">Recommended</span>
+                                </div>
+                            }
+                            
+                            <div class="card-header text-center">
+                                <h5 class="plan-name">@plan.Name</h5>
+                                <div class="plan-price">
+                                    <span class="price">@FormatPrice(plan.Price, plan.Currency)</span>
+                                    <span class="period">/@GetPeriodLabel(plan.BillingInterval)</span>
+                                </div>
+                                @if (plan.BillingInterval == BillingInterval.Yearly && plan.MonthlyEquivalent.HasValue)
+                                {
+                                    <small class="text-muted">
+                                        @FormatPrice(plan.MonthlyEquivalent.Value, plan.Currency)/month
+                                    </small>
+                                }
+                            </div>
+
+                            <div class="card-body">
+                                @if (!string.IsNullOrEmpty(plan.Description))
+                                {
+                                    <p class="plan-description">@plan.Description</p>
+                                }
+
+                                @if (plan.Features?.Any() == true)
+                                {
+                                    <ul class="plan-features list-unstyled">
+                                        @foreach (var feature in plan.Features)
+                                        {
+                                            <li>
+                                                <i class="bi bi-check text-success me-2"></i>
+                                                @feature
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+
+                                @if (plan.Limitations?.Any() == true)
+                                {
+                                    <div class="plan-limitations">
+                                        @foreach (var limitation in plan.Limitations)
+                                        {
+                                            <small class="text-muted d-block">
+                                                <i class="bi bi-info-circle me-1"></i>
+                                                @limitation
+                                            </small>
+                                        }
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="card-footer">
+                                <button class="btn @(plan.IsRecommended ? "btn-primary" : "btn-outline-primary") w-100" 
+                                        @onclick="() => SelectPlanAsync(plan)"
+                                        disabled="@(IsLoading || (currentSubscription?.PlanId == plan.Id))">
+                                    @if (IsLoading && selectedPlanId == plan.Id)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    @if (currentSubscription?.PlanId == plan.Id)
+                                    {
+                                        <span>Current Plan</span>
+                                    }
+                                    else if (plan.IsFree)
+                                    {
+                                        <span>Get Started Free</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Subscribe Now</span>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Cancellation Confirmation Modal -->
+    @if (showCancellationDialog)
+    {
+        <div class="modal d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Cancel Subscription</h5>
+                        <button type="button" class="btn-close" @onclick="HideCancellationDialog"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to cancel your subscription?</p>
+                        @if (currentSubscription?.NextBillingDate.HasValue == true)
+                        {
+                            <p class="text-muted">
+                                Your subscription will remain active until @currentSubscription.NextBillingDate.Value.ToString("MMM dd, yyyy").
+                            </p>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="HideCancellationDialog">
+                            Keep Subscription
+                        </button>
+                        <button type="button" class="btn btn-danger" @onclick="ConfirmCancellationAsync" disabled="@IsLoading">
+                            @if (IsLoading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            Cancel Subscription
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string UserId { get; set; } = string.Empty;
+    [Parameter] public bool ShowCurrentSubscription { get; set; } = true;
+    [Parameter] public bool ShowBillingToggle { get; set; } = true;
+    [Parameter] public bool AllowUpgrade { get; set; } = true;
+    [Parameter] public bool AllowCancellation { get; set; } = true;
+    [Parameter] public bool AllowPause { get; set; } = false;
+    [Parameter] public string PlanDescription { get; set; } = string.Empty;
+    [Parameter] public EventCallback<SubscriptionResult> OnSubscriptionChanged { get; set; }
+    [Parameter] public EventCallback<SubscriptionPlan> OnPlanSelected { get; set; }
+
+    private List<SubscriptionPlan> availablePlans = new();
+    private Subscription? currentSubscription;
+    private BillingInterval selectedBillingInterval = BillingInterval.Monthly;
+    private string? selectedPlanId;
+    private string? loadingMessage;
+    private bool showCancellationDialog = false;
+
+    protected override async Task OnComponentInitializedAsync()
+    {
+        await ExecuteAsync(async () =>
+        {
+            loadingMessage = "Loading subscription data...";
+            
+            // Load available plans and current subscription
+            var tasks = new List<Task>
+            {
+                LoadAvailablePlansAsync(),
+            };
+
+            if (!string.IsNullOrEmpty(UserId))
+            {
+                tasks.Add(LoadCurrentSubscriptionAsync());
+            }
+
+            await Task.WhenAll(tasks);
+        }, "Initializing subscription component");
+    }
+
+    private async Task LoadAvailablePlansAsync()
+    {
+        availablePlans = await SubscriptionService.GetAvailablePlansAsync();
+    }
+
+    private async Task LoadCurrentSubscriptionAsync()
+    {
+        if (!string.IsNullOrEmpty(UserId))
+        {
+            currentSubscription = await SubscriptionService.GetCurrentSubscriptionAsync(UserId);
+        }
+    }
+
+    private async Task SelectPlanAsync(SubscriptionPlan plan)
+    {
+        await ExecuteAsync(async () =>
+        {
+            selectedPlanId = plan.Id;
+            loadingMessage = $"Setting up {plan.Name} subscription...";
+
+            var result = await SubscriptionService.SubscribeToPlanAsync(UserId, plan.Id);
+            
+            if (result.IsSuccess)
+            {
+                currentSubscription = result.Subscription;
+                await OnSubscriptionChanged.InvokeAsync(result);
+                await OnPlanSelected.InvokeAsync(plan);
+            }
+            else
+            {
+                throw new SubscriptionException(result.ErrorMessage ?? "Failed to subscribe to plan");
+            }
+        }, $"Subscribing to {plan.Name}");
+    }
+
+    private async Task PauseSubscriptionAsync()
+    {
+        await ExecuteAsync(async () =>
+        {
+            if (currentSubscription == null) return;
+
+            loadingMessage = "Pausing subscription...";
+            var result = await SubscriptionService.PauseSubscriptionAsync(currentSubscription.Id);
+            
+            if (result.IsSuccess)
+            {
+                currentSubscription = result.Subscription;
+                await OnSubscriptionChanged.InvokeAsync(result);
+            }
+            else
+            {
+                throw new SubscriptionException(result.ErrorMessage ?? "Failed to pause subscription");
+            }
+        }, "Pausing subscription");
+    }
+
+    private async Task ResumeSubscriptionAsync()
+    {
+        await ExecuteAsync(async () =>
+        {
+            if (currentSubscription == null) return;
+
+            loadingMessage = "Resuming subscription...";
+            var result = await SubscriptionService.ResumeSubscriptionAsync(currentSubscription.Id);
+            
+            if (result.IsSuccess)
+            {
+                currentSubscription = result.Subscription;
+                await OnSubscriptionChanged.InvokeAsync(result);
+            }
+            else
+            {
+                throw new SubscriptionException(result.ErrorMessage ?? "Failed to resume subscription");
+            }
+        }, "Resuming subscription");
+    }
+
+    private void ShowCancellationDialog()
+    {
+        showCancellationDialog = true;
+        StateHasChanged();
+    }
+
+    private void HideCancellationDialog()
+    {
+        showCancellationDialog = false;
+        StateHasChanged();
+    }
+
+    private async Task ConfirmCancellationAsync()
+    {
+        await ExecuteAsync(async () =>
+        {
+            if (currentSubscription == null) return;
+
+            loadingMessage = "Canceling subscription...";
+            var result = await SubscriptionService.CancelSubscriptionAsync(currentSubscription.Id);
+            
+            if (result.IsSuccess)
+            {
+                currentSubscription = result.Subscription;
+                showCancellationDialog = false;
+                await OnSubscriptionChanged.InvokeAsync(result);
+            }
+            else
+            {
+                throw new SubscriptionException(result.ErrorMessage ?? "Failed to cancel subscription");
+            }
+        }, "Canceling subscription");
+    }
+
+    private void ShowUpgradeOptions()
+    {
+        // Logic to show upgrade options - could expand plans view or navigate to upgrade flow
+        StateHasChanged();
+    }
+
+    private void ToggleBillingInterval(BillingInterval interval)
+    {
+        selectedBillingInterval = interval;
+        StateHasChanged();
+    }
+
+    private List<SubscriptionPlan> GetFilteredPlans()
+    {
+        if (!ShowBillingToggle)
+        {
+            return availablePlans;
+        }
+
+        return availablePlans.Where(p => p.BillingInterval == selectedBillingInterval).ToList();
+    }
+
+    private int GetYearlyDiscount()
+    {
+        var monthlyPlans = availablePlans.Where(p => p.BillingInterval == BillingInterval.Monthly).ToList();
+        var yearlyPlans = availablePlans.Where(p => p.BillingInterval == BillingInterval.Yearly).ToList();
+
+        if (!monthlyPlans.Any() || !yearlyPlans.Any()) return 0;
+
+        // Calculate average discount
+        var discounts = new List<int>();
+        foreach (var yearlyPlan in yearlyPlans)
+        {
+            var matchingMonthly = monthlyPlans.FirstOrDefault(m => m.Name == yearlyPlan.Name);
+            if (matchingMonthly != null)
+            {
+                var yearlyMonthlyEquivalent = yearlyPlan.Price / 12;
+                var discount = (int)Math.Round(((matchingMonthly.Price - yearlyMonthlyEquivalent) / matchingMonthly.Price) * 100);
+                discounts.Add(discount);
+            }
+        }
+
+        return discounts.Any() ? (int)discounts.Average() : 0;
+    }
+
+    private string GetPeriodLabel(BillingInterval interval)
+    {
+        return interval switch
+        {
+            BillingInterval.Weekly => "week",
+            BillingInterval.Monthly => "month",
+            BillingInterval.Quarterly => "quarter",
+            BillingInterval.Yearly => "year",
+            _ => "period"
+        };
+    }
+
+    private string FormatPrice(decimal price, string currency)
+    {
+        return currency.ToUpperInvariant() switch
+        {
+            "USD" => price.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-US")),
+            "EUR" => price.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("de-DE")),
+            "GBP" => price.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-GB")),
+            _ => $"{currency} {price:N2}"
+        };
+    }
+}
