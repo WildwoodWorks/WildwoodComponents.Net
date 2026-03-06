@@ -1,0 +1,1453 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@using WildwoodComponents.Blazor.Services.Payment
+@using Microsoft.AspNetCore.Components.Forms
+@inherits BaseWildwoodComponent
+@implements IAsyncDisposable
+@inject IPaymentProviderService PaymentProviderService
+@inject IPlatformDetectionService PlatformService
+@inject PaymentScriptLoader ScriptLoader
+@inject IJSRuntime JSRuntime
+
+<div class="@GetRootCssClasses() payment-component">
+    @if (IsLoading && ShowLoadingStates)
+    {
+        <div class="payment-loading text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">@(_loadingMessage ?? "Loading payment options...")</p>
+        </div>
+    }
+    else if (_paymentComplete && _paymentResult != null)
+    {
+        <!-- Payment Success -->
+        <div class="payment-success text-center py-4">
+            <div class="success-icon mb-3">
+                <i class="bi bi-check-circle-fill text-success"></i>
+            </div>
+            <h4 class="text-success">Payment Successful!</h4>
+            <p class="transaction-id-display">Transaction ID: <code>@_paymentResult.TransactionId</code></p>
+            <p class="mb-0">Amount: <strong>@FormatAmount(Amount, Currency)</strong></p>
+            @if (!string.IsNullOrEmpty(_paymentResult.ReceiptUrl))
+            {
+                <a href="@_paymentResult.ReceiptUrl" target="_blank" class="btn btn-outline-primary mt-3">
+                    <i class="bi bi-receipt me-2"></i>View Receipt
+                </a>
+            }
+            @if (OnPaymentSuccess.HasDelegate)
+            {
+                <button class="btn btn-primary mt-3 ms-2" @onclick="HandleSuccessContinue">
+                    Continue
+                </button>
+            }
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(ErrorMessage) && EnableErrorHandling)
+    {
+        <!-- Payment Error -->
+        <div class="payment-error">
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <span class="error-message">@ErrorMessage</span>
+                <button type="button" class="btn-close" @onclick="ClearError" aria-label="Close"></button>
+            </div>
+            <button class="btn btn-outline-primary" @onclick="RetryPayment">
+                <i class="bi bi-arrow-clockwise me-2"></i>Try Again
+            </button>
+        </div>
+    }
+    else
+    {
+        <!-- Payment Form -->
+        <div class="payment-form">
+            @* Tracking Prevention Warning *@
+            @if (_trackingPreventionDetected)
+            {
+                <div class="alert alert-warning alert-dismissible fade show mb-3" role="alert">
+                    <i class="bi bi-shield-exclamation me-2"></i>
+                    <strong>Browser Privacy Settings Detected</strong>
+                    <p class="mb-0 small mt-1">
+                        Your browser's tracking prevention may affect payment processing. 
+                        If you experience issues, try disabling tracking prevention for this site or using a different browser.
+                    </p>
+                    <button type="button" class="btn-close" @onclick="() => _trackingPreventionDetected = false" aria-label="Close"></button>
+                </div>
+            }
+
+            <!-- Amount Display -->
+            @if (ShowAmount)
+            {
+                <div class="payment-amount-display mb-4 text-center">
+                    <span class="amount-value fs-3 fw-bold">@FormatAmount(Amount, Currency)</span>
+                    @if (!string.IsNullOrEmpty(Description))
+                    {
+                        <p class="text-muted mb-0">@Description</p>
+                    }
+                </div>
+            }
+
+            <!-- Platform Notice -->
+            @if (_platformInfo?.RequiresAppStorePayment == true)
+            {
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    @if (PlatformService.CurrentPlatform == RuntimePlatform.iOS || 
+                         PlatformService.CurrentPlatform == RuntimePlatform.macOS)
+                    {
+                        <text>Payment will be processed through the App Store.</text>
+                    }
+                    else if (PlatformService.CurrentPlatform == RuntimePlatform.Android)
+                    {
+                        <text>Payment will be processed through Google Play.</text>
+                    }
+                </div>
+            }
+
+            <!-- Provider Selection -->
+            @if (_availableProviders.Count > 1 && !_platformInfo?.RequiresAppStorePayment == true)
+            {
+                <div class="payment-providers mb-4">
+                    <label class="form-label fw-bold">Payment Method</label>
+                    <div class="provider-list">
+                        @foreach (var provider in _availableProviders)
+                        {
+                            <div class="provider-option @(_selectedProvider?.Id == provider.Id ? "selected" : "")"
+                                 @onclick="() => SelectProvider(provider)">
+                                <div class="provider-icon">
+                                    <i class="@provider.GetIconClass()"></i>
+                                </div>
+                                <div class="provider-name">
+                                    @provider.GetDisplayLabel()
+                                </div>
+                                @if (provider.IsDefault)
+                                {
+                                    <span class="badge bg-primary ms-2">Default</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Provider-Specific Payment Form -->
+            @if (_selectedProvider != null)
+            {
+                <div class="payment-form-content">
+                    @switch ((PaymentProviderType)_selectedProvider.ProviderType)
+                    {
+                        case PaymentProviderType.Stripe:
+                            <!-- Stripe Card Element -->
+                            <div class="stripe-payment">
+                                <div class="mb-3">
+                                    <label class="form-label">Card Details</label>
+                                    <div id="stripe-card-element" class="stripe-element"></div>
+                                    <div id="stripe-card-errors" class="text-danger small mt-1"></div>
+                                </div>
+                                @if (RequireBillingAddress)
+                                {
+                                    @RenderBillingAddressForm()
+                                }
+                            </div>
+                            break;
+
+                        case PaymentProviderType.PayPal:
+                            <!-- PayPal Button Container -->
+                            <div class="paypal-payment">
+                                @* PayPal loading indicator - shown outside the button container *@
+                                @if (!_paypalButtonsLoaded)
+                                {
+                                    <div class="text-center py-3">
+                                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                            <span class="visually-hidden">Loading PayPal...</span>
+                                        </div>
+                                        <p class="text-muted small mt-2 mb-0">Loading PayPal buttons...</p>
+                                    </div>
+                                }
+                                @* PayPal renders its buttons here - don't put conditional content inside *@
+                                <div id="paypal-button-container" class="paypal-buttons-container @(_paypalButtonsLoaded ? "" : "d-none")">
+                                </div>
+                                <p class="text-muted small mt-2 text-center">
+                                    <i class="bi bi-shield-check me-1"></i>Secure payment via PayPal
+                                </p>
+                            </div>
+                            break;
+
+                        case PaymentProviderType.ApplePay:
+                            <!-- Apple Pay Button -->
+                            <div class="apple-pay-payment text-center">
+                                <div id="apple-pay-button" class="apple-pay-button apple-pay-button-black"></div>
+                                <p class="text-muted small mt-2">Use Face ID or Touch ID to confirm payment.</p>
+                            </div>
+                            break;
+
+                        case PaymentProviderType.GooglePay:
+                            <!-- Google Pay Button -->
+                            <div class="google-pay-payment text-center">
+                                <div id="google-pay-button"></div>
+                                <p class="text-muted small mt-2">Pay securely with Google Pay.</p>
+                            </div>
+                            break;
+
+                        case PaymentProviderType.AppleAppStore:
+                        case PaymentProviderType.GooglePlayStore:
+                            <!-- App Store Payment -->
+                            <div class="app-store-payment text-center">
+                                <button class="btn btn-lg @((PaymentProviderType)_selectedProvider.ProviderType == PaymentProviderType.AppleAppStore ? "btn-dark" : "btn-success")"
+                                        @onclick="InitiateAppStorePurchase"
+                                        disabled="@_isProcessing">
+                                    @if (_isProcessing)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    @if ((PaymentProviderType)_selectedProvider.ProviderType == PaymentProviderType.AppleAppStore)
+                                    {
+                                        <i class="bi bi-apple me-2"></i>
+                                        <text>Purchase with Apple</text>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-google-play me-2"></i>
+                                        <text>Purchase with Google Play</text>
+                                    }
+                                </button>
+                                <p class="text-muted small mt-3">
+                                    @if ((PaymentProviderType)_selectedProvider.ProviderType == PaymentProviderType.AppleAppStore)
+                                    {
+                                        <text>Your payment will be charged to your Apple ID account.</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Your payment will be charged to your Google Play account.</text>
+                                    }
+                                </p>
+                            </div>
+                            break;
+
+                        case PaymentProviderType.Klarna:
+                        case PaymentProviderType.Affirm:
+                        case PaymentProviderType.Afterpay:
+                            <!-- BNPL Payment -->
+                            <div class="bnpl-payment text-center">
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-clock me-2"></i>
+                                    <strong>Pay in installments</strong>
+                                    <p class="mb-0 mt-1 small">Split your payment into easy installments with @_selectedProvider.GetDisplayLabel().</p>
+                                </div>
+                                <button class="btn btn-warning btn-lg" @onclick="InitiateBnplPayment" disabled="@_isProcessing">
+                                    @if (_isProcessing)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    Continue with @_selectedProvider.GetDisplayLabel()
+                                </button>
+                            </div>
+                            break;
+
+                        default:
+                            <!-- Generic Card Form -->
+                            <div class="generic-payment">
+                                <div class="mb-3">
+                                    <label class="form-label">Card Number</label>
+                                    <input type="text" class="form-control" @bind="_cardNumber" 
+                                           placeholder="1234 5678 9012 3456" maxlength="19" />
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">Expiry</label>
+                                            <input type="text" class="form-control" @bind="_cardExpiry" 
+                                                   placeholder="MM/YY" maxlength="5" />
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="mb-3">
+                                            <label class="form-label">CVV</label>
+                                            <input type="text" class="form-control" @bind="_cardCvv" 
+                                                   placeholder="123" maxlength="4" />
+                                        </div>
+                                    </div>
+                                </div>
+                                @if (RequireBillingAddress)
+                                {
+                                    @RenderBillingAddressForm()
+                                }
+                            </div>
+                            break;
+                    }
+                </div>
+
+                <!-- Submit Button (for non-redirect flows) -->
+                @if (!IsRedirectProvider(_selectedProvider.ProviderType))
+                {
+                    <div class="payment-submit mt-4">
+                        <button class="btn btn-primary btn-lg w-100" 
+                                @onclick="ProcessPayment"
+                                disabled="@_isProcessing">
+                            @if (_isProcessing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                <text>Processing...</text>
+                            }
+                            else
+                            {
+                                <i class="bi bi-lock-fill me-2"></i>
+                                <text>Pay @FormatAmount(Amount, Currency)</text>
+                            }
+                        </button>
+                    </div>
+                }
+
+                <!-- Security Notice -->
+                <div class="payment-security text-center mt-3">
+                    <small class="text-muted">
+                        <i class="bi bi-shield-lock me-1"></i>
+                        Secured by @_selectedProvider.GetDisplayLabel()
+                    </small>
+                </div>
+            }
+            else if (_availableProviders.Count == 0)
+            {
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>No payment methods available</strong>
+                    <p class="small mb-0 mt-2">
+                        @if (!string.IsNullOrEmpty(_noProvidersReason))
+                        {
+                            @_noProvidersReason
+                        }
+                        else
+                        {
+                            <text>No payment methods are available for this app on your current platform.</text>
+                        }
+                    </p>
+                    <details class="mt-2">
+                        <summary class="small text-muted" style="cursor: pointer;">
+                            <i class="bi bi-bug me-1"></i>Technical details (click to expand)
+                        </summary>
+                        <div class="mt-2 p-2 bg-light rounded" style="font-family: monospace; font-size: 0.75rem;">
+                            <div><strong>AppId:</strong> @AppId</div>
+                            <div><strong>Platform:</strong> @(_platformInfo?.Platform ?? PlatformService.CurrentPlatform.ToString())</div>
+                            <div><strong>Platform Flags:</strong> @_platformFlags (0x@(_platformFlags.ToString("X")))</div>
+                            <div><strong>RequiresAppStore:</strong> @(_platformInfo?.RequiresAppStorePayment ?? PlatformService.RequiresAppStorePayment)</div>
+                            <div><strong>API Response:</strong> @(_apiResponseStatus ?? "Unknown")</div>
+                            <div><strong>Providers from API:</strong> @_providersFromApi</div>
+                            <div><strong>Providers after filtering:</strong> @_availableProviders.Count</div>
+                            @if (_filteringDetails.Count > 0)
+                            {
+                                <div class="mt-2">
+                                    <strong>Provider filtering log:</strong>
+                                    <ul class="mb-0 ps-3">
+                                        @foreach (var detail in _filteringDetails)
+                                        {
+                                            <li>@detail</li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(_debugInfo))
+                            {
+                                <div class="mt-2">
+                                    <strong>Additional info:</strong>
+                                    <pre class="mb-0 mt-1" style="white-space: pre-wrap; word-break: break-all;">@_debugInfo</pre>
+                                </div>
+                            }
+                        </div>
+                        <div class="mt-2 small text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Check browser console (F12) for detailed API logs. Look for "[PaymentProviderService]" or "[PaymentComponent]" entries.
+                        </div>
+                    </details>
+                </div>
+            }
+
+            <!-- Cancel Button -->
+            @if (OnCancel.HasDelegate)
+            {
+                <div class="text-center mt-3">
+                    <button type="button" class="btn btn-link" @onclick="HandleCancel">
+                        Cancel
+                    </button>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    // Required Parameters
+    [Parameter, EditorRequired] public string AppId { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public decimal Amount { get; set; }
+    
+    // Optional Parameters
+    [Parameter] public string Currency { get; set; } = "USD";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string? CustomerId { get; set; }
+    [Parameter] public string? CustomerEmail { get; set; }
+    [Parameter] public string? OrderId { get; set; }
+    [Parameter] public string? SubscriptionId { get; set; }
+    [Parameter] public string? PricingModelId { get; set; }
+    [Parameter] public bool IsSubscription { get; set; }
+    [Parameter] public bool ShowAmount { get; set; } = true;
+    [Parameter] public bool RequireBillingAddress { get; set; } = false;
+    [Parameter] public string? ReturnUrl { get; set; }
+    [Parameter] public string? CancelUrl { get; set; }
+    [Parameter] public Dictionary<string, string>? Metadata { get; set; }
+    
+    /// <summary>
+    /// Optional: Pre-loaded providers to use instead of fetching from API.
+    /// When provided, the component skips the API discovery call.
+    /// Useful for admin scenarios where the provider is already selected.
+    /// </summary>
+    [Parameter] public List<PaymentProviderDto>? PreloadedProviders { get; set; }
+    
+    /// <summary>
+    /// Optional: ID of the provider to pre-select when using PreloadedProviders.
+    /// </summary>
+    [Parameter] public string? PreselectedProviderId { get; set; }
+    
+    // Events
+    [Parameter] public EventCallback<PaymentSuccessEventArgs> OnPaymentSuccess { get; set; }
+    [Parameter] public EventCallback<PaymentFailureEventArgs> OnPaymentFailure { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    // Private state
+    private List<PaymentProviderDto> _availableProviders = new();
+    private PaymentProviderDto? _selectedProvider;
+    private PlatformFilteredProvidersDto? _platformInfo;
+    private PaymentCompletionResult? _paymentResult;
+    private bool _paymentComplete;
+    private bool _isProcessing;
+    private string? _loadingMessage;
+    private DotNetObjectReference<PaymentComponent>? _dotNetRef;
+    private bool _cardComplete;
+    private bool _stripeInitialized;
+    
+    // Track which provider scripts we've loaded for cleanup
+    private HashSet<PaymentProviderType> _loadedProviderScripts = new();
+    private bool _scriptsLoaded;
+    private bool _paypalButtonsLoaded;
+    
+    // Card form fields (for generic providers)
+    private string _cardNumber = string.Empty;
+    private string _cardExpiry = string.Empty;
+    private string _cardCvv = string.Empty;
+    
+    // Billing address
+    private string _billingFirstName = string.Empty;
+    private string _billingLastName = string.Empty;
+    private string _billingAddress = string.Empty;
+    private string _billingCity = string.Empty;
+    private string _billingState = string.Empty;
+    private string _billingZip = string.Empty;
+    private string _billingCountry = "US";
+
+    // Flag for tracking prevention detection
+    private bool _trackingPreventionDetected = false;
+
+    // Debug info for when providers aren't loaded
+    private string? _noProvidersReason;
+    private string? _debugInfo;
+    
+    // Enhanced debug info
+    private List<string> _filteringDetails = new();
+    private string? _apiResponseStatus;
+    private int _providersFromApi = 0;
+    private int _platformFlags = 0;
+
+    protected override async Task OnComponentInitializedAsync()
+    {
+        await LoadAvailableProviders();
+    }
+
+    private bool _providersInitialized = false;
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        
+        // Log initialization state on first render for debugging
+        if (firstRender)
+        {
+            await LogToConsoleAsync($"[PaymentComponent] First render - AppId: {AppId}, Providers: {_availableProviders.Count}, Selected: {_selectedProvider?.Name ?? "none"}");
+        }
+        
+        // Initialize providers after render - handles both first render and subsequent renders
+        // This ensures DOM elements exist and scripts can be loaded
+        if (!_providersInitialized && _availableProviders.Count > 0 && _selectedProvider != null)
+        {
+            _providersInitialized = true;
+            _dotNetRef = DotNetObjectReference.Create(this);
+            
+            Logger?.LogInformation("OnAfterRenderAsync: Initializing {Count} providers, selected: {Selected}", 
+                _availableProviders.Count, _selectedProvider?.Name);
+            await LogToConsoleAsync($"[PaymentComponent] Initializing provider: {_selectedProvider.Name}");
+            
+            // Load scripts for all available providers (multi-provider support)
+            await LoadProviderScriptsAsync();
+            
+            // Small delay to ensure DOM is fully ready
+            await Task.Delay(100);
+            
+            // Initialize the selected provider
+            await InitializeProviderJs(_selectedProvider);
+        }
+    }
+
+    private async Task LoadProviderScriptsAsync()
+    {
+        if (_scriptsLoaded)
+            return;
+
+        foreach (var provider in _availableProviders)
+        {
+            var providerType = (PaymentProviderType)provider.ProviderType;
+            
+            // Only load scripts for providers that need client-side JS
+            if (RequiresClientScript(providerType))
+            {
+                var loaded = await ScriptLoader.LoadAsync(providerType);
+                if (loaded)
+                {
+                    _loadedProviderScripts.Add(providerType);
+                    Logger?.LogDebug("Loaded script for provider: {Provider}", providerType);
+                }
+            }
+        }
+
+        _scriptsLoaded = true;
+    }
+
+    private static bool RequiresClientScript(PaymentProviderType providerType)
+    {
+        return providerType == PaymentProviderType.Stripe ||
+               providerType == PaymentProviderType.PayPal ||
+               providerType == PaymentProviderType.ApplePay ||
+               providerType == PaymentProviderType.GooglePay;
+    }
+
+    private async Task LoadAvailableProviders()
+    {
+        // Reset debug info
+        _filteringDetails.Clear();
+        _apiResponseStatus = null;
+        _providersFromApi = 0;
+        _platformFlags = PlatformService.GetPlatformFlags();
+        
+        // Log to browser console via JS for easier debugging
+        await LogToConsoleAsync($"[PaymentComponent] LoadAvailableProviders starting for AppId: {AppId}");
+        await LogToConsoleAsync($"[PaymentComponent] Platform: {PlatformService.CurrentPlatform}, Flags: {_platformFlags} (0x{_platformFlags:X}), RequiresAppStore: {PlatformService.RequiresAppStorePayment}");
+        
+        // If providers are preloaded, use them directly (skip API call)
+        if (PreloadedProviders != null && PreloadedProviders.Count > 0)
+        {
+            _availableProviders = PreloadedProviders;
+            _providersFromApi = PreloadedProviders.Count;
+            _apiResponseStatus = "Preloaded (skipped API call)";
+            
+            if (!string.IsNullOrEmpty(PreselectedProviderId))
+            {
+                _selectedProvider = FindProviderById(PreselectedProviderId);
+            }
+            
+            if (_selectedProvider == null && _availableProviders.Count > 0)
+            {
+                _selectedProvider = _availableProviders[0];
+            }
+            
+            Logger?.LogDebug("Using {Count} preloaded providers, selected: {SelectedId}", 
+                _availableProviders.Count, _selectedProvider?.Id);
+            await LogToConsoleAsync($"[PaymentComponent] Using {_availableProviders.Count} preloaded providers");
+            return;
+        }
+        
+        _loadingMessage = "Loading payment options...";
+        await SetLoadingAsync(true);
+
+        try
+        {
+            // Validate AppId
+            if (string.IsNullOrEmpty(AppId))
+            {
+                _noProvidersReason = "Application ID is not configured.";
+                _debugInfo = "AppId parameter is null or empty";
+                _apiResponseStatus = "Not called - AppId missing";
+                Logger?.LogError("LoadAvailableProviders: AppId is null or empty!");
+                await LogToConsoleAsync("[PaymentComponent] ERROR: AppId is null or empty!");
+                return;
+            }
+            
+            Logger?.LogInformation("LoadAvailableProviders: Starting for AppId: '{AppId}'", AppId);
+            Logger?.LogInformation("LoadAvailableProviders: Platform: {Platform}, RequiresAppStore: {RequiresAppStore}", 
+                PlatformService.CurrentPlatform, PlatformService.RequiresAppStorePayment);
+            
+            _platformInfo = await PaymentProviderService.GetAvailableProvidersAsync(AppId);
+            
+            if (_platformInfo == null)
+            {
+                _noProvidersReason = "Unable to load payment configuration from server.";
+                _debugInfo = $"API returned null response. Check server logs and network connectivity.";
+                _apiResponseStatus = "Null response from API";
+                Logger?.LogError("LoadAvailableProviders: API returned null for AppId: {AppId}", AppId);
+                await LogToConsoleAsync($"[PaymentComponent] ERROR: API returned null for AppId: {AppId}");
+                return;
+            }
+            
+            _availableProviders = _platformInfo.AvailableProviders;
+            _providersFromApi = _availableProviders.Count;
+            _apiResponseStatus = $"Success - {_providersFromApi} provider(s) after filtering";
+            
+            Logger?.LogInformation("LoadAvailableProviders: Received {Count} providers for AppId: {AppId}", 
+                _availableProviders.Count, AppId);
+            await LogToConsoleAsync($"[PaymentComponent] Received {_availableProviders.Count} providers after filtering");
+            await LogToConsoleAsync($"[PaymentComponent] Check server console logs for '[PaymentProviderService]' entries to see what API returned BEFORE filtering");
+            
+            // Log each provider for debugging
+            foreach (var provider in _availableProviders)
+            {
+                var providerType = (PaymentProviderType)provider.ProviderType;
+                var hasKey = !string.IsNullOrEmpty(provider.PublishableKey) || !string.IsNullOrEmpty(provider.ClientId);
+                _filteringDetails.Add($"{provider.Name} (Type: {providerType}, Enabled: {provider.IsEnabled}, HasKey: {hasKey}, Platforms: {provider.AllowedPlatforms})");
+                await LogToConsoleAsync($"[PaymentComponent]   Provider: {provider.Name}, Type: {providerType}, Enabled: {provider.IsEnabled}, AllowedPlatforms: {provider.AllowedPlatforms}, HasPublishableKey: {!string.IsNullOrEmpty(provider.PublishableKey)}, HasClientId: {!string.IsNullOrEmpty(provider.ClientId)}");
+            }
+            
+            if (_availableProviders.Count == 0)
+            {
+                // Build debug info with more context - SERVER SIDE ISSUE
+                var debugBuilder = new System.Text.StringBuilder();
+                debugBuilder.AppendLine("SERVER-SIDE CONFIGURATION ISSUE:");
+                debugBuilder.AppendLine("The WildwoodAPI returned 0 payment providers for this app.");
+                debugBuilder.AppendLine("");
+                debugBuilder.AppendLine("Possible causes:");
+                debugBuilder.AppendLine("1. No payment providers configured for the app's company");
+                debugBuilder.AppendLine("2. Providers exist but none are enabled (IsEnabled=false)");
+                debugBuilder.AppendLine("3. Providers exist but none have Web platform in AllowedPlatforms");
+                debugBuilder.AppendLine("");
+                debugBuilder.AppendLine("To fix:");
+                debugBuilder.AppendLine("1. Go to WildwoodAdmin");
+                debugBuilder.AppendLine("2. Navigate to Company > Payment Providers");
+                debugBuilder.AppendLine("3. Add/configure a payment provider (e.g., Stripe, PayPal)");
+                debugBuilder.AppendLine("4. Ensure the provider is Enabled");
+                debugBuilder.AppendLine("5. Ensure AllowedPlatforms includes 'Web' (flag 1)");
+                
+                _noProvidersReason = "No payment providers are configured for this application. Please configure payment providers in the admin panel.";
+                _debugInfo = debugBuilder.ToString();
+                
+                Logger?.LogWarning("LoadAvailableProviders: API returned 0 providers - this is a SERVER-SIDE configuration issue. " +
+                    "AppId: {AppId}, Platform: {Platform}. Check that payment providers are configured and enabled for the app's company.", 
+                    AppId, _platformInfo.Platform);
+                await LogToConsoleAsync($"[PaymentComponent] WARNING: API returned 0 providers - SERVER-SIDE CONFIGURATION ISSUE");
+                await LogToConsoleAsync($"[PaymentComponent] Check that payment providers are configured in WildwoodAdmin for the company associated with AppId: {AppId}");
+                return;
+            }
+            
+            // Log each provider's details for debugging
+            foreach (var provider in _availableProviders)
+            {
+                var providerType = (PaymentProviderType)provider.ProviderType;
+                Logger?.LogInformation("  Provider: {Name} (Type: {Type}, Id: {Id})", 
+                    provider.Name, providerType, provider.Id);
+            }
+            
+            // Auto-select default or first provider
+            if (_platformInfo.RequiredProviderId != null)
+            {
+                _selectedProvider = FindProviderById(_platformInfo.RequiredProviderId);
+                Logger?.LogInformation("Required provider selected: {ProviderId}", _platformInfo.RequiredProviderId);
+            }
+            else if (_platformInfo.DefaultProvider != null)
+            {
+                _selectedProvider = _platformInfo.DefaultProvider;
+                Logger?.LogInformation("Default provider selected: {ProviderId}", _selectedProvider?.Id);
+            }
+            else if (_availableProviders.Count > 0)
+            {
+                _selectedProvider = _availableProviders[0];
+                Logger?.LogInformation("First provider selected: {ProviderId}", _selectedProvider?.Id);
+            }
+            
+            if (_selectedProvider != null)
+            {
+                var selectedType = (PaymentProviderType)_selectedProvider.ProviderType;
+                Logger?.LogInformation("SELECTED: {ProviderName} (Type: {Type})", 
+                    _selectedProvider.Name, selectedType);
+                await LogToConsoleAsync($"[PaymentComponent] Selected provider: {_selectedProvider.Name} (Type: {selectedType})");
+            }
+        }
+        catch (Exception ex)
+        {
+            _noProvidersReason = "An error occurred while loading payment options.";
+            _debugInfo = $"Exception: {ex.GetType().Name}\nMessage: {ex.Message}";
+            _apiResponseStatus = $"Exception: {ex.GetType().Name}";
+            Logger?.LogError(ex, "LoadAvailableProviders: Failed for AppId: {AppId}", AppId);
+            await LogToConsoleAsync($"[PaymentComponent] ERROR: {ex.Message}");
+            await HandleErrorAsync(ex, "Loading payment providers");
+        }
+        finally
+        {
+            await SetLoadingAsync(false);
+        }
+    }
+
+    private async Task InitializeProviderJs(PaymentProviderDto provider)
+    {
+        try
+        {
+            var providerType = (PaymentProviderType)provider.ProviderType;
+            Logger?.LogInformation("InitializeProviderJs: Starting for {ProviderType}", providerType);
+            await LogToConsoleAsync($"[PaymentComponent] InitializeProviderJs: Starting for {providerType}");
+            
+            // Ensure script is loaded for this provider
+            if (!ScriptLoader.IsLoaded(providerType) && RequiresClientScript(providerType))
+            {
+                Logger?.LogInformation("InitializeProviderJs: Loading script for {ProviderType}...", providerType);
+                await LogToConsoleAsync($"[PaymentComponent] Loading script for {providerType}...");
+                var loaded = await ScriptLoader.LoadAsync(providerType);
+                if (loaded)
+                {
+                    _loadedProviderScripts.Add(providerType);
+                    Logger?.LogInformation("InitializeProviderJs: Script loaded for {ProviderType}", providerType);
+                    await LogToConsoleAsync($"[PaymentComponent] Script loaded for {providerType}");
+                }
+                else
+                {
+                    Logger?.LogError("InitializeProviderJs: FAILED to load script for {ProviderType}", providerType);
+                    await LogToConsoleAsync($"[PaymentComponent] ERROR: FAILED to load script for {providerType}");
+                    await HandleErrorAsync(new Exception($"Failed to load {providerType} payment script"), "Script loading");
+                    return;
+                }
+            }
+            else
+            {
+                Logger?.LogInformation("InitializeProviderJs: Script already loaded for {ProviderType}", providerType);
+                await LogToConsoleAsync($"[PaymentComponent] Script already loaded for {providerType}");
+            }
+            
+            // Initialize the provider with its configuration
+            var refKey = $"payment-{ComponentId}-{providerType}";
+            
+            switch (providerType)
+            {
+                case PaymentProviderType.Stripe:
+                    if (!string.IsNullOrEmpty(provider.PublishableKey))
+                    {
+                        await LogToConsoleAsync($"[PaymentComponent] Initializing Stripe with key: {provider.PublishableKey.Substring(0, Math.Min(20, provider.PublishableKey.Length))}...");
+                        _dotNetRef ??= DotNetObjectReference.Create(this);
+                        await InvokeJSVoidAsync("wildwoodPayment.initStripe", 
+                            provider.PublishableKey, "stripe-card-element", _dotNetRef, refKey);
+                        _stripeInitialized = true;
+                        Logger?.LogInformation("InitializeProviderJs: Stripe initialized");
+                        await LogToConsoleAsync("[PaymentComponent] Stripe initialized successfully");
+                    }
+                    else
+                    {
+                        Logger?.LogWarning("InitializeProviderJs: Stripe provider missing PublishableKey");
+                        await LogToConsoleAsync("[PaymentComponent] ERROR: Stripe provider missing PublishableKey");
+                        await HandleErrorAsync(new Exception("Stripe is not properly configured (missing PublishableKey). Please contact support."), "Stripe configuration");
+                    }
+                    break;
+                    
+                case PaymentProviderType.PayPal:
+                    if (!string.IsNullOrEmpty(provider.ClientId))
+                    {
+                        Logger?.LogInformation("InitializeProviderJs: Calling wildwoodPayment.initPayPal with ClientId: {ClientIdPrefix}...", 
+                            provider.ClientId.Length > 10 ? provider.ClientId.Substring(0, 10) : provider.ClientId);
+                        await LogToConsoleAsync($"[PaymentComponent] Initializing PayPal with ClientId: {provider.ClientId.Substring(0, Math.Min(10, provider.ClientId.Length))}...");
+                        Logger?.LogInformation("InitializeProviderJs: PayPal options - IsSubscription: {IsSubscription}, SupportsApplePay: {ApplePay}, SupportsGooglePay: {GooglePay}",
+                            IsSubscription, provider.SupportsApplePay, provider.SupportsGooglePay);
+                        _dotNetRef ??= DotNetObjectReference.Create(this);
+                        
+                        try
+                        {
+                            // Build PayPal options including subscription and funding source info
+                            var paypalOptions = new Dictionary<string, object>
+                            {
+                                ["isSubscription"] = IsSubscription,
+                                ["supportsApplePay"] = provider.SupportsApplePay,
+                                ["supportsGooglePay"] = provider.SupportsGooglePay,
+                                ["description"] = Description ?? string.Empty
+                            };
+                            
+                            var result = await InvokeJSAsync<bool>("wildwoodPayment.initPayPal", 
+                                provider.ClientId, "paypal-button-container", Amount, Currency, _dotNetRef, refKey, paypalOptions);
+                            _paypalButtonsLoaded = result;
+                            Logger?.LogInformation("InitializeProviderJs: PayPal initPayPal returned: {Result}", result);
+                            await LogToConsoleAsync($"[PaymentComponent] PayPal initialization result: {result}");
+                            
+                            if (!result)
+                            {
+                                Logger?.LogWarning("InitializeProviderJs: PayPal initialization returned false");
+                                await HandleErrorAsync(new Exception("PayPal buttons failed to initialize. Check browser console for errors."), "PayPal initialization");
+                            }
+                        }
+                        catch (Exception jsEx)
+                        {
+                            Logger?.LogError(jsEx, "InitializeProviderJs: JavaScript error calling initPayPal");
+                            await LogToConsoleAsync($"[PaymentComponent] ERROR: PayPal JavaScript error: {jsEx.Message}");
+                            await HandleErrorAsync(new Exception($"PayPal JavaScript error: {jsEx.Message}"), "PayPal initialization");
+                        }
+                        
+                        StateHasChanged();
+                    }
+                    else
+                    {
+                        Logger?.LogWarning("InitializeProviderJs: PayPal provider missing ClientId - provider ID: {ProviderId}, Name: {Name}", 
+                            provider.Id, provider.Name);
+                        await LogToConsoleAsync("[PaymentComponent] ERROR: PayPal provider missing ClientId");
+                        _paypalButtonsLoaded = false;
+                        await HandleErrorAsync(new InvalidOperationException("PayPal is not properly configured (missing ClientId). Please contact support."), "PayPal configuration");
+                    }
+                    break;
+                    
+                case PaymentProviderType.ApplePay:
+                    _dotNetRef ??= DotNetObjectReference.Create(this);
+                    await LogToConsoleAsync("[PaymentComponent] Initializing Apple Pay...");
+                    await InvokeJSVoidAsync("wildwoodPayment.initApplePay", 
+                        provider.MerchantId, Amount, Currency, Description ?? "Payment", _dotNetRef, refKey);
+                    Logger?.LogInformation("InitializeProviderJs: Apple Pay initialized");
+                    await LogToConsoleAsync("[PaymentComponent] Apple Pay initialized");
+                    break;
+                    
+                case PaymentProviderType.GooglePay:
+                    _dotNetRef ??= DotNetObjectReference.Create(this);
+                    await LogToConsoleAsync("[PaymentComponent] Initializing Google Pay...");
+                    await InvokeJSVoidAsync("wildwoodPayment.initGooglePay", 
+                        provider.MerchantId, Amount, Currency, 
+                        provider.IsSandboxMode ? "TEST" : "PRODUCTION",
+                        provider.PublishableKey, _dotNetRef, refKey);
+                    Logger?.LogInformation("InitializeProviderJs: Google Pay initialized");
+                    await LogToConsoleAsync("[PaymentComponent] Google Pay initialized");
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "InitializeProviderJs: Failed to initialize payment provider JS for {ProviderType}", 
+                (PaymentProviderType)provider.ProviderType);
+            await LogToConsoleAsync($"[PaymentComponent] ERROR: Failed to initialize provider: {ex.Message}");
+            await HandleErrorAsync(ex, $"Initializing {(PaymentProviderType)provider.ProviderType}");
+        }
+    }
+
+    /// <summary>
+    /// Logs a message to the browser console for debugging
+    /// </summary>
+    private async Task LogToConsoleAsync(string message)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", message);
+        }
+        catch
+        {
+            // Ignore logging failures - console may not be available
+        }
+    }
+
+    private PaymentProviderDto? FindProviderById(string id)
+    {
+        foreach (var provider in _availableProviders)
+        {
+            if (provider.Id == id)
+                return provider;
+        }
+        return null;
+    }
+
+    private async Task SelectProvider(PaymentProviderDto provider)
+    {
+        _selectedProvider = provider;
+        _cardComplete = false;
+        _stripeInitialized = false;
+        _paypalButtonsLoaded = false;
+        ClearError();
+        StateHasChanged();
+        
+        // Initialize JS for the new provider
+        await Task.Delay(100); // Allow DOM to update
+        await InitializeProviderJs(provider);
+    }
+
+    /// <summary>
+    /// Called from JavaScript when card input changes
+    /// </summary>
+    [JSInvokable]
+    public void OnCardChange(bool complete, string? error)
+    {
+        _cardComplete = complete;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Called from JavaScript when tracking prevention is detected.
+    /// Shows a user-friendly warning message about potential payment issues.
+    /// </summary>
+    [JSInvokable]
+    public void OnTrackingPreventionDetected()
+    {
+        _trackingPreventionDetected = true;
+        Logger?.LogWarning("Browser tracking prevention detected - this may affect Stripe fraud detection features");
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Called from JavaScript when PayPal payment is approved
+    /// </summary>
+    [JSInvokable]
+    public async Task OnPayPalApproved(PayPalApprovalResult result)
+    {
+        try
+        {
+            Logger?.LogInformation("PayPal payment approved. OrderId: {OrderId}, TransactionId: {TransactionId}", 
+                result.OrderId, result.TransactionId);
+
+            _paymentResult = new PaymentCompletionResult
+            {
+                Success = true,
+                TransactionId = result.TransactionId,
+                PaymentIntentId = result.OrderId
+            };
+            _paymentComplete = true;
+            
+            await NotifyPaymentSuccess();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "Error handling PayPal approval");
+            await HandlePaymentError("Failed to process PayPal payment", "paypal_error");
+        }
+    }
+
+    /// <summary>
+    /// Called from JavaScript when PayPal payment is cancelled
+    /// </summary>
+    [JSInvokable]
+    public void OnPayPalCancelled(PayPalCancelResult result)
+    {
+        Logger?.LogInformation("PayPal payment cancelled. OrderId: {OrderId}", result.OrderId);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Called from JavaScript when PayPal encounters an error
+    /// </summary>
+    [JSInvokable]
+    public async Task OnPayPalError(PayPalErrorResult result)
+    {
+        Logger?.LogWarning("PayPal error: {ErrorMessage}", result.ErrorMessage);
+        await HandlePaymentError(result.ErrorMessage ?? "PayPal payment failed", "paypal_error");
+        StateHasChanged();
+    }
+
+    // PayPal JS callback models
+    public class PayPalApprovalResult
+    {
+        public string? OrderId { get; set; }
+        public string? PayerId { get; set; }
+        public string? TransactionId { get; set; }
+    }
+
+    public class PayPalCancelResult
+    {
+        public string? OrderId { get; set; }
+    }
+
+    public class PayPalErrorResult
+    {
+        public string? ErrorMessage { get; set; }
+    }
+
+    private async Task ProcessPayment()
+    {
+        if (_selectedProvider == null || _isProcessing)
+            return;
+
+        _isProcessing = true;
+        _loadingMessage = "Processing payment...";
+        StateHasChanged();
+
+        try
+        {
+            var request = new InitiatePaymentRequest
+            {
+                ProviderId = _selectedProvider.Id,
+                AppId = AppId,
+                Amount = Amount,
+                Currency = Currency,
+                Description = Description,
+                CustomerId = CustomerId,
+                CustomerEmail = CustomerEmail,
+                OrderId = OrderId,
+                SubscriptionId = SubscriptionId,
+                PricingModelId = PricingModelId,
+                IsSubscription = IsSubscription,
+                ReturnUrl = ReturnUrl,
+                CancelUrl = CancelUrl,
+                Metadata = Metadata
+            };
+
+            var response = await PaymentProviderService.InitiatePaymentAsync(request);
+            Logger?.LogInformation("ProcessPayment: Payment initiation response: {Response}", response);
+
+            if (!response.Success)
+            {
+                await HandlePaymentError(response.ErrorMessage ?? "Payment initiation failed", response.ErrorCode);
+                return;
+            }
+
+            var providerType = (PaymentProviderType)_selectedProvider.ProviderType;
+            switch (providerType)
+            {
+                case PaymentProviderType.Stripe:
+                    await ConfirmStripePayment(response.ClientSecret!);
+                    break;
+                    
+                default:
+                    await CompletePayment(response.PaymentIntentId!);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex, "Processing payment");
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ConfirmStripePayment(string clientSecret)
+    {
+        try
+        {
+            var result = await InvokeJSAsync<PaymentJsResult>("wildwoodPayment.confirmStripePayment", clientSecret) 
+                ?? new PaymentJsResult { Success = false, ErrorMessage = "JS call failed" };
+            
+            if (result.Success)
+            {
+                await CompletePayment(result.PaymentIntentId!);
+            }
+            else
+            {
+                await HandlePaymentError(result.ErrorMessage ?? "Card payment failed", result.ErrorCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex, "Confirming card payment");
+        }
+    }
+
+    private async Task InitiateAppStorePurchase()
+    {
+        if (_selectedProvider == null || _isProcessing)
+            return;
+
+        _isProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            var request = new InitiatePaymentRequest
+            {
+                ProviderId = _selectedProvider.Id,
+                AppId = AppId,
+                Amount = Amount,
+                Currency = Currency,
+                PricingModelId = PricingModelId,
+                IsSubscription = IsSubscription
+            };
+
+            var response = await PaymentProviderService.InitiatePaymentAsync(request);
+
+            if (!response.Success || response.ProductIds == null || response.ProductIds.Count == 0)
+            {
+                await HandlePaymentError(response.ErrorMessage ?? "No products configured", response.ErrorCode);
+                return;
+            }
+
+            var providerType = (PaymentProviderType)_selectedProvider.ProviderType;
+            var receiptData = await InvokeJSAsync<string>("wildwoodPayment.purchaseAppStoreProduct", 
+                response.ProductIds[0], providerType == PaymentProviderType.AppleAppStore);
+
+            if (!string.IsNullOrEmpty(receiptData))
+            {
+                var validationResult = await PaymentProviderService.ValidateAppStoreReceiptAsync(
+                    AppId, receiptData, providerType);
+
+                if (validationResult.Success)
+                {
+                    _paymentResult = validationResult;
+                    _paymentComplete = true;
+                    await NotifyPaymentSuccess();
+                }
+                else
+                {
+                    await HandlePaymentError(validationResult.ErrorMessage ?? "Receipt validation failed", validationResult.ErrorCode);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex, "App store purchase");
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task InitiateBnplPayment()
+    {
+        if (_selectedProvider == null || _isProcessing)
+            return;
+
+        _isProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            var request = new InitiatePaymentRequest
+            {
+                ProviderId = _selectedProvider.Id,
+                AppId = AppId,
+                Amount = Amount,
+                Currency = Currency,
+                CustomerEmail = CustomerEmail,
+                ReturnUrl = ReturnUrl,
+                CancelUrl = CancelUrl
+            };
+
+            var response = await PaymentProviderService.InitiatePaymentAsync(request);
+
+            if (response.Success && !string.IsNullOrEmpty(response.RedirectUrl))
+            {
+                await InvokeJSVoidAsync("eval", $"window.location.href = '{response.RedirectUrl}'");
+            }
+            else
+            {
+                await HandlePaymentError(response.ErrorMessage ?? "Failed to initialize payment", response.ErrorCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex, "BNPL payment");
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CompletePayment(string paymentIntentId)
+    {
+        var providerType = (PaymentProviderType)(_selectedProvider?.ProviderType ?? (int)PaymentProviderType.Stripe);
+        var result = await PaymentProviderService.ConfirmPaymentAsync(paymentIntentId, providerType);
+
+        if (result.Success)
+        {
+            _paymentResult = result;
+            _paymentComplete = true;
+            await NotifyPaymentSuccess();
+        }
+        else
+        {
+            await HandlePaymentError(result.ErrorMessage ?? "Payment confirmation failed", result.ErrorCode);
+        }
+    }
+
+    private async Task NotifyPaymentSuccess()
+    {
+        if (OnPaymentSuccess.HasDelegate)
+        {
+            await OnPaymentSuccess.InvokeAsync(new PaymentSuccessEventArgs
+            {
+                TransactionId = _paymentResult?.TransactionId,
+                PaymentIntentId = _paymentResult?.PaymentIntentId,
+                SubscriptionId = _paymentResult?.SubscriptionId,
+                Amount = Amount,
+                Currency = Currency,
+                ProviderType = _selectedProvider?.ProviderType ?? (int)PaymentProviderType.Stripe,
+                ReceiptUrl = _paymentResult?.ReceiptUrl
+            });
+        }
+    }
+
+    private async Task HandlePaymentError(string message, string? code)
+    {
+        await HandleErrorAsync(new Exception(message), "Payment failed");
+        
+        if (OnPaymentFailure.HasDelegate)
+        {
+            await OnPaymentFailure.InvokeAsync(new PaymentFailureEventArgs
+            {
+                ErrorMessage = message,
+                ErrorCode = code,
+                ProviderType = _selectedProvider?.ProviderType ?? (int)PaymentProviderType.Stripe,
+                IsRetryable = IsRetryableError(code)
+            });
+        }
+    }
+
+    private void RetryPayment()
+    {
+        ClearError();
+        _paymentComplete = false;
+        _paymentResult = null;
+        _providersInitialized = false;
+        StateHasChanged();
+    }
+
+    private void HandleSuccessContinue()
+    {
+        if (OnPaymentSuccess.HasDelegate && _paymentResult != null)
+        {
+            _ = OnPaymentSuccess.InvokeAsync(new PaymentSuccessEventArgs
+            {
+                TransactionId = _paymentResult.TransactionId,
+                Amount = Amount,
+                Currency = Currency,
+                ProviderType = _selectedProvider?.ProviderType ?? (int)PaymentProviderType.Stripe
+            });
+        }
+    }
+
+    private void HandleCancel()
+    {
+        if (OnCancel.HasDelegate)
+        {
+            _ = OnCancel.InvokeAsync();
+        }
+    }
+
+    private static bool IsRedirectProvider(int providerType)
+    {
+        var type = (PaymentProviderType)providerType;
+        return type == PaymentProviderType.Klarna ||
+               type == PaymentProviderType.Affirm ||
+               type == PaymentProviderType.Afterpay;
+    }
+
+    private static bool IsRetryableError(string? code)
+    {
+        if (string.IsNullOrEmpty(code)) return true;
+        
+        return code != "card_declined" && 
+               code != "insufficient_funds" && 
+               code != "lost_card" && 
+               code != "stolen_card";
+    }
+
+    private static string FormatAmount(decimal amount, string currency)
+    {
+        return currency.ToUpperInvariant() switch
+        {
+            "USD" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-US")),
+            "EUR" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("de-DE")),
+            "GBP" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-GB")),
+            "JPY" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("ja-JP")),
+            "INR" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-IN")),
+            _ => $"{currency} {amount:N2}"
+        };
+    }
+
+    private RenderFragment RenderBillingAddressForm() => __builder =>
+    {
+        <div class="billing-address mt-4">
+            <h6>Billing Address</h6>
+            <div class="row">
+                <div class="col-6">
+                    <div class="mb-3">
+                        <label class="form-label">First Name</label>
+                        <input type="text" class="form-control" @bind="_billingFirstName" />
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="mb-3">
+                        <label class="form-label">Last Name</label>
+                        <input type="text" class="form-control" @bind="_billingLastName" />
+                    </div>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Address</label>
+                <input type="text" class="form-control" @bind="_billingAddress" />
+            </div>
+            <div class="row">
+                <div class="col-6">
+                    <div class="mb-3">
+                        <label class="form-label">City</label>
+                        <input type="text" class="form-control" @bind="_billingCity" />
+                    </div>
+                </div>
+                <div class="col-3">
+                    <div class="mb-3">
+                        <label class="form-label">State</label>
+                        <input type="text" class="form-control" @bind="_billingState" />
+                    </div>
+                </div>
+                <div class="col-3">
+                    <div class="mb-3">
+                        <label class="form-label">ZIP</label>
+                        <input type="text" class="form-control" @bind="_billingZip" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    };
+
+    private class PaymentJsResult
+    {
+        public bool Success { get; set; }
+        public string? PaymentIntentId { get; set; }
+        public string? ErrorMessage { get; set; }
+        public string? ErrorCode { get; set; }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _dotNetRef?.Dispose();
+        
+        if (_stripeInitialized)
+        {
+            try
+            {
+                await InvokeJSVoidAsync("wildwoodPayment.disposeStripe");
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
+        
+        if (_selectedProvider != null && (PaymentProviderType)_selectedProvider.ProviderType == PaymentProviderType.PayPal)
+        {
+            try
+            {
+                await InvokeJSVoidAsync("wildwoodPayment.disposePayPal");
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
+        
+        foreach (var providerType in _loadedProviderScripts)
+        {
+            try
+            {
+                await ScriptLoader.ReleaseAsync(providerType);
+            }
+            catch
+            {
+                // Ignore release errors during disposal
+            }
+        }
+        _loadedProviderScripts.Clear();
+    }
+}
+<style>
+.payment-component {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.payment-amount-display {
+    background: var(--ww-bg-tertiary, #f8f9fa);
+    padding: 1.5rem;
+    border-radius: var(--ww-border-radius, 0.5rem);
+}
+
+.provider-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.provider-option {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    border: 2px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius-sm, 0.375rem);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.provider-option:hover {
+    border-color: var(--ww-primary, #0d6efd);
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+.provider-option.selected {
+    border-color: var(--ww-primary, #0d6efd);
+    background: var(--ww-primary-bg, rgba(13, 110, 253, 0.1));
+}
+
+.provider-icon {
+    font-size: 1.5rem;
+    width: 40px;
+    text-align: center;
+    color: var(--ww-text-secondary, #6c757d);
+}
+
+.provider-option.selected .provider-icon {
+    color: var(--ww-primary, #0d6efd);
+}
+
+.provider-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.stripe-element {
+    padding: 12px;
+    border: 1px solid var(--ww-border-color, #ced4da);
+    border-radius: var(--ww-border-radius-sm, 0.375rem);
+    background: var(--ww-input-bg, #ffffff);
+    min-height: 44px;
+}
+
+.stripe-element.StripeElement--focus {
+    border-color: var(--ww-primary, #0d6efd);
+    box-shadow: 0 0 0 0.25rem var(--ww-focus-ring, rgba(13, 110, 253, 0.25));
+}
+
+.apple-pay-button {
+    width: 100%;
+    height: 48px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.payment-security {
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.payment-success {
+    background: var(--ww-success-bg, rgba(25, 135, 84, 0.1));
+    padding: 2rem;
+    border-radius: var(--ww-border-radius, 0.5rem);
+}
+
+.payment-loading {
+    padding: 3rem;
+}
+
+.paypal-buttons-container {
+    min-height: 150px;
+}
+
+.transaction-id-display {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: #333;
+    margin-top: 0.5rem;
+}
+</style>
