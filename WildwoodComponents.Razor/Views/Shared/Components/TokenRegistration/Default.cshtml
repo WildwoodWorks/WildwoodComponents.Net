@@ -1,0 +1,296 @@
+@using WildwoodComponents.Razor.Models
+@model TokenRegistrationViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var defaultPricing = ViewData["DefaultPricing"] as PricingDetails;
+}
+
+<div id="ww-reg-@cid"
+     class="ww-registration-component"
+     data-component-id="@cid"
+     data-app-id="@(Model.AppId ?? "")"
+     data-token="@(Model.Token ?? "")"
+     data-allow-token="@Model.AllowTokenRegistration.ToString().ToLower()"
+     data-allow-open="@Model.AllowOpenRegistration.ToString().ToLower()"
+     data-token-required="@Model.TokenIsRequired.ToString().ToLower()"
+     data-token-optional="@Model.TokenIsOptional.ToString().ToLower()"
+     data-default-pricing-id="@(Model.DefaultPricingModelId ?? "")"
+     data-auto-login="@Model.AutoLogin.ToString().ToLower()"
+     data-redirect-url="@(Model.RedirectUrl ?? "")"
+     data-proxy-base="@Model.ProxyBaseUrl"
+     data-payment-proxy-base="@(Model.PaymentProxyBaseUrl ?? "")"
+     data-default-pricing='@(defaultPricing != null ? System.Text.Json.JsonSerializer.Serialize(defaultPricing) : "")'>
+
+    <!-- Step Indicator -->
+    <div class="ww-reg-steps mb-3" style="display: none;">
+        <div class="d-flex justify-content-center">
+            <div class="ww-step ww-step-token" style="display: none;">
+                <span class="step-number">1</span>
+                <span class="step-label">Token</span>
+            </div>
+            <div class="ww-step-connector ww-connector-token" style="display: none;"></div>
+            <div class="ww-step ww-step-account">
+                <span class="step-number ww-account-step-num">1</span>
+                <span class="step-label">Account</span>
+            </div>
+            <div class="ww-step-connector ww-connector-payment" style="display: none;"></div>
+            <div class="ww-step ww-step-payment" style="display: none;">
+                <span class="step-number ww-payment-step-num">2</span>
+                <span class="step-label">Payment</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 1: Token Validation -->
+    <div class="ww-reg-token-step" style="display: none;">
+        <h3>Registration Token Required</h3>
+        <p class="text-muted">Please enter your registration token to begin the signup process.</p>
+
+        <div class="form-group">
+            <label for="ww-token-@cid">Registration Token: <span class="text-danger">*</span></label>
+            <input type="text"
+                   class="form-control ww-token-input"
+                   id="ww-token-@cid"
+                   placeholder="Enter your registration token"
+                   maxlength="100" />
+            <div class="invalid-feedback ww-token-error"></div>
+        </div>
+
+        <button type="button" class="btn btn-primary mt-2 ww-validate-token-btn">
+            <span class="spinner-border spinner-border-sm me-2 ww-token-spinner" role="status" style="display: none;"></span>
+            <span class="ww-token-btn-text">Validate Token</span>
+        </button>
+    </div>
+
+    <!-- Step 2: Registration Form -->
+    <div class="ww-reg-form-step" style="display: none;">
+        <h3>Create Your Account</h3>
+        <p class="text-muted ww-reg-subtitle">Please complete the form below to create your account.</p>
+
+        <!-- Optional Token Card (shown when both modes allowed and no token validated) -->
+        <div class="ww-optional-token-card card mb-3 border-info" style="display: none;">
+            <div class="card-body">
+                <h6 class="card-title"><i class="fas fa-ticket-alt me-2"></i>Have a Registration Token?</h6>
+                <p class="card-text small text-muted mb-2">
+                    If you have a registration token, enter it below to unlock special access or pricing.
+                </p>
+                <div class="input-group">
+                    <input type="text"
+                           class="form-control ww-optional-token-input"
+                           placeholder="Enter registration token (optional)"
+                           maxlength="100" />
+                    <button type="button" class="btn btn-outline-primary ww-apply-token-btn" disabled>
+                        <span class="spinner-border spinner-border-sm ww-opt-token-spinner" role="status" style="display: none;"></span>
+                        <span class="ww-opt-token-text">Apply</span>
+                    </button>
+                </div>
+                <div class="text-danger small mt-1 ww-opt-token-error" style="display: none;"></div>
+                <div class="text-success small mt-1 ww-opt-token-success" style="display: none;">
+                    <i class="fas fa-check-circle me-1"></i>Token applied successfully!
+                </div>
+            </div>
+        </div>
+
+        <!-- Token Info Display -->
+        <div class="ww-token-info alert alert-info mb-3" style="display: none;">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h6><i class="fas fa-info-circle"></i> Token Information</h6>
+                    <small class="ww-token-info-content"></small>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary ww-clear-token-btn" style="display: none;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Registration Form -->
+        <form class="ww-registration-form" novalidate>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group mb-3">
+                        <label for="ww-firstName-@cid">First Name *</label>
+                        <input type="text" class="form-control" id="ww-firstName-@cid" name="firstName" required maxlength="50" />
+                        <div class="invalid-feedback">First name is required</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group mb-3">
+                        <label for="ww-lastName-@cid">Last Name *</label>
+                        <input type="text" class="form-control" id="ww-lastName-@cid" name="lastName" required maxlength="50" />
+                        <div class="invalid-feedback">Last name is required</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="ww-username-@cid">Username *</label>
+                <input type="text" class="form-control" id="ww-username-@cid" name="username"
+                       required minlength="3" maxlength="50"
+                       pattern="^[a-zA-Z0-9_.\-]+$"
+                       placeholder="Choose a unique username" />
+                <div class="invalid-feedback">Username must be 3-50 characters (letters, numbers, underscores, dots, hyphens)</div>
+                <small class="text-muted">This will be used to log in to your account</small>
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="ww-email-@cid">Email Address *</label>
+                <input type="email" class="form-control" id="ww-email-@cid" name="email" required />
+                <div class="invalid-feedback">Please enter a valid email address</div>
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="ww-password-@cid">Password *</label>
+                <div class="input-group">
+                    <input type="password" class="form-control" id="ww-password-@cid" name="password"
+                           required minlength="8" maxlength="100" />
+                    <button type="button" class="btn btn-outline-secondary ww-toggle-password-btn">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </div>
+                <div class="invalid-feedback">Password must be at least 8 characters</div>
+                <small class="text-muted ww-password-requirements" style="display: none;"></small>
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="ww-confirmPassword-@cid">Confirm Password *</label>
+                <input type="password" class="form-control" id="ww-confirmPassword-@cid" name="confirmPassword"
+                       required minlength="8" maxlength="100" />
+                <div class="invalid-feedback">Passwords do not match</div>
+            </div>
+
+            <div class="alert alert-danger ww-reg-error" style="display: none;">
+                <i class="fas fa-exclamation-triangle"></i> <span class="ww-reg-error-msg"></span>
+            </div>
+
+            <div class="d-grid gap-2 mt-3">
+                <button type="submit" class="btn btn-success btn-lg ww-register-btn">
+                    <span class="spinner-border spinner-border-sm me-2 ww-reg-spinner" role="status" style="display: none;"></span>
+                    <span class="ww-reg-btn-text">Create Account</span>
+                </button>
+
+                <button type="button" class="btn btn-link ww-use-different-token-btn" style="display: none;">
+                    Use Different Token
+                </button>
+                <button type="button" class="btn btn-link ww-cancel-btn" style="display: none;">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Disclaimer Step -->
+    <div class="ww-reg-disclaimer-step" style="display: none;">
+        <h3><i class="fas fa-file-contract me-2"></i>Terms & Agreements</h3>
+        <p class="text-muted">Please review and accept the following before continuing.</p>
+
+        <div class="ww-disclaimers-list"></div>
+
+        <div class="d-grid gap-2 mt-3">
+            <button type="button" class="btn btn-primary btn-lg ww-accept-disclaimers-btn" disabled>
+                Accept & Continue
+            </button>
+            <button type="button" class="btn btn-link ww-cancel-disclaimers-btn">
+                Cancel
+            </button>
+        </div>
+    </div>
+
+    <!-- Step 3: Payment -->
+    <div class="ww-reg-payment-step" style="display: none;">
+        <div class="mb-3">
+            <button class="btn btn-link p-0 ww-back-to-account-btn">
+                <i class="bi bi-arrow-left me-2"></i>Back to account details
+            </button>
+        </div>
+
+        <h3><i class="fas fa-credit-card me-2"></i>Payment Setup</h3>
+        <p class="text-muted ww-payment-subtitle">Complete your payment to activate your account.</p>
+
+        <!-- Pricing Summary Card -->
+        <div class="ww-pricing-summary-card mb-4">
+            <div class="ww-pricing-header">
+                <h5 class="mb-0 ww-pricing-plan-name">Pricing</h5>
+                <span class="badge bg-primary ms-2 ww-subscription-badge" style="display: none;">Subscription</span>
+            </div>
+            <div class="ww-pricing-body">
+                <div class="ww-price-display">
+                    <span class="ww-price-amount"></span>
+                    <span class="ww-price-period"></span>
+                </div>
+                <p class="ww-pricing-description" style="display: none;"></p>
+                <div class="ww-subscription-info" style="display: none;">
+                    <i class="fas fa-sync-alt me-1"></i>
+                    <small>Your card will be charged monthly. Cancel anytime.</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Component Container (dynamically loaded) -->
+        <div class="ww-payment-container"></div>
+
+        <!-- Fallback if no payment app configured -->
+        <div class="ww-payment-fallback" style="display: none;">
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Payment configuration is not available. Please contact support.
+            </div>
+            <div class="d-grid gap-2">
+                <button type="button" class="btn btn-outline-secondary ww-skip-payment-btn">
+                    <i class="fas fa-clock me-2"></i>Set Up Payment Later
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success State -->
+    <div class="ww-reg-success-step text-center" style="display: none;">
+        <!-- Auto-login spinner -->
+        <div class="ww-auto-login-spinner" style="display: none;">
+            <div class="mb-4">
+                <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                    <span class="visually-hidden">Logging in...</span>
+                </div>
+            </div>
+            <h4>Logging you in...</h4>
+            <p class="text-muted">Please wait while we complete your sign in.</p>
+        </div>
+
+        <!-- Success content -->
+        <div class="ww-success-content" style="display: none;">
+            <div class="mb-4">
+                <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+            </div>
+            <h4 class="ww-success-title">Account Created Successfully!</h4>
+            <p class="text-muted ww-success-message">Your account has been created and you've been granted access to the application.</p>
+
+            <!-- Granted Apps -->
+            <div class="ww-granted-apps alert alert-info text-start mb-4" style="display: none;">
+                <h6><i class="fas fa-mobile-alt me-2"></i>Apps You Have Access To:</h6>
+                <ul class="mb-0 ww-granted-apps-list"></ul>
+            </div>
+
+            <!-- Payment Status -->
+            <div class="ww-payment-success-msg alert alert-success" style="display: none;">
+                <i class="fas fa-check-circle me-2"></i>
+                Payment setup completed successfully!
+            </div>
+            <div class="ww-payment-skipped-msg alert alert-warning" style="display: none;">
+                <i class="fas fa-clock me-2"></i>
+                Payment setup skipped. You can complete it later in your account settings.
+            </div>
+
+            <!-- Auto-login error -->
+            <div class="ww-auto-login-error alert alert-warning" style="display: none;"></div>
+
+            <!-- Continue to Login button (shown when auto-login disabled or failed) -->
+            <div class="mt-4 ww-continue-login" style="display: none;">
+                <button class="btn btn-primary btn-lg ww-continue-login-btn">
+                    <i class="fas fa-sign-in-alt me-2"></i>
+                    Continue to Login
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
