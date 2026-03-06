@@ -1,0 +1,893 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@using WildwoodComponents.Blazor.Components.Base
+@inherits BaseWildwoodComponent
+@inject ITwoFactorSettingsService TwoFactorService
+@inject IJSRuntime JS
+
+<div class="@GetRootCssClasses()">
+    <div class="two-factor-settings-card">
+        <div class="settings-header">
+            <h3><i class="fas fa-shield-alt"></i> Two-Factor Authentication</h3>
+            @if (!string.IsNullOrEmpty(ErrorMessage))
+            {
+                <div class="alert alert-danger mt-2">
+                    <i class="fas fa-exclamation-triangle"></i> @ErrorMessage
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(_successMessage))
+            {
+                <div class="alert alert-success mt-2">
+                    <i class="fas fa-check-circle"></i> @_successMessage
+                </div>
+            }
+        </div>
+
+        @if (IsLoading && _status == null)
+        {
+            <div class="loading-spinner text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2 text-muted">Loading 2FA settings...</p>
+            </div>
+        }
+        else
+        {
+            <!-- Status Overview Section -->
+            <div class="status-section mb-4">
+                <div class="status-badge @(_status?.IsEnabled == true ? "enabled" : "disabled")">
+                    <i class="fas @(_status?.IsEnabled == true ? "fa-lock" : "fa-lock-open")"></i>
+                    <span>@(_status?.IsEnabled == true ? "2FA Enabled" : "2FA Not Enabled")</span>
+                </div>
+
+                @if (_status?.IsEnabled == true)
+                {
+                    <div class="status-details mt-3">
+                        <div class="row">
+                            <div class="col-md-3 col-6 text-center mb-2">
+                                <div class="stat-value">@_status.MethodCount</div>
+                                <div class="stat-label">Methods</div>
+                            </div>
+                            <div class="col-md-3 col-6 text-center mb-2">
+                                <div class="stat-value">@_status.TrustedDevicesCount</div>
+                                <div class="stat-label">Trusted Devices</div>
+                            </div>
+                            <div class="col-md-3 col-6 text-center mb-2">
+                                <div class="stat-value @(_status.RecoveryCodesRemaining <= 2 ? "text-warning" : "")">
+                                    @_status.RecoveryCodesRemaining
+                                </div>
+                                <div class="stat-label">Recovery Codes</div>
+                            </div>
+                            <div class="col-md-3 col-6 text-center mb-2">
+                                <div class="stat-value">@(_status.PrimaryMethod ?? "None")</div>
+                                <div class="stat-label">Primary Method</div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (_status?.IsRequired == true)
+                {
+                    <div class="alert alert-warning mt-3">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>2FA Required:</strong> This application requires two-factor authentication. Please set up at least one 2FA method below.
+                    </div>
+                }
+            </div>
+
+            <!-- Accordion for sections -->
+            <div class="accordion" id="twoFactorAccordion">
+                <!-- Authenticator App Section -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button @(_activeSection == "authenticator" ? "" : "collapsed")"
+                                type="button" @onclick='() => ToggleSection("authenticator")'>
+                            <i class="fas fa-mobile-alt me-2"></i>
+                            Authenticator App (TOTP)
+                            @if (_credentials?.Any(c => c.ProviderType == "Authenticator" && c.IsVerified) == true)
+                            {
+                                <span class="badge bg-success ms-2">Enabled</span>
+                            }
+                        </button>
+                    </h2>
+                    <div class="accordion-collapse @(_activeSection == "authenticator" ? "show" : "collapse")">
+                        <div class="accordion-body">
+                            @if (_authenticatorEnrollment != null)
+                            {
+                                <!-- Authenticator Setup Flow -->
+                                <div class="authenticator-setup">
+                                    <p>Scan this QR code with your authenticator app (Google Authenticator, Microsoft Authenticator, Authy, etc.):</p>
+
+                                    <div class="qr-code-container text-center my-3">
+                                        <img src="@_authenticatorEnrollment.QrCodeDataUrl" alt="QR Code" class="qr-code-image" />
+                                    </div>
+
+                                    <div class="manual-entry mb-3">
+                                        <p class="text-muted small">Or enter this key manually:</p>
+                                        <code class="manual-key">@_authenticatorEnrollment.ManualEntryKey</code>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" @onclick="CopyManualKey">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+
+                                    <div class="verify-code-form">
+                                        <label class="form-label">Enter the 6-digit code from your app:</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control verification-code-input"
+                                                   @bind="_verificationCode" maxlength="6" placeholder="000000" />
+                                            <button type="button" class="btn btn-primary"
+                                                    @onclick="CompleteAuthenticatorSetup" disabled="@IsLoading">
+                                                @if (IsLoading)
+                                                {
+                                                    <span class="spinner-border spinner-border-sm"></span>
+                                                }
+                                                else
+                                                {
+                                                    <text>Verify & Enable</text>
+                                                }
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <button type="button" class="btn btn-link mt-2" @onclick="CancelAuthenticatorSetup">
+                                        <i class="fas fa-times"></i> Cancel
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <!-- Existing authenticator credentials or setup button -->
+                                @if (_credentials?.Any(c => c.ProviderType == "Authenticator" && c.IsVerified) == true)
+                                {
+                                    <div class="credentials-list">
+                                        @foreach (var cred in _credentials.Where(c => c.ProviderType == "Authenticator"))
+                                        {
+                                            <div class="credential-item d-flex justify-content-between align-items-center p-2 border-bottom">
+                                                <div>
+                                                    <i class="fas fa-mobile-alt text-primary me-2"></i>
+                                                    <strong>@cred.DisplayName</strong>
+                                                    @if (cred.IsPrimary) { <span class="badge bg-primary ms-2">Primary</span> }
+                                                    <div class="small text-muted">
+                                                        Added @cred.CreatedAt.ToString("MMM d, yyyy")
+                                                        @if (cred.LastUsedAt.HasValue)
+                                                        {
+                                                            <text> | Last used @cred.LastUsedAt.Value.ToString("MMM d")</text>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    @if (!cred.IsPrimary)
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-outline-primary me-1"
+                                                                @onclick="() => SetPrimary(cred.Id)" title="Set as primary">
+                                                            <i class="fas fa-star"></i>
+                                                        </button>
+                                                    }
+                                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                                            @onclick="() => RemoveCredential(cred)" title="Remove">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                    <button type="button" class="btn btn-outline-primary mt-3" @onclick="BeginAuthenticatorSetup">
+                                        <i class="fas fa-plus"></i> Add Another Authenticator
+                                    </button>
+                                }
+                                else
+                                {
+                                    <p class="text-muted">Use an authenticator app on your phone to generate verification codes.</p>
+                                    <button type="button" class="btn btn-primary" @onclick="BeginAuthenticatorSetup" disabled="@IsLoading">
+                                        <i class="fas fa-mobile-alt"></i> Set Up Authenticator App
+                                    </button>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Email 2FA Section -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button @(_activeSection == "email" ? "" : "collapsed")"
+                                type="button" @onclick='() => ToggleSection("email")'>
+                            <i class="fas fa-envelope me-2"></i>
+                            Email Verification
+                            @if (_credentials?.Any(c => c.ProviderType == "TwoFactorEmail" && c.IsVerified) == true)
+                            {
+                                <span class="badge bg-success ms-2">Enabled</span>
+                            }
+                        </button>
+                    </h2>
+                    <div class="accordion-collapse @(_activeSection == "email" ? "show" : "collapse")">
+                        <div class="accordion-body">
+                            @if (_emailEnrollment != null)
+                            {
+                                <!-- Email Verification Flow -->
+                                <div class="email-setup">
+                                    <p>A verification code has been sent to <strong>@_emailEnrollment.MaskedEmail</strong></p>
+
+                                    <div class="verify-code-form">
+                                        <label class="form-label">Enter the code from your email:</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control verification-code-input"
+                                                   @bind="_verificationCode" maxlength="6" placeholder="000000" />
+                                            <button type="button" class="btn btn-primary"
+                                                    @onclick="CompleteEmailSetup" disabled="@IsLoading">
+                                                @if (IsLoading)
+                                                {
+                                                    <span class="spinner-border spinner-border-sm"></span>
+                                                }
+                                                else
+                                                {
+                                                    <text>Verify & Enable</text>
+                                                }
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <button type="button" class="btn btn-link mt-2" @onclick="CancelEmailSetup">
+                                        <i class="fas fa-times"></i> Cancel
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                @if (_credentials?.Any(c => c.ProviderType == "TwoFactorEmail" && c.IsVerified) == true)
+                                {
+                                    <div class="credentials-list">
+                                        @foreach (var cred in _credentials.Where(c => c.ProviderType == "TwoFactorEmail"))
+                                        {
+                                            <div class="credential-item d-flex justify-content-between align-items-center p-2 border-bottom">
+                                                <div>
+                                                    <i class="fas fa-envelope text-primary me-2"></i>
+                                                    <strong>@(cred.MaskedEmail ?? cred.DisplayName)</strong>
+                                                    @if (cred.IsPrimary) { <span class="badge bg-primary ms-2">Primary</span> }
+                                                    <div class="small text-muted">
+                                                        Added @cred.CreatedAt.ToString("MMM d, yyyy")
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    @if (!cred.IsPrimary)
+                                                    {
+                                                        <button type="button" class="btn btn-sm btn-outline-primary me-1"
+                                                                @onclick="() => SetPrimary(cred.Id)" title="Set as primary">
+                                                            <i class="fas fa-star"></i>
+                                                        </button>
+                                                    }
+                                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                                            @onclick="() => RemoveCredential(cred)" title="Remove">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <p class="text-muted">Receive verification codes via email when signing in.</p>
+                                    <button type="button" class="btn btn-primary" @onclick="BeginEmailSetup" disabled="@IsLoading">
+                                        <i class="fas fa-envelope"></i> Set Up Email Verification
+                                    </button>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trusted Devices Section -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button @(_activeSection == "devices" ? "" : "collapsed")"
+                                type="button" @onclick='() => ToggleSection("devices")'>
+                            <i class="fas fa-laptop me-2"></i>
+                            Trusted Devices
+                            @if (_trustedDevices?.Any() == true)
+                            {
+                                <span class="badge bg-secondary ms-2">@_trustedDevices.Count</span>
+                            }
+                        </button>
+                    </h2>
+                    <div class="accordion-collapse @(_activeSection == "devices" ? "show" : "collapse")">
+                        <div class="accordion-body">
+                            <p class="text-muted">Devices you've marked as trusted won't require 2FA verification.</p>
+
+                            @if (_trustedDevices?.Any() == true)
+                            {
+                                <div class="devices-list">
+                                    @foreach (var device in _trustedDevices)
+                                    {
+                                        <div class="device-item d-flex justify-content-between align-items-center p-2 border-bottom @(device.IsExpired ? "text-muted" : "")">
+                                            <div>
+                                                <i class="fas fa-laptop me-2"></i>
+                                                <strong>@device.DeviceName</strong>
+                                                @if (device.IsExpired) { <span class="badge bg-warning ms-2">Expired</span> }
+                                                <div class="small text-muted">
+                                                    @if (device.Location != null)
+                                                    {
+                                                        <text>@device.Location | </text>
+                                                    }
+                                                    Added @device.CreatedAt.ToString("MMM d, yyyy")
+                                                    @if (!device.IsExpired)
+                                                    {
+                                                        <text> | Expires @device.ExpiresAt.ToString("MMM d, yyyy")</text>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                                    @onclick="() => RevokeDevice(device)" title="Revoke trust">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+
+                                @if (_trustedDevices.Count > 1)
+                                {
+                                    <button type="button" class="btn btn-outline-danger mt-3" @onclick="RevokeAllDevices">
+                                        <i class="fas fa-trash"></i> Revoke All Devices
+                                    </button>
+                                }
+                            }
+                            else
+                            {
+                                <div class="text-center text-muted py-3">
+                                    <i class="fas fa-laptop fa-2x mb-2"></i>
+                                    <p>No trusted devices</p>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recovery Codes Section -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button @(_activeSection == "recovery" ? "" : "collapsed")"
+                                type="button" @onclick='() => ToggleSection("recovery")'>
+                            <i class="fas fa-key me-2"></i>
+                            Recovery Codes
+                            @if (_recoveryCodeInfo != null)
+                            {
+                                <span class="badge @(_recoveryCodeInfo.Remaining <= 2 ? "bg-warning" : "bg-secondary") ms-2">
+                                    @_recoveryCodeInfo.Remaining remaining
+                                </span>
+                            }
+                        </button>
+                    </h2>
+                    <div class="accordion-collapse @(_activeSection == "recovery" ? "show" : "collapse")">
+                        <div class="accordion-body">
+                            <p class="text-muted">Recovery codes can be used to access your account if you lose access to your 2FA device.</p>
+
+                            @if (_newRecoveryCodes != null && _newRecoveryCodes.Any())
+                            {
+                                <!-- Display newly generated codes -->
+                                <div class="alert alert-warning">
+                                    <strong><i class="fas fa-exclamation-triangle"></i> Save these codes now!</strong>
+                                    <p class="mb-2">These codes will only be shown once. Store them in a safe place.</p>
+                                </div>
+
+                                <div class="recovery-codes-display p-3 bg-light border rounded mb-3">
+                                    <div class="row">
+                                        @foreach (var code in _newRecoveryCodes)
+                                        {
+                                            <div class="col-6 col-md-4 mb-2">
+                                                <code class="recovery-code">@(code)</code>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-outline-primary" @onclick="CopyRecoveryCodes">
+                                        <i class="fas fa-copy"></i> Copy All
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="DownloadRecoveryCodes">
+                                        <i class="fas fa-download"></i> Download
+                                    </button>
+                                    <button type="button" class="btn btn-primary" @onclick="AcknowledgeRecoveryCodes">
+                                        <i class="fas fa-check"></i> I've Saved These
+                                    </button>
+                                </div>
+                            }
+                            else if (_recoveryCodeInfo != null)
+                            {
+                                <div class="recovery-info mb-3">
+                                    <p>
+                                        <strong>@_recoveryCodeInfo.Remaining</strong> of @_recoveryCodeInfo.TotalGenerated codes remaining
+                                        @if (_recoveryCodeInfo.GeneratedAt.HasValue)
+                                        {
+                                            <span class="text-muted">
+                                                (Generated @_recoveryCodeInfo.GeneratedAt.Value.ToString("MMM d, yyyy"))
+                                            </span>
+                                        }
+                                    </p>
+
+                                    @if (_recoveryCodeInfo.Remaining <= 2)
+                                    {
+                                        <div class="alert alert-warning">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                            You're running low on recovery codes. Consider generating new ones.
+                                        </div>
+                                    }
+                                </div>
+
+                                <button type="button" class="btn btn-outline-primary" @onclick="GenerateNewRecoveryCodes" disabled="@IsLoading">
+                                    @if (IsLoading)
+                                    {
+                                        <span class="spinner-border spinner-border-sm"></span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fas fa-sync-alt"></i>
+                                    }
+                                    Generate New Codes
+                                </button>
+                                <small class="d-block text-muted mt-2">
+                                    Warning: This will invalidate all existing recovery codes.
+                                </small>
+                            }
+                            else if (_status?.IsEnabled != true)
+                            {
+                                <div class="text-muted">
+                                    <p>Enable 2FA to get recovery codes.</p>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+@if (_showConfirmModal)
+{
+    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@_confirmTitle</h5>
+                    <button type="button" class="btn-close" @onclick="CancelConfirm"></button>
+                </div>
+                <div class="modal-body">
+                    <p>@_confirmMessage</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelConfirm">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmAction" disabled="@IsLoading">
+                        @if (IsLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm"></span>
+                        }
+                        Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .two-factor-settings-card {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        padding: 1.5rem;
+    }
+
+    .settings-header h3 {
+        margin: 0 0 1rem 0;
+        color: #333;
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-weight: 500;
+    }
+
+    .status-badge.enabled {
+        background-color: #d4edda;
+        color: #155724;
+    }
+
+    .status-badge.disabled {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .stat-label {
+        font-size: 0.85rem;
+        color: #666;
+    }
+
+    .qr-code-image {
+        max-width: 200px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+    }
+
+    .manual-key {
+        font-size: 0.9rem;
+        padding: 0.5rem;
+        background: #f8f9fa;
+        border-radius: 4px;
+        word-break: break-all;
+    }
+
+    .verification-code-input {
+        font-family: monospace;
+        font-size: 1.25rem;
+        letter-spacing: 0.25rem;
+        text-align: center;
+        max-width: 200px;
+    }
+
+    .recovery-code {
+        font-family: monospace;
+        font-size: 0.9rem;
+        background: #f8f9fa;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+    }
+
+    .credential-item, .device-item {
+        transition: background-color 0.2s;
+    }
+
+    .credential-item:hover, .device-item:hover {
+        background-color: #f8f9fa;
+    }
+</style>
+
+@code {
+    [Parameter] public string? AppId { get; set; }
+    [Parameter] public string? AuthToken { get; set; }
+    [Parameter] public string? ApiBaseUrl { get; set; }
+    [Parameter] public EventCallback<string> OnTwoFactorError { get; set; }
+    [Parameter] public EventCallback OnStatusChanged { get; set; }
+
+    private TwoFactorUserStatus? _status;
+    private List<TwoFactorCredential>? _credentials;
+    private List<TrustedDevice>? _trustedDevices;
+    private RecoveryCodeInfo? _recoveryCodeInfo;
+    private AuthenticatorEnrollmentResult? _authenticatorEnrollment;
+    private EmailEnrollmentResult? _emailEnrollment;
+    private List<string>? _newRecoveryCodes;
+
+    private string _activeSection = "";
+    private string _verificationCode = "";
+    private string _successMessage = "";
+
+    // Confirmation modal state
+    private bool _showConfirmModal;
+    private string _confirmTitle = "";
+    private string _confirmMessage = "";
+    private Func<Task>? _confirmAction;
+
+    protected override async Task OnComponentInitializedAsync()
+    {
+        if (!string.IsNullOrEmpty(ApiBaseUrl))
+        {
+            TwoFactorService.SetApiBaseUrl(ApiBaseUrl);
+        }
+
+        if (!string.IsNullOrEmpty(AuthToken))
+        {
+            TwoFactorService.SetAuthToken(AuthToken);
+        }
+
+        await LoadAllDataAsync();
+    }
+
+    private async Task LoadAllDataAsync()
+    {
+        await ExecuteAsync(async () =>
+        {
+            _status = await TwoFactorService.GetStatusAsync();
+            _credentials = await TwoFactorService.GetCredentialsAsync();
+            _trustedDevices = await TwoFactorService.GetTrustedDevicesAsync();
+
+            if (_status?.IsEnabled == true)
+            {
+                _recoveryCodeInfo = await TwoFactorService.GetRecoveryCodeInfoAsync();
+            }
+        }, "Loading 2FA settings");
+    }
+
+    private void ToggleSection(string section)
+    {
+        _activeSection = _activeSection == section ? "" : section;
+    }
+
+    // ============================================
+    // Authenticator Setup
+    // ============================================
+
+    private async Task BeginAuthenticatorSetup()
+    {
+        _successMessage = "";
+        await ExecuteAsync(async () =>
+        {
+            _authenticatorEnrollment = await TwoFactorService.BeginAuthenticatorEnrollmentAsync("Authenticator App");
+            _verificationCode = "";
+        }, "Starting authenticator setup");
+    }
+
+    private async Task CompleteAuthenticatorSetup()
+    {
+        if (string.IsNullOrWhiteSpace(_verificationCode) || _verificationCode.Length != 6)
+        {
+            await HandleErrorAsync(new InvalidOperationException("Please enter a 6-digit verification code."), "Validation");
+            return;
+        }
+
+        _successMessage = "";
+        await ExecuteAsync(async () =>
+        {
+            var success = await TwoFactorService.CompleteAuthenticatorEnrollmentAsync(
+                _authenticatorEnrollment!.CredentialId, _verificationCode);
+
+            if (success)
+            {
+                _authenticatorEnrollment = null;
+                _verificationCode = "";
+                _successMessage = "Authenticator app enabled successfully!";
+                await LoadAllDataAsync();
+                await OnStatusChanged.InvokeAsync();
+            }
+            else
+            {
+                throw new InvalidOperationException("Invalid verification code. Please try again.");
+            }
+        }, "Completing authenticator setup");
+    }
+
+    private void CancelAuthenticatorSetup()
+    {
+        _authenticatorEnrollment = null;
+        _verificationCode = "";
+        ClearError();
+    }
+
+    private async Task CopyManualKey()
+    {
+        if (_authenticatorEnrollment != null)
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _authenticatorEnrollment.ManualEntryKey);
+            _successMessage = "Key copied to clipboard!";
+            StateHasChanged();
+        }
+    }
+
+    // ============================================
+    // Email Setup
+    // ============================================
+
+    private async Task BeginEmailSetup()
+    {
+        _successMessage = "";
+        await ExecuteAsync(async () =>
+        {
+            _emailEnrollment = await TwoFactorService.EnrollEmailAsync();
+            _verificationCode = "";
+        }, "Starting email setup");
+    }
+
+    private async Task CompleteEmailSetup()
+    {
+        if (string.IsNullOrWhiteSpace(_verificationCode) || _verificationCode.Length != 6)
+        {
+            await HandleErrorAsync(new InvalidOperationException("Please enter a 6-digit verification code."), "Validation");
+            return;
+        }
+
+        _successMessage = "";
+        await ExecuteAsync(async () =>
+        {
+            var success = await TwoFactorService.VerifyEmailEnrollmentAsync(
+                _emailEnrollment!.CredentialId, _verificationCode);
+
+            if (success)
+            {
+                _emailEnrollment = null;
+                _verificationCode = "";
+                _successMessage = "Email verification enabled successfully!";
+                await LoadAllDataAsync();
+                await OnStatusChanged.InvokeAsync();
+            }
+            else
+            {
+                throw new InvalidOperationException("Invalid verification code. Please try again.");
+            }
+        }, "Completing email setup");
+    }
+
+    private void CancelEmailSetup()
+    {
+        _emailEnrollment = null;
+        _verificationCode = "";
+        ClearError();
+    }
+
+    // ============================================
+    // Credential Management
+    // ============================================
+
+    private async Task SetPrimary(string credentialId)
+    {
+        _successMessage = "";
+        await ExecuteAsync(async () =>
+        {
+            var success = await TwoFactorService.SetPrimaryCredentialAsync(credentialId);
+            if (success)
+            {
+                _successMessage = "Primary method updated!";
+                await LoadAllDataAsync();
+            }
+        }, "Setting primary credential");
+    }
+
+    private void RemoveCredential(TwoFactorCredential credential)
+    {
+        _confirmTitle = "Remove 2FA Method";
+        _confirmMessage = $"Are you sure you want to remove '{credential.DisplayName}'? You will no longer be able to use this method for verification.";
+        _confirmAction = async () =>
+        {
+            await ExecuteAsync(async () =>
+            {
+                var success = await TwoFactorService.RemoveCredentialAsync(credential.Id);
+                if (success)
+                {
+                    _successMessage = "2FA method removed!";
+                    await LoadAllDataAsync();
+                    await OnStatusChanged.InvokeAsync();
+                }
+            }, "Removing credential");
+        };
+        _showConfirmModal = true;
+    }
+
+    // ============================================
+    // Trusted Devices
+    // ============================================
+
+    private void RevokeDevice(TrustedDevice device)
+    {
+        _confirmTitle = "Revoke Trusted Device";
+        _confirmMessage = $"Are you sure you want to revoke trust for '{device.DeviceName}'? You will need to verify 2FA again on this device.";
+        _confirmAction = async () =>
+        {
+            await ExecuteAsync(async () =>
+            {
+                var success = await TwoFactorService.RevokeTrustedDeviceAsync(device.Id);
+                if (success)
+                {
+                    _successMessage = "Device trust revoked!";
+                    await LoadAllDataAsync();
+                }
+            }, "Revoking device");
+        };
+        _showConfirmModal = true;
+    }
+
+    private void RevokeAllDevices()
+    {
+        _confirmTitle = "Revoke All Trusted Devices";
+        _confirmMessage = "Are you sure you want to revoke trust for all devices? You will need to verify 2FA on every device.";
+        _confirmAction = async () =>
+        {
+            await ExecuteAsync(async () =>
+            {
+                var count = await TwoFactorService.RevokeAllTrustedDevicesAsync();
+                _successMessage = $"{count} device(s) revoked!";
+                await LoadAllDataAsync();
+            }, "Revoking all devices");
+        };
+        _showConfirmModal = true;
+    }
+
+    // ============================================
+    // Recovery Codes
+    // ============================================
+
+    private void GenerateNewRecoveryCodes()
+    {
+        _confirmTitle = "Generate New Recovery Codes";
+        _confirmMessage = "This will invalidate all your existing recovery codes. Are you sure you want to continue?";
+        _confirmAction = async () =>
+        {
+            await ExecuteAsync(async () =>
+            {
+                var result = await TwoFactorService.RegenerateRecoveryCodesAsync();
+                if (result.Success)
+                {
+                    _newRecoveryCodes = result.Codes;
+                    await LoadAllDataAsync();
+                }
+            }, "Generating recovery codes");
+        };
+        _showConfirmModal = true;
+    }
+
+    private async Task CopyRecoveryCodes()
+    {
+        if (_newRecoveryCodes != null)
+        {
+            var codesText = string.Join("\n", _newRecoveryCodes);
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", codesText);
+            _successMessage = "Recovery codes copied to clipboard!";
+            StateHasChanged();
+        }
+    }
+
+    private async Task DownloadRecoveryCodes()
+    {
+        if (_newRecoveryCodes != null)
+        {
+            var codesText = $"Recovery Codes - Generated {DateTime.Now:yyyy-MM-dd HH:mm}\n" +
+                          "Keep these codes in a safe place.\n\n" +
+                          string.Join("\n", _newRecoveryCodes);
+
+            await JS.InvokeVoidAsync("eval", $@"
+                const blob = new Blob([`{codesText}`], {{ type: 'text/plain' }});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'recovery-codes.txt';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            ");
+        }
+    }
+
+    private void AcknowledgeRecoveryCodes()
+    {
+        _newRecoveryCodes = null;
+        _successMessage = "Recovery codes saved!";
+    }
+
+    // ============================================
+    // Confirmation Modal
+    // ============================================
+
+    private async Task ConfirmAction()
+    {
+        if (_confirmAction != null)
+        {
+            await _confirmAction();
+        }
+        _showConfirmModal = false;
+        _confirmAction = null;
+    }
+
+    private void CancelConfirm()
+    {
+        _showConfirmModal = false;
+        _confirmAction = null;
+    }
+
+    protected override async Task OnComponentErrorAsync(Exception exception, string context)
+    {
+        if (OnTwoFactorError.HasDelegate)
+        {
+            await OnTwoFactorError.InvokeAsync(exception.Message);
+        }
+    }
+}
