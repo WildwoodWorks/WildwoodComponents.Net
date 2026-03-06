@@ -1,0 +1,61 @@
+@rendermode InteractiveServer
+
+<PageTitle>@PageTitle - Wildwood Components Test Suite</PageTitle>
+
+<h4 class="page-header">
+    <i class="@IconClass me-2"></i>@PageTitle
+</h4>
+
+<div class="test-page-layout">
+    <!-- Left side: Settings + Component + Event Log -->
+    <div class="test-page-main">
+        <!-- Settings Panel -->
+        @if (Settings != null)
+        {
+            <SettingsPanel Title="@($"{ComponentName} Settings")" OnApply="OnApplySettings" OnReset="OnResetSettings">
+                @Settings
+            </SettingsPanel>
+        }
+
+        <!-- Rendered Component -->
+        <div class="card component-render-area">
+            <div class="card-header py-2">
+                <h6 class="mb-0"><i class="fas fa-eye me-2"></i>@ComponentName</h6>
+            </div>
+            <div class="card-body">
+                @Component
+            </div>
+        </div>
+
+        <!-- Event Log -->
+        @if (EventLog != null)
+        {
+            <div class="card">
+                <div class="card-header py-2">
+                    <h6 class="mb-0"><i class="fas fa-list-ul me-2"></i>Event Log</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="event-log">
+                        @EventLog
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Right side: Debug Panel -->
+    <div class="test-page-debug">
+        <DebugPanel ComponentFilter="@ComponentName" />
+    </div>
+</div>
+
+@code {
+    [Parameter] public string PageTitle { get; set; } = "Component Test";
+    [Parameter] public string ComponentName { get; set; } = "Component";
+    [Parameter] public string IconClass { get; set; } = "fas fa-puzzle-piece";
+    [Parameter] public RenderFragment? Settings { get; set; }
+    [Parameter] public RenderFragment? Component { get; set; }
+    [Parameter] public RenderFragment? EventLog { get; set; }
+    [Parameter] public EventCallback OnApplySettings { get; set; }
+    [Parameter] public EventCallback OnResetSettings { get; set; }
+}
