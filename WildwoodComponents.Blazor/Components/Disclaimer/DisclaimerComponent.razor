@@ -1,0 +1,99 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@using Microsoft.AspNetCore.Components
+@inherits BaseWildwoodComponent
+
+<div class="ww-disclaimer-container @CssClass">
+    @if (_isLoading)
+    {
+        <div class="ww-disclaimer-loading">
+            <div class="ww-spinner"></div>
+            <p>Loading disclaimers...</p>
+        </div>
+    }
+    else if (_disclaimers == null || !_disclaimers.Any())
+    {
+        <div class="ww-disclaimer-empty">
+            <p>No disclaimers to display.</p>
+        </div>
+    }
+    else
+    {
+        <div class="ww-disclaimer-list">
+            @foreach (var disclaimer in _disclaimers)
+            {
+                <div class="ww-disclaimer-item @(disclaimer.IsRequired ? "ww-required" : "ww-optional")">
+                    <div class="ww-disclaimer-header">
+                        <h4 class="ww-disclaimer-title">@disclaimer.Title</h4>
+                        <div class="ww-disclaimer-meta">
+                            <span class="ww-disclaimer-type">@disclaimer.DisclaimerType</span>
+                            <span class="ww-disclaimer-version">v@(disclaimer.VersionNumber)</span>
+                            @if (disclaimer.IsRequired)
+                            {
+                                <span class="ww-badge ww-badge-required">Required</span>
+                            }
+                            @if (disclaimer.PreviouslyAcceptedVersion.HasValue)
+                            {
+                                <span class="ww-badge ww-badge-updated">Updated from v@(disclaimer.PreviouslyAcceptedVersion)</span>
+                            }
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(disclaimer.ChangeNotes) && disclaimer.PreviouslyAcceptedVersion.HasValue)
+                    {
+                        <div class="ww-disclaimer-changes">
+                            <strong>What changed:</strong> @disclaimer.ChangeNotes
+                        </div>
+                    }
+
+                    <div class="ww-disclaimer-content">
+                        @if (disclaimer.ContentFormat == "html")
+                        {
+                            @((MarkupString)disclaimer.Content)
+                        }
+                        else
+                        {
+                            <pre>@disclaimer.Content</pre>
+                        }
+                    </div>
+
+                    <div class="ww-disclaimer-accept">
+                        <label class="ww-checkbox-label">
+                            <input type="checkbox"
+                                   checked="@disclaimer.IsAccepted"
+                                   @onchange="@((ChangeEventArgs e) => OnDisclaimerChecked(disclaimer, (bool)(e.Value ?? false)))" />
+                            <span>I have read and accept @disclaimer.Title</span>
+                        </label>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="ww-disclaimer-error">@_errorMessage</div>
+        }
+
+        <div class="ww-disclaimer-actions">
+            @if (ShowCancelButton)
+            {
+                <button class="ww-btn ww-btn-secondary" @onclick="HandleCancel" disabled="@_isSubmitting">
+                    Cancel
+                </button>
+            }
+            <button class="ww-btn ww-btn-primary" @onclick="HandleAcceptAll" disabled="@(!CanSubmit || _isSubmitting)">
+                @if (_isSubmitting)
+                {
+                    <span class="ww-spinner-sm"></span>
+                    <span>Submitting...</span>
+                }
+                else
+                {
+                    <span>Accept @(_disclaimers.Count > 1 ? "All" : "")</span>
+                }
+            </button>
+        </div>
+    }
+</div>
+
