@@ -1,0 +1,104 @@
+@namespace WildwoodComponents.Blazor.Components.AI
+@inherits WildwoodComponents.Blazor.Components.Base.BaseWildwoodComponent
+
+<div class="ww-ai-proxy @GetRootCssClasses() @CssClass" @attributes="AdditionalAttributes">
+    @if (!string.IsNullOrEmpty(Title))
+    {
+        <div class="ww-ai-proxy-header">
+            <h3 class="ww-ai-proxy-title">@Title</h3>
+        </div>
+    }
+
+    <div class="ww-ai-proxy-body">
+        @* Error display *@
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="ww-ai-proxy-error" role="alert">
+                <span class="ww-ai-proxy-error-icon">&#9888;</span>
+                <span>@_errorMessage</span>
+                <button type="button" class="ww-ai-proxy-error-close" @onclick="() => _errorMessage = null">&times;</button>
+            </div>
+        }
+
+        @* Prompt input *@
+        <div class="ww-ai-proxy-input-section">
+            <textarea class="ww-ai-proxy-textarea"
+                      placeholder="@Placeholder"
+                      @bind="_promptText"
+                      @bind:event="oninput"
+                      @onkeydown="HandleKeyDown"
+                      disabled="@_isProcessing"
+                      rows="4"></textarea>
+
+            @* File upload *@
+            @if (AllowFileUpload)
+            {
+                <div class="ww-ai-proxy-file-section">
+                    @if (_selectedFile != null)
+                    {
+                        <div class="ww-ai-proxy-file-badge">
+                            <span class="ww-ai-proxy-file-name">@_selectedFileName</span>
+                            <button type="button" class="ww-ai-proxy-file-remove" @onclick="ClearFile">&times;</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <label class="ww-ai-proxy-file-label">
+                            <InputFile OnChange="OnFileSelected" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.gif,.webp" />
+                            <span>Attach file</span>
+                        </label>
+                    }
+                </div>
+            }
+
+            @* Submit button *@
+            <div class="ww-ai-proxy-actions">
+                <button type="button"
+                        class="ww-ai-proxy-submit"
+                        @onclick="SubmitRequestAsync"
+                        disabled="@(_isProcessing || string.IsNullOrWhiteSpace(_promptText))">
+                    @if (_isProcessing)
+                    {
+                        <span class="ww-ai-proxy-spinner"></span>
+                        <span>Processing...</span>
+                    }
+                    else
+                    {
+                        <span>@SubmitLabel</span>
+                    }
+                </button>
+            </div>
+        </div>
+
+        @* Response display *@
+        @if (_hasResponse)
+        {
+            <div class="ww-ai-proxy-response">
+                <div class="ww-ai-proxy-response-header">
+                    <span class="ww-ai-proxy-response-label">Response</span>
+                    <div class="ww-ai-proxy-response-actions">
+                        <button type="button" class="ww-ai-proxy-btn-icon" title="Copy" @onclick="CopyResponseAsync">
+                            &#128203;
+                        </button>
+                        <button type="button" class="ww-ai-proxy-btn-icon" title="Clear" @onclick="ClearResponse">
+                            &times;
+                        </button>
+                    </div>
+                </div>
+                <div class="ww-ai-proxy-response-body">
+                    <pre class="ww-ai-proxy-response-text">@_responseText</pre>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && e.CtrlKey)
+        {
+            await SubmitRequestAsync();
+        }
+    }
+}
