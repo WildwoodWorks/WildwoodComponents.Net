@@ -1,0 +1,125 @@
+@page "/test/subscription-manager"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Subscription
+@using WildwoodComponents.Blazor.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="SubscriptionManagerComponent Test" ComponentName="SubscriptionManagerComponent" IconClass="fas fa-tasks"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">UserId</label>
+            <input class="form-control form-control-sm" @bind="userId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Plan Description</label>
+            <input class="form-control form-control-sm" @bind="planDescription" />
+        </div>
+        <hr class="my-2" />
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="showCurrentSubscription" id="chkShowCurrent" />
+            <label class="form-check-label small" for="chkShowCurrent">Show Current Subscription</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="showBillingToggle" id="chkMgrBilling" />
+            <label class="form-check-label small" for="chkMgrBilling">Show Billing Toggle</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="allowUpgrade" id="chkUpgrade" />
+            <label class="form-check-label small" for="chkUpgrade">Allow Upgrade</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="allowCancellation" id="chkCancel" />
+            <label class="form-check-label small" for="chkCancel">Allow Cancellation</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="allowPause" id="chkPause" />
+            <label class="form-check-label small" for="chkPause">Allow Pause</label>
+        </div>
+    </Settings>
+    <Component>
+        <SubscriptionManagerComponent UserId="@userId"
+                                      ShowCurrentSubscription="@showCurrentSubscription"
+                                      ShowBillingToggle="@showBillingToggle"
+                                      AllowUpgrade="@allowUpgrade"
+                                      AllowCancellation="@allowCancellation"
+                                      AllowPause="@allowPause"
+                                      PlanDescription="@planDescription"
+                                      OnSubscriptionChanged="HandleSubscriptionChanged"
+                                      OnPlanSelected="HandlePlanSelected"
+                                      OnError="HandleError" />
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string userId = "";
+    private string planDescription = "Select the plan that works best for you";
+    private bool showCurrentSubscription = true;
+    private bool showBillingToggle = true;
+    private bool allowUpgrade = true;
+    private bool allowCancellation = true;
+    private bool allowPause = false;
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await StateStorage.GetItemAsync("wildwood_auth_token") ?? "";
+        LifecycleTracker.TrackInitialized("SubscriptionManagerComponent");
+    }
+
+    private void HandleSubscriptionChanged(SubscriptionResult result)
+    {
+        var msg = result.IsSuccess
+            ? $"Subscription changed - Plan: {result.Subscription?.PlanName}, Status: {result.Subscription?.Status}"
+            : $"Subscription change failed - Error: {result.ErrorMessage}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("SubscriptionManagerComponent", "OnSubscriptionChanged", msg);
+        StateHasChanged();
+    }
+
+    private void HandlePlanSelected(SubscriptionPlan plan)
+    {
+        var msg = $"Plan selected: {plan.Name} - {(plan.IsFree ? "Free" : $"{plan.Price} {plan.Currency}/{plan.BillingInterval}")}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("SubscriptionManagerComponent", "OnPlanSelected", msg);
+        StateHasChanged();
+    }
+
+    private void HandleError(ComponentErrorEventArgs args)
+    {
+        var msg = $"Error: {args.Exception.Message}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackError("SubscriptionManagerComponent", args.Exception.Message);
+        StateHasChanged();
+    }
+
+    private void ApplySettings() { StateHasChanged(); }
+
+    private void ResetSettings()
+    {
+        userId = "";
+        planDescription = "Select the plan that works best for you";
+        showCurrentSubscription = true;
+        showBillingToggle = true;
+        allowUpgrade = true;
+        allowCancellation = true;
+        allowPause = false;
+        events.Clear();
+        StateHasChanged();
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
