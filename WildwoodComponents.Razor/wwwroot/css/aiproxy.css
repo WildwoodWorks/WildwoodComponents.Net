@@ -1,0 +1,82 @@
+/* WildwoodComponents.Razor - AI Proxy Component Styles */
+
+.ww-ai-proxy {
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+/* ========================================
+   FILE UPLOAD ZONE
+   ======================================== */
+
+.ww-ai-upload-zone {
+    border: 2px dashed var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius, 0.375rem);
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s;
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+.ww-ai-upload-zone:hover,
+.ww-ai-upload-zone.ww-ai-upload-active {
+    border-color: var(--ww-primary, #0d6efd);
+    background: rgba(13, 110, 253, 0.05);
+}
+
+.ww-ai-upload-icon {
+    font-size: 2rem;
+    color: var(--ww-text-muted, #6c757d);
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+/* ========================================
+   RESPONSE AREA
+   ======================================== */
+
+.ww-ai-response-area {
+    animation: ww-ai-fade-in 0.3s ease-in-out;
+}
+
+.ww-ai-response-content {
+    background: var(--ww-bg-secondary, #f8f9fa);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius, 0.375rem);
+    padding: 1rem 1.25rem;
+    max-height: 500px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    font-family: inherit;
+    line-height: 1.6;
+}
+
+@keyframes ww-ai-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+
+@media (max-width: 576px) {
+    .ww-ai-proxy {
+        max-width: 100%;
+    }
+
+    .ww-ai-upload-zone {
+        padding: 1rem;
+    }
+
+    .ww-ai-response-content {
+        max-height: 300px;
+    }
+}
