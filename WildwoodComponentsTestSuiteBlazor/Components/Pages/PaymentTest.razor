@@ -1,0 +1,193 @@
+@page "/test/payment"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Payment
+@using WildwoodComponents.Blazor.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="PaymentComponent Test" ComponentName="PaymentComponent" IconClass="fas fa-credit-card"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">AppId</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Amount</label>
+            <input class="form-control form-control-sm" type="number" step="0.01" @bind="amount" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Currency</label>
+            <select class="form-select form-select-sm" @bind="currency">
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+                <option value="JPY">JPY</option>
+            </select>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Description</label>
+            <input class="form-control form-control-sm" @bind="description" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Customer ID</label>
+            <input class="form-control form-control-sm" @bind="customerId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Customer Email</label>
+            <input class="form-control form-control-sm" @bind="customerEmail" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Order ID</label>
+            <input class="form-control form-control-sm" @bind="orderId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Subscription ID</label>
+            <input class="form-control form-control-sm" @bind="subscriptionId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Pricing Model ID</label>
+            <input class="form-control form-control-sm" @bind="pricingModelId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Return URL</label>
+            <input class="form-control form-control-sm" @bind="returnUrl" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Cancel URL</label>
+            <input class="form-control form-control-sm" @bind="cancelUrl" />
+        </div>
+        <hr class="my-2" />
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="isSubscription" id="chkIsSub" />
+            <label class="form-check-label small" for="chkIsSub">Is Subscription</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="showAmount" id="chkShowAmt" />
+            <label class="form-check-label small" for="chkShowAmt">Show Amount</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="requireBillingAddress" id="chkReqBilling" />
+            <label class="form-check-label small" for="chkReqBilling">Require Billing Address</label>
+        </div>
+    </Settings>
+    <Component>
+        <PaymentComponent AppId="@appId"
+                          Amount="@amount"
+                          Currency="@currency"
+                          Description="@description"
+                          CustomerId="@customerId"
+                          CustomerEmail="@customerEmail"
+                          OrderId="@orderId"
+                          SubscriptionId="@subscriptionId"
+                          PricingModelId="@pricingModelId"
+                          IsSubscription="@isSubscription"
+                          ShowAmount="@showAmount"
+                          RequireBillingAddress="@requireBillingAddress"
+                          ReturnUrl="@returnUrl"
+                          CancelUrl="@cancelUrl"
+                          OnPaymentSuccess="HandlePaymentSuccess"
+                          OnPaymentFailure="HandlePaymentFailure"
+                          OnCancel="HandleCancel"
+                          OnError="HandleError" />
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string appId = "";
+    private decimal amount = 49.99m;
+    private string currency = "USD";
+    private string description = "Test Payment";
+    private string customerId = "";
+    private string customerEmail = "";
+    private string orderId = "";
+    private string subscriptionId = "";
+    private string pricingModelId = "";
+    private bool isSubscription = false;
+    private bool showAmount = true;
+    private bool requireBillingAddress = false;
+    private string returnUrl = "";
+    private string cancelUrl = "";
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        authToken = await StateStorage.GetItemAsync("wildwood_auth_token") ?? "";
+        LifecycleTracker.TrackInitialized("PaymentComponent");
+    }
+
+    private string authToken = "";
+
+    private void HandlePaymentSuccess(PaymentSuccessEventArgs args)
+    {
+        var msg = $"Payment succeeded - Transaction: {args.TransactionId}, Amount: {args.Amount} {args.Currency}";
+        if (!string.IsNullOrEmpty(args.ReceiptUrl))
+            msg += $", Receipt: {args.ReceiptUrl}";
+        if (!string.IsNullOrEmpty(args.SubscriptionId))
+            msg += $", Subscription: {args.SubscriptionId}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("PaymentComponent", "OnPaymentSuccess", msg);
+        StateHasChanged();
+    }
+
+    private void HandlePaymentFailure(PaymentFailureEventArgs args)
+    {
+        var msg = $"Payment failed - Error: {args.ErrorMessage}, Code: {args.ErrorCode}, Retryable: {args.IsRetryable}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("PaymentComponent", "OnPaymentFailure", msg);
+        StateHasChanged();
+    }
+
+    private void HandleCancel()
+    {
+        var msg = "Payment cancelled by user";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("PaymentComponent", "OnCancel", msg);
+        StateHasChanged();
+    }
+
+    private void HandleError(ComponentErrorEventArgs args)
+    {
+        var msg = $"Error: {args.Exception.Message}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackError("PaymentComponent", args.Exception.Message);
+        StateHasChanged();
+    }
+
+    private void ApplySettings() { StateHasChanged(); }
+
+    private void ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        amount = 49.99m;
+        currency = "USD";
+        description = "Test Payment";
+        customerId = "";
+        customerEmail = "";
+        orderId = "";
+        subscriptionId = "";
+        pricingModelId = "";
+        isSubscription = false;
+        showAmount = true;
+        requireBillingAddress = false;
+        returnUrl = "";
+        cancelUrl = "";
+        events.Clear();
+        StateHasChanged();
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
