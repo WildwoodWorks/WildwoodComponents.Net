@@ -1,0 +1,589 @@
+/*
+ * TokenRegistrationComponent Styles
+ * 
+ * Uses --ww-* CSS variables for theming.
+ * These variables are mapped to application-specific theme variables
+ * (e.g., --aicoach-*) via a theme override CSS file.
+ */
+
+/* ===== Main Container ===== */
+.registration-token-component {
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 1rem;
+    width: 100%;
+}
+
+/* ===== Step Indicator ===== */
+.step-indicator {
+    margin-bottom: 1rem;
+}
+
+.step-indicator .d-flex {
+    align-items: center;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.step-number {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: var(--ww-bg-tertiary, #e9ecef);
+    color: var(--ww-text-secondary, #495057);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.step.active .step-number {
+    background-color: var(--ww-primary, #0d6efd);
+    color: var(--ww-text-inverse, white);
+}
+
+.step.completed .step-number {
+    background-color: var(--ww-success, #198754);
+    color: var(--ww-text-inverse, white);
+}
+
+.step-label {
+    font-size: 0.75rem;
+    color: var(--ww-text-muted, #6c757d);
+    transition: color 0.2s;
+}
+
+.step.active .step-label {
+    color: var(--ww-primary, #0d6efd);
+    font-weight: 600;
+}
+
+.step-connector {
+    width: 40px;
+    height: 2px;
+    background-color: var(--ww-bg-tertiary, #e9ecef);
+    margin: 0 0.5rem;
+    margin-bottom: 1.25rem;
+    transition: background-color 0.2s;
+}
+
+.step-connector.completed {
+    background-color: var(--ww-success, #198754);
+}
+
+/* ===== Section Containers ===== */
+.token-validation-section,
+.registration-form-section,
+.payment-section {
+    background: var(--ww-bg-secondary, #f8f9fa);
+    padding: 1rem;
+    border-radius: var(--ww-border-radius, 0.5rem);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    box-shadow: var(--ww-shadow-sm, none);
+}
+
+.token-validation-section h3,
+.registration-form-section h3,
+.payment-section h3 {
+    color: var(--ww-text-primary, #212529);
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.token-validation-section p,
+.registration-form-section p,
+.payment-section p {
+    color: var(--ww-text-secondary, #6c757d);
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+}
+
+/* ===== Success Section ===== */
+.registration-success-section {
+    padding: 1rem;
+}
+
+.registration-success-section h4 {
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ===== Form Groups ===== */
+.registration-token-component .form-group {
+    margin-bottom: 0.75rem;
+}
+
+.registration-token-component .form-group label {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    display: block;
+    color: var(--ww-text-primary, #212529);
+    font-size: 0.875rem;
+}
+
+/* ===== Form Controls ===== */
+.registration-token-component .form-control {
+    background-color: var(--ww-input-bg, #ffffff);
+    border-color: var(--ww-border-color, #ced4da);
+    color: var(--ww-text-primary, #212529);
+    padding: 0.5rem 0.75rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.registration-token-component .form-control::placeholder {
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.registration-token-component .form-control:focus {
+    background-color: var(--ww-input-bg, #ffffff);
+    border-color: var(--ww-primary, #0d6efd);
+    color: var(--ww-text-primary, #212529);
+    box-shadow: 0 0 0 0.25rem var(--ww-focus-ring, rgba(13, 110, 253, 0.25));
+}
+
+.registration-token-component .input-group .btn {
+    border-left: none;
+}
+
+/* ===== Alerts ===== */
+.registration-token-component .alert {
+    border-radius: var(--ww-border-radius-sm, 0.375rem);
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.registration-token-component .alert h6 {
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+}
+
+.registration-token-component .alert small {
+    font-size: 0.8rem;
+}
+
+.registration-token-component .alert-info {
+    background-color: var(--ww-info-bg, rgba(13, 202, 240, 0.15));
+    border-color: var(--ww-info, #0dcaf0);
+    color: var(--ww-info-text, #055160);
+}
+
+.registration-token-component .alert-info h6 {
+    color: var(--ww-info-text, #055160);
+}
+
+.registration-token-component .alert-info small {
+    color: var(--ww-text-secondary, #6c757d);
+}
+
+.registration-token-component .alert-danger {
+    background-color: var(--ww-danger-bg, rgba(220, 53, 69, 0.15));
+    border-color: var(--ww-danger, #dc3545);
+    color: var(--ww-danger-text, #842029);
+}
+
+.registration-token-component .alert-success {
+    background-color: var(--ww-success-bg, rgba(25, 135, 84, 0.15));
+    border-color: var(--ww-success, #198754);
+    color: var(--ww-success-text, #0f5132);
+}
+
+.registration-token-component .alert-warning {
+    background-color: var(--ww-warning-bg, rgba(255, 193, 7, 0.15));
+    border-color: var(--ww-warning, #ffc107);
+    color: var(--ww-warning-text, #664d03);
+}
+
+/* ===== Buttons ===== */
+.registration-token-component .btn-primary {
+    background: var(--ww-primary, #0d6efd);
+    border-color: var(--ww-primary, #0d6efd);
+    color: var(--ww-btn-primary-text, white);
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.registration-token-component .btn-primary:hover {
+    background: var(--ww-primary-dark, #0b5ed7);
+    border-color: var(--ww-primary-dark, #0b5ed7);
+}
+
+.registration-token-component .btn-success {
+    background-color: var(--ww-success, #198754);
+    border-color: var(--ww-success, #198754);
+    color: var(--ww-btn-success-text, white);
+}
+
+.registration-token-component .btn-outline-secondary {
+    border-color: var(--ww-border-color, #6c757d);
+    color: var(--ww-text-secondary, #6c757d);
+}
+
+.registration-token-component .btn-outline-secondary:hover {
+    background-color: var(--ww-bg-tertiary, #6c757d);
+    border-color: var(--ww-border-color, #6c757d);
+    color: var(--ww-text-primary, white);
+}
+
+.registration-token-component .btn-link {
+    color: var(--ww-primary, #0d6efd);
+    padding: 0.25rem 0.5rem;
+}
+
+.registration-token-component .btn-link:hover {
+    color: var(--ww-primary-dark, #0b5ed7);
+}
+
+.registration-token-component .btn-lg {
+    padding: 0.625rem 1.25rem;
+    font-size: 1rem;
+}
+
+/* ===== Spinners ===== */
+.registration-token-component .spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+}
+
+.registration-token-component .spinner-border {
+    width: 1.25rem;
+    height: 1.25rem;
+    border-width: 0.2em;
+}
+
+/* ===== Stripe Elements ===== */
+.registration-token-component .stripe-element {
+    padding: 8px 10px;
+    border: 1px solid var(--ww-border-color, #ced4da);
+    border-radius: var(--ww-border-radius-sm, 0.375rem);
+    background-color: var(--ww-input-bg, #ffffff);
+    min-height: 38px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.registration-token-component .stripe-element.StripeElement--focus {
+    border-color: var(--ww-primary, #0d6efd);
+    box-shadow: 0 0 0 0.25rem var(--ww-focus-ring, rgba(13, 110, 253, 0.25));
+    outline: none;
+}
+
+.registration-token-component .stripe-element.StripeElement--invalid {
+    border-color: var(--ww-danger, #dc3545);
+}
+
+.registration-token-component .stripe-element.StripeElement--complete {
+    border-color: var(--ww-success, #198754);
+}
+
+/* ===== Pricing Card ===== */
+.registration-token-component .pricing-summary-card {
+    background: var(--ww-bg-tertiary, #ffffff);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius, 0.5rem);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--ww-shadow-sm, 0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.registration-token-component .pricing-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.registration-token-component .pricing-header h5 {
+    color: var(--ww-text-primary, #212529);
+    font-size: 1rem;
+    margin-bottom: 0;
+}
+
+.registration-token-component .price-display {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.registration-token-component .price-amount {
+    color: var(--ww-success, #198754);
+}
+
+.registration-token-component .price-period {
+    color: var(--ww-text-secondary, #6c757d);
+    font-size: 0.875rem;
+}
+
+.registration-token-component .pricing-description {
+    color: var(--ww-text-secondary, #6c757d);
+    font-size: 0.875rem;
+}
+
+/* ===== Badges ===== */
+.registration-token-component .badge-primary {
+    background-color: var(--ww-primary, #0d6efd);
+    color: var(--ww-btn-primary-text, white);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+}
+
+/* ===== Subscription Info ===== */
+.registration-token-component .subscription-info {
+    background: var(--ww-success-bg, rgba(25, 135, 84, 0.15));
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.25rem;
+    display: flex;
+    align-items: center;
+    margin-top: 0.5rem;
+    color: var(--ww-success-text, #0f5132);
+}
+
+.registration-token-component .subscription-info i {
+    color: var(--ww-success, #198754);
+    margin-right: 0.5rem;
+}
+
+.registration-token-component .subscription-info small {
+    color: var(--ww-text-secondary, #6c757d);
+    font-size: 0.8rem;
+}
+
+/* ===== Text Utilities ===== */
+.registration-token-component .text-danger {
+    color: var(--ww-danger, #dc3545) !important;
+}
+
+.registration-token-component .text-muted {
+    color: var(--ww-text-secondary, #6c757d) !important;
+}
+
+.registration-token-component .text-success {
+    color: var(--ww-success, #198754) !important;
+}
+
+/* ===== Validation ===== */
+.registration-token-component .invalid-feedback {
+    color: var(--ww-danger, #dc3545);
+    font-size: 0.8rem;
+}
+
+.registration-token-component .validation-message {
+    color: var(--ww-danger, #dc3545);
+    font-size: 0.8rem;
+}
+
+/* ===== Bootstrap Utility Overrides ===== */
+.registration-token-component .mb-3 {
+    margin-bottom: 0.75rem !important;
+}
+
+.registration-token-component .mb-4 {
+    margin-bottom: 1rem !important;
+}
+
+.registration-token-component .mt-2 {
+    margin-top: 0.5rem !important;
+}
+
+.registration-token-component .mt-4 {
+    margin-top: 1rem !important;
+}
+
+/* Compact row spacing */
+.registration-token-component .row {
+    margin-left: -0.5rem;
+    margin-right: -0.5rem;
+}
+
+.registration-token-component .row > [class*="col-"] {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+}
+
+/* D-grid gap override */
+.registration-token-component .d-grid.gap-2 {
+    gap: 0.5rem !important;
+}
+
+/* ===== Responsive Styles ===== */
+@media (max-width: 768px) {
+    .registration-token-component {
+        padding: 0.75rem;
+        max-width: 100%;
+    }
+
+    .token-validation-section,
+    .registration-form-section,
+    .payment-section {
+        padding: 0.75rem;
+    }
+
+    .step-connector {
+        width: 24px;
+        margin: 0 0.25rem;
+    }
+
+    .step-number {
+        width: 28px;
+        height: 28px;
+        font-size: 0.8rem;
+    }
+}
+
+/* Small screens - maximize width usage */
+@media (max-width: 576px) {
+    .registration-token-component {
+        padding: 0.5rem;
+        max-width: 100%;
+    }
+
+    .token-validation-section,
+    .registration-form-section,
+    .payment-section {
+        padding: 0.5rem;
+        border-radius: var(--ww-border-radius-sm, 0.375rem);
+    }
+
+    .token-validation-section h3,
+    .registration-form-section h3,
+    .payment-section h3 {
+        font-size: 1.1rem;
+        margin-bottom: 0.375rem;
+    }
+
+    .token-validation-section p,
+    .registration-form-section p,
+    .payment-section p {
+        font-size: 0.8rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .step-connector {
+        width: 20px;
+        margin: 0 0.125rem;
+    }
+
+    .step-number {
+        width: 26px;
+        height: 26px;
+        font-size: 0.75rem;
+    }
+
+    .step-label {
+        font-size: 0.65rem;
+    }
+
+    /* Form group compact */
+    .registration-token-component .form-group {
+        margin-bottom: 0.5rem;
+    }
+
+    .registration-token-component .form-group label {
+        font-size: 0.8rem;
+        margin-bottom: 0.125rem;
+    }
+
+    .registration-token-component .form-control {
+        padding: 0.375rem 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    /* Row spacing compact */
+    .registration-token-component .row {
+        margin-left: -0.25rem;
+        margin-right: -0.25rem;
+    }
+
+    .registration-token-component .row > [class*="col-"] {
+        padding-left: 0.25rem;
+        padding-right: 0.25rem;
+    }
+
+    /* Alert compact */
+    .registration-token-component .alert {
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .registration-token-component .alert h6 {
+        font-size: 0.8rem;
+    }
+
+    .registration-token-component .alert small {
+        font-size: 0.75rem;
+    }
+
+    /* Pricing card compact */
+    .registration-token-component .pricing-summary-card {
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .registration-token-component .pricing-header h5 {
+        font-size: 0.9rem;
+    }
+
+    .registration-token-component .price-display {
+        font-size: 1.1rem;
+    }
+
+    /* Button compact */
+    .registration-token-component .btn-lg {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    /* Utility overrides */
+    .registration-token-component .mb-3 {
+        margin-bottom: 0.5rem !important;
+    }
+
+    .registration-token-component .mb-4 {
+        margin-bottom: 0.75rem !important;
+    }
+
+    .registration-token-component .mt-4 {
+        margin-top: 0.75rem !important;
+    }
+
+    .registration-token-component .d-grid.gap-2 {
+        gap: 0.375rem !important;
+    }
+}
+
+/* Extra small screens - minimal padding */
+@media (max-width: 400px) {
+    .registration-token-component {
+        padding: 0.25rem;
+    }
+
+    .token-validation-section,
+    .registration-form-section,
+    .payment-section {
+        padding: 0.375rem;
+    }
+
+    .registration-token-component .form-control {
+        padding: 0.3rem 0.4rem;
+        font-size: 0.85rem;
+    }
+
+    .registration-token-component .btn-lg {
+        padding: 0.4rem 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    .step-number {
+        width: 24px;
+        height: 24px;
+        font-size: 0.7rem;
+    }
+
+    .step-connector {
+        width: 16px;
+    }
+}
