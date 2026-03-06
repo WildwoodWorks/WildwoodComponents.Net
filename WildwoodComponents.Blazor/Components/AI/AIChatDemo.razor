@@ -1,0 +1,311 @@
+@page "/ai-chat-demo"
+@using WildwoodComponents.Blazor.Components.AI
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inject IAIService AIService
+@inject ILocalStorageService LocalStorage
+
+<div class="container-fluid p-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">AI Chat Component Demo</h1>
+            
+            <!-- Configuration Panel -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="apiUrl" class="form-label">API Base URL</label>
+                                <input @bind="settings.ApiBaseUrl" id="apiUrl" class="form-control" placeholder="https://localhost:7001/api" />
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="configId" class="form-label">Configuration ID (Optional)</label>
+                                <input @bind="configurationId" id="configId" class="form-control" placeholder="Auto-select first available" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="authToken" class="form-label">Authentication Token</label>
+                                <input @bind="authToken" id="authToken" class="form-control" type="password" placeholder="Bearer token for API access" />
+                            </div>
+                            <div class="form-group mb-3">
+                                <label class="form-label">Features</label>
+                                <div class="form-check">
+                                    <input @bind="settings.EnableSessions" class="form-check-input" type="checkbox" id="enableSessions">
+                                    <label class="form-check-label" for="enableSessions">Enable Sessions</label>
+                                </div>
+                                <div class="form-check">
+                                    <input @bind="settings.ShowTokenUsage" class="form-check-input" type="checkbox" id="showTokens">
+                                    <label class="form-check-label" for="showTokens">Show Token Usage</label>
+                                </div>
+                                <div class="form-check">
+                                    <input @bind="settings.AutoScroll" class="form-check-input" type="checkbox" id="autoScroll">
+                                    <label class="form-check-label" for="autoScroll">Auto Scroll</label>
+                                </div>
+                                <div class="form-check">
+                                    <input @bind="settings.ShowDebugInfo" class="form-check-input" type="checkbox" id="showDebugInfo">
+                                    <label class="form-check-label" for="showDebugInfo">Show Debug Info</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <button @onclick="ApplyConfiguration" class="btn btn-primary">Apply Configuration</button>
+                            <button @onclick="LoadSampleData" class="btn btn-secondary ms-2">Load Sample Data</button>
+                            @if (!string.IsNullOrEmpty(statusMessage))
+                            {
+                                <div class="alert alert-info mt-3" role="alert">
+                                    @statusMessage
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Theme Customization -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Theme Customization</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label for="primaryColor" class="form-label">Primary Color</label>
+                                <input @bind="settings.Theme.PrimaryColor" type="color" id="primaryColor" class="form-control form-control-color" />
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label for="secondaryColor" class="form-label">Secondary Color</label>
+                                <input @bind="settings.Theme.SecondaryColor" type="color" id="secondaryColor" class="form-control form-control-color" />
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label for="fontFamily" class="form-label">Font Family</label>
+                                <select @bind="settings.Theme.FontFamily" id="fontFamily" class="form-select">
+                                    <option value="system-ui, -apple-system, sans-serif">System UI</option>
+                                    <option value="Arial, sans-serif">Arial</option>
+                                    <option value="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif">Segoe UI</option>
+                                    <option value="'Roboto', sans-serif">Roboto</option>
+                                    <option value="'Inter', sans-serif">Inter</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label for="borderRadius" class="form-label">Border Radius</label>
+                                <select @bind="settings.Theme.BorderRadius" id="borderRadius" class="form-select">
+                                    <option value="0">None</option>
+                                    <option value="0.25rem">Small</option>
+                                    <option value="0.375rem">Medium</option>
+                                    <option value="0.5rem">Large</option>
+                                    <option value="1rem">Extra Large</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Chat Component -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">AI Chat Component</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div style="height: 600px;">
+                        <AIChatComponent 
+                            ConfigurationId="@configurationId"
+                            Settings="@settings"
+                            OnMessageSent="OnMessageSent"
+                            OnMessageReceived="OnMessageReceived"
+                            OnError="@OnError"
+                            OnSessionCreated="OnSessionCreated"
+                            OnSessionEnded="OnSessionEnded" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Event Log -->
+            @if (eventLog.Any())
+            {
+                <div class="card mt-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Event Log</h5>
+                        <button @onclick="ClearEventLog" class="btn btn-sm btn-outline-secondary">Clear</button>
+                    </div>
+                    <div class="card-body">
+                        <div style="max-height: 300px; overflow-y: auto;">
+                            @foreach (var logEntry in eventLog.OrderByDescending(e => e.Timestamp))
+                            {
+                                <div class="border-bottom pb-2 mb-2">
+                                    <strong>@logEntry.Timestamp.ToString("HH:mm:ss")</strong> - 
+                                    <span class="badge bg-@GetLogLevelClass(logEntry.Level)">@logEntry.Level</span>
+                                    <div class="mt-1">@logEntry.Message</div>
+                                    @if (!string.IsNullOrEmpty(logEntry.Details))
+                                    {
+                                        <small class="text-muted">@logEntry.Details</small>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private AIChatSettings settings = new();
+    private string configurationId = string.Empty;
+    private string authToken = string.Empty;
+    private string statusMessage = string.Empty;
+    private List<LogEntry> eventLog = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load saved settings
+        settings = await LocalStorage.GetItemAsync<AIChatSettings>("demo-settings") ?? new AIChatSettings();
+        authToken = await LocalStorage.GetItemAsync<string>("demo-auth-token") ?? string.Empty;
+        configurationId = await LocalStorage.GetItemAsync<string>("demo-config-id") ?? string.Empty;
+    }
+
+    private async Task ApplyConfiguration()
+    {
+        try
+        {
+            // Save settings
+            await LocalStorage.SetItemAsync("demo-settings", settings);
+            await LocalStorage.SetItemAsync("demo-auth-token", authToken);
+            await LocalStorage.SetItemAsync("demo-config-id", configurationId);
+
+            // Configure AI service
+            if (!string.IsNullOrEmpty(authToken))
+            {
+                AIService.SetAuthToken(authToken);
+                AddLogEntry("info", "Authentication token set");
+            }
+
+            if (!string.IsNullOrEmpty(settings.ApiBaseUrl))
+            {
+                AIService.SetApiBaseUrl(settings.ApiBaseUrl);
+                AddLogEntry("info", $"API base URL set to: {settings.ApiBaseUrl}");
+            }
+
+            // Test API connection
+            var configs = await AIService.GetConfigurationsAsync();
+            if (configs.Any())
+            {
+                statusMessage = $"✅ Connected! Found {configs.Count} AI configuration(s)";
+                AddLogEntry("success", $"Successfully connected. Found {configs.Count} configurations", 
+                    string.Join(", ", configs.Select(c => c.Name)));
+            }
+            else
+            {
+                statusMessage = "⚠️ Connected but no AI configurations found";
+                AddLogEntry("warning", "Connected but no configurations found");
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Connection failed: {ex.Message}";
+            AddLogEntry("error", "Configuration failed", ex.Message);
+        }
+
+        StateHasChanged();
+    }
+
+    private void LoadSampleData()
+    {
+        // Load sample configuration for testing
+        settings.ApiBaseUrl = "https://localhost:7001/api";
+        settings.EnableSessions = true;
+        settings.ShowTokenUsage = true;
+        settings.ShowDebugInfo = true; // Enable debug info for demo/testing
+        settings.AutoScroll = true;
+        settings.PlaceholderText = "Ask me anything...";
+        settings.Theme.PrimaryColor = "#007bff";
+        settings.Theme.SecondaryColor = "#6c757d";
+
+        statusMessage = "Sample configuration loaded. Click 'Apply Configuration' to test.";
+        AddLogEntry("info", "Sample configuration loaded");
+        StateHasChanged();
+    }
+
+    private void OnMessageSent(AIMessage message)
+    {
+        AddLogEntry("info", "Message sent", $"Role: {message.Role}, Content: {message.Content.Substring(0, Math.Min(50, message.Content.Length))}...");
+    }
+
+    private void OnMessageReceived(AIMessage message)
+    {
+        AddLogEntry("success", "Message received", $"Role: {message.Role}, Tokens: {message.TokenCount}");
+    }
+
+    private void OnError(ComponentErrorEventArgs errorArgs)
+    {
+        AddLogEntry("error", "Error occurred", errorArgs.Exception.Message);
+    }
+
+    private void OnSessionCreated(AISession session)
+    {
+        AddLogEntry("info", "Session created", $"ID: {session.Id}, Name: {session.Name}");
+    }
+
+    private void OnSessionEnded(AISession session)
+    {
+        AddLogEntry("info", "Session ended", $"ID: {session.Id}, Name: {session.Name}");
+    }
+
+    private void AddLogEntry(string level, string message, string? details = null)
+    {
+        eventLog.Add(new LogEntry
+        {
+            Timestamp = DateTime.Now,
+            Level = level,
+            Message = message,
+            Details = details
+        });
+
+        // Keep only last 50 entries
+        if (eventLog.Count > 50)
+        {
+            eventLog.RemoveAt(0);
+        }
+
+        StateHasChanged();
+    }
+
+    private void ClearEventLog()
+    {
+        eventLog.Clear();
+        StateHasChanged();
+    }
+
+    private string GetLogLevelClass(string level) => level switch
+    {
+        "error" => "danger",
+        "warning" => "warning",
+        "success" => "success",
+        "info" => "primary",
+        _ => "secondary"
+    };
+
+    public class LogEntry
+    {
+        public DateTime Timestamp { get; set; }
+        public string Level { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string? Details { get; set; }
+    }
+}
