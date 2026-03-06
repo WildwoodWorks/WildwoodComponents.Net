@@ -1,0 +1,299 @@
+@using WildwoodComponents.Razor.Models
+@using WildwoodComponents.Shared.Models
+@model PaymentViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var providers = Model.PreloadedProviders ?? new List<PaymentProviderDto>();
+    var selectedId = Model.PreselectedProviderId ?? "";
+}
+
+<div id="ww-payment-@cid"
+     class="ww-payment-component"
+     data-component-id="@cid"
+     data-app-id="@Model.AppId"
+     data-amount="@Model.Amount"
+     data-currency="@Model.Currency"
+     data-description="@(Model.Description ?? "")"
+     data-customer-id="@(Model.CustomerId ?? "")"
+     data-customer-email="@(Model.CustomerEmail ?? "")"
+     data-order-id="@(Model.OrderId ?? "")"
+     data-subscription-id="@(Model.SubscriptionId ?? "")"
+     data-pricing-model-id="@(Model.PricingModelId ?? "")"
+     data-is-subscription="@Model.IsSubscription.ToString().ToLower()"
+     data-require-billing="@Model.RequireBillingAddress.ToString().ToLower()"
+     data-return-url="@(Model.ReturnUrl ?? "")"
+     data-cancel-url="@(Model.CancelUrl ?? "")"
+     data-proxy-base="@Model.ProxyBaseUrl"
+     data-selected-provider="@selectedId">
+
+    <!-- Loading State -->
+    <div class="ww-payment-loading text-center py-4" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted ww-payment-loading-msg">Processing payment...</p>
+    </div>
+
+    <!-- Success State -->
+    <div class="ww-payment-success text-center py-4" style="display: none;">
+        <div class="mb-3">
+            <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+        </div>
+        <h4 class="text-success">Payment Successful!</h4>
+        <p class="ww-payment-txn-id">Transaction ID: <code></code></p>
+        <p class="mb-0">Amount: <strong class="ww-payment-success-amount"></strong></p>
+        <div class="ww-payment-receipt-link mt-3" style="display: none;">
+            <a href="#" target="_blank" class="btn btn-outline-primary">
+                <i class="bi bi-receipt me-2"></i>View Receipt
+            </a>
+        </div>
+        <button class="btn btn-primary mt-3 ww-payment-continue-btn" style="display: none;">Continue</button>
+    </div>
+
+    <!-- Error State -->
+    <div class="ww-payment-error" style="display: none;">
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            <span class="ww-payment-error-msg"></span>
+            <button type="button" class="btn-close" aria-label="Close"></button>
+        </div>
+        <button class="btn btn-outline-primary ww-payment-retry-btn">
+            <i class="bi bi-arrow-clockwise me-2"></i>Try Again
+        </button>
+    </div>
+
+    <!-- Payment Form -->
+    <div class="ww-payment-form">
+        <!-- Amount Display -->
+        @if (Model.ShowAmount)
+        {
+            <div class="ww-payment-amount-display mb-4 text-center">
+                <span class="amount-value fs-3 fw-bold">@FormatAmount(Model.Amount, Model.Currency)</span>
+                @if (!string.IsNullOrEmpty(Model.Description))
+                {
+                    <p class="text-muted mb-0">@Model.Description</p>
+                }
+            </div>
+        }
+
+        <!-- Provider Selection -->
+        @if (providers.Count > 1)
+        {
+            <div class="ww-payment-providers mb-4">
+                <label class="form-label fw-bold">Payment Method</label>
+                <div class="provider-list">
+                    @foreach (var provider in providers)
+                    {
+                        var isSelected = provider.Id == selectedId;
+                        <div class="provider-option @(isSelected ? "selected" : "")"
+                             data-provider-id="@provider.Id"
+                             data-provider-type="@provider.ProviderType"
+                             data-publishable-key="@(provider.PublishableKey ?? "")"
+                             data-client-id="@(provider.ClientId ?? "")"
+                             data-merchant-id="@(provider.MerchantId ?? "")"
+                             data-is-sandbox="@provider.IsSandboxMode.ToString().ToLower()"
+                             data-supports-apple-pay="@provider.SupportsApplePay.ToString().ToLower()"
+                             data-supports-google-pay="@provider.SupportsGooglePay.ToString().ToLower()">
+                            <div class="provider-icon">
+                                <i class="@provider.GetIconClass()"></i>
+                            </div>
+                            <div class="provider-name">
+                                @provider.GetDisplayLabel()
+                            </div>
+                            @if (provider.IsDefault)
+                            {
+                                <span class="badge bg-primary ms-2">Default</span>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else if (providers.Count == 1)
+        {
+            var provider = providers[0];
+            <input type="hidden"
+                   class="ww-single-provider"
+                   data-provider-id="@provider.Id"
+                   data-provider-type="@provider.ProviderType"
+                   data-publishable-key="@(provider.PublishableKey ?? "")"
+                   data-client-id="@(provider.ClientId ?? "")"
+                   data-merchant-id="@(provider.MerchantId ?? "")"
+                   data-is-sandbox="@provider.IsSandboxMode.ToString().ToLower()"
+                   data-supports-apple-pay="@provider.SupportsApplePay.ToString().ToLower()"
+                   data-supports-google-pay="@provider.SupportsGooglePay.ToString().ToLower()" />
+        }
+
+        <!-- Provider-Specific Payment Forms -->
+        <div class="ww-payment-form-content">
+            <!-- Stripe Card Element -->
+            <div class="ww-stripe-payment" style="display: none;">
+                <div class="mb-3">
+                    <label class="form-label">Card Details</label>
+                    <div id="stripe-card-element-@cid" class="stripe-element"></div>
+                    <div id="stripe-card-errors-@cid" class="text-danger small mt-1"></div>
+                </div>
+            </div>
+
+            <!-- PayPal Button Container -->
+            <div class="ww-paypal-payment" style="display: none;">
+                <div class="text-center py-3 ww-paypal-loading">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                        <span class="visually-hidden">Loading PayPal...</span>
+                    </div>
+                    <p class="text-muted small mt-2 mb-0">Loading PayPal buttons...</p>
+                </div>
+                <div id="paypal-button-container-@cid" class="paypal-buttons-container" style="display: none;"></div>
+                <p class="text-muted small mt-2 text-center">
+                    <i class="bi bi-shield-check me-1"></i>Secure payment via PayPal
+                </p>
+            </div>
+
+            <!-- Apple Pay Button -->
+            <div class="ww-applepay-payment text-center" style="display: none;">
+                <div id="apple-pay-button-@cid" class="apple-pay-button apple-pay-button-black"></div>
+                <p class="text-muted small mt-2">Use Face ID or Touch ID to confirm payment.</p>
+            </div>
+
+            <!-- Google Pay Button -->
+            <div class="ww-googlepay-payment text-center" style="display: none;">
+                <div id="google-pay-button-@cid"></div>
+                <p class="text-muted small mt-2">Pay securely with Google Pay.</p>
+            </div>
+
+            <!-- BNPL Payment -->
+            <div class="ww-bnpl-payment text-center" style="display: none;">
+                <div class="alert alert-warning">
+                    <i class="bi bi-clock me-2"></i>
+                    <strong>Pay in installments</strong>
+                    <p class="mb-0 mt-1 small">Split your payment into easy installments with <span class="ww-bnpl-provider-name"></span>.</p>
+                </div>
+                <button class="btn btn-warning btn-lg ww-bnpl-btn" disabled>
+                    Continue with <span class="ww-bnpl-provider-name"></span>
+                </button>
+            </div>
+
+            <!-- Generic Card Form (fallback) -->
+            <div class="ww-generic-payment" style="display: none;">
+                <div class="mb-3">
+                    <label class="form-label">Card Number</label>
+                    <input type="text" class="form-control ww-card-number" placeholder="1234 5678 9012 3456" maxlength="19" />
+                </div>
+                <div class="row">
+                    <div class="col-6">
+                        <div class="mb-3">
+                            <label class="form-label">Expiry</label>
+                            <input type="text" class="form-control ww-card-expiry" placeholder="MM/YY" maxlength="5" />
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="mb-3">
+                            <label class="form-label">CVV</label>
+                            <input type="text" class="form-control ww-card-cvv" placeholder="123" maxlength="4" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Billing Address (shared) -->
+            @if (Model.RequireBillingAddress)
+            {
+                <div class="ww-billing-address mt-3">
+                    <h6 class="fw-bold">Billing Address</h6>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="mb-3">
+                                <label class="form-label">First Name</label>
+                                <input type="text" class="form-control ww-billing-first" />
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="mb-3">
+                                <label class="form-label">Last Name</label>
+                                <input type="text" class="form-control ww-billing-last" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Address</label>
+                        <input type="text" class="form-control ww-billing-address-line" />
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="mb-3">
+                                <label class="form-label">City</label>
+                                <input type="text" class="form-control ww-billing-city" />
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="mb-3">
+                                <label class="form-label">State</label>
+                                <input type="text" class="form-control ww-billing-state" />
+                            </div>
+                        </div>
+                        <div class="col-3">
+                            <div class="mb-3">
+                                <label class="form-label">ZIP</label>
+                                <input type="text" class="form-control ww-billing-zip" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Submit Button (for non-redirect providers) -->
+        <div class="ww-payment-submit mt-4" style="display: none;">
+            <button class="btn btn-primary btn-lg w-100 ww-pay-btn" disabled>
+                <i class="bi bi-lock-fill me-2"></i>
+                Pay <span class="ww-pay-amount">@FormatAmount(Model.Amount, Model.Currency)</span>
+            </button>
+        </div>
+
+        <!-- Security Notice -->
+        <div class="ww-payment-security text-center mt-3" style="display: none;">
+            <small class="text-muted">
+                <i class="bi bi-shield-lock me-1"></i>
+                Secured by <span class="ww-security-provider"></span>
+            </small>
+        </div>
+
+        <!-- No Providers Warning -->
+        @if (providers.Count == 0)
+        {
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>No payment methods available</strong>
+                <p class="small mb-0 mt-2">No payment methods are configured for this application.</p>
+            </div>
+        }
+
+        <!-- Cancel Button -->
+        <div class="text-center mt-3 ww-payment-cancel" style="display: none;">
+            <button type="button" class="btn btn-link ww-cancel-btn">Cancel</button>
+        </div>
+    </div>
+</div>
+
+@functions {
+    private static string FormatAmount(decimal amount, string currency)
+    {
+        var symbol = GetCurrencySymbol(currency);
+        return $"{symbol}{amount:N2}";
+    }
+
+    private static string GetCurrencySymbol(string currency)
+    {
+        return currency.ToUpperInvariant() switch
+        {
+            "USD" => "$",
+            "EUR" => "\u20ac",
+            "GBP" => "\u00a3",
+            "JPY" => "\u00a5",
+            "CAD" => "CA$",
+            "AUD" => "A$",
+            _ => currency + " "
+        };
+    }
+}
