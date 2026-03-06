@@ -1,0 +1,1678 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
+@using System.ComponentModel.DataAnnotations
+@using System.Net.Http.Json
+@using Microsoft.Extensions.Logging
+@using Microsoft.JSInterop
+@using Microsoft.Extensions.Options
+@using WildwoodComponents.Blazor.Extensions
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@using WildwoodComponents.Blazor.Components.Payment
+@inject IHttpClientFactory HttpClientFactory
+@inject ILogger<TokenRegistrationComponent> Logger
+@inject IJSRuntime JSRuntime
+@inject IOptions<WildwoodComponentsOptions> OptionsAccessor
+@inject IAuthenticationService AuthService
+@inject IPaymentProviderService PaymentProviderService
+
+<div class="registration-token-component">
+    <!-- Step Indicator - Dynamic based on token requirement and payment requirement -->
+    @if (_currentStep > 0)
+    {
+        <div class="step-indicator mb-3">
+            <div class="d-flex justify-content-center">
+                @if (_tokenIsRequired)
+                {
+                    <!-- Token required: show Token step -->
+                    <div class="step @(_currentStep >= 1 ? "active" : "") @(_currentStep > 1 ? "completed" : "")">
+                        <span class="step-number">1</span>
+                        <span class="step-label">Token</span>
+                    </div>
+                    <div class="step-connector @(_currentStep > 1 ? "completed" : "")"></div>
+                    <div class="step @(_currentStep >= 2 ? "active" : "") @(_currentStep > 2 ? "completed" : "")">
+                        <span class="step-number">2</span>
+                        <span class="step-label">Account</span>
+                    </div>
+                }
+                else
+                {
+                    <!-- Token optional or open-only: just show Account step -->
+                    <div class="step @(_currentStep >= 2 ? "active" : "") @(_currentStep > 2 ? "completed" : "")">
+                        <span class="step-number">1</span>
+                        <span class="step-label">Account</span>
+                    </div>
+                }
+                @if (_requiresPayment)
+                {
+                    <div class="step-connector @(_currentStep > 2 ? "completed" : "")"></div>
+                    <div class="step @(_currentStep >= 3 ? "active" : "")">
+                        <span class="step-number">@(_tokenIsRequired ? "3" : "2")</span>
+                        <span class="step-label">Payment</span>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @if (!_tokenValidated && _currentStep == 1 && _tokenIsRequired)
+    {
+        <!-- Token Validation Step (onlyShown when token is required) -->
+        <div class="token-validation-section">
+            <h3>Registration Token Required</h3>
+            <p class="text-muted">Please enter your registration token to begin the signup process.</p>
+            
+            <div class="form-group">
+                <label for="token">Registration Token: <span class="text-danger">*</span></label>
+                <input type="text"
+                       @bind="_tokenValue"
+                       @bind:event="oninput"
+                       @onkeypress="HandleTokenKeyPress"
+                       class="form-control @(!string.IsNullOrEmpty(_tokenError) ? "is-invalid" : "")" 
+                       id="token" 
+                       placeholder="Enter your registration token"
+                       maxlength="100" />
+                @if (!string.IsNullOrEmpty(_tokenError))
+                {
+                    <div class="invalid-feedback d-block">@_tokenError</div>
+                }
+            </div>
+            
+            <button type="button"
+                    @onclick="ValidateTokenAsync" 
+                    class="btn btn-primary mt-2">
+                @if (_isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    <text>Validating...</text>
+                }
+                else
+                {
+                    <text>Validate Token</text>
+                }
+            </button>
+        </div>
+    }
+    else if (_tokenValidated && _currentStep == 2 && !_registrationSuccessful)
+    {
+        <!-- Registration Form Step -->
+        <div class="registration-form-section">
+            <h3>Create Your Account</h3>
+            @if (_useToken && _tokenInfo != null)
+            {
+                <p class="text-muted">Your registration token is valid. Please complete your account setup.</p>
+            }
+            else
+            {
+                <p class="text-muted">Please complete the form below to create your account.</p>
+            }
+            
+            <!-- Optional Token Field - Show when both modes are allowed and no token validated yet -->
+            @if (_tokenIsOptional && !_useToken)
+            {
+                <div class="card mb-3 border-info">
+                    <div class="card-body">
+                        <h6 class="card-title"><i class="fas fa-ticket-alt me-2"></i>Have a Registration Token?</h6>
+                        <p class="card-text small text-muted mb-2">
+                            If you have a registration token, enter it below to unlock special access or pricing.
+                        </p>
+                        <div class="input-group">
+                            <input type="text"
+                                   @bind="_tokenValue"
+                                   @bind:event="oninput"
+                                   @onblur="HandleOptionalTokenBlur"
+                                   class="form-control @(!string.IsNullOrEmpty(_tokenError) ? "is-invalid" : "") @(_tokenInfo?.IsValid == true ? "is-valid" : "")" 
+                                   placeholder="Enter registration token (optional)"
+                                   maxlength="100" />
+                            <button type="button"
+                                    @onclick="ValidateOptionalTokenAsync" 
+                                    class="btn btn-outline-primary"
+                                    disabled="@(string.IsNullOrWhiteSpace(_tokenValue) || _isLoading)">
+                                @if (_isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                }
+                                else
+                                {
+                                    <text>Apply</text>
+                                }
+                            </button>
+                        </div>
+                        @if (!string.IsNullOrEmpty(_tokenError))
+                        {
+                            <div class="text-danger small mt-1">@_tokenError</div>
+                        }
+                        @if (_tokenInfo?.IsValid == true)
+                        {
+                            <div class="text-success small mt-1"><i class="fas fa-check-circle me-1"></i>Token applied successfully!</div>
+                        }
+                    </div>
+                </div>
+            }
+            
+            <!-- Token Info Display - Show when using a validated token -->
+            @if (_useToken && _tokenInfo != null)
+            {
+                <div class="alert alert-info mb-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6><i class="fas fa-info-circle"></i> Token Information</h6>
+                            <small>
+                                @if (!string.IsNullOrEmpty(_tokenInfo?.CompanyClientName))
+                                {
+                                    <strong>Organization:</strong> @_tokenInfo.CompanyClientName<br>
+                                }
+                                else if (!string.IsNullOrEmpty(_tokenInfo?.CompanyName))
+                                {
+                                    <strong>Company:</strong> @_tokenInfo.CompanyName<br>
+                                }
+                                <strong>Role:</strong> @_tokenInfo?.AssignedRole<br>
+                                @if (_tokenInfo?.RestrictedToAppNames != null && _tokenInfo.RestrictedToAppNames.Count > 0)
+                                {
+                                    <strong>Apps:</strong>
+                                    @if (_tokenInfo.RestrictedToAppNames.Count == 1)
+                                    {
+                                        @_tokenInfo.RestrictedToAppNames[0]<br>
+                                    }
+                                    else
+                                    {
+                                        <ul class="mb-0 ps-3">
+                                            @foreach (var appName in _tokenInfo.RestrictedToAppNames)
+                                            {
+                                                <li>@appName</li>
+                                            }
+                                        </ul>
+                                    }
+                                }
+                                else if (_tokenInfo?.RestrictedToAppId != null)
+                                {
+                                    <strong>App:</strong> @_tokenInfo.AppName<br>
+                                }
+                                else if (_tokenInfo?.AssignedRole == "CompanyAdmin")
+                                {
+                                    <strong>Apps:</strong> <em>All company apps</em><br>
+                                }
+                                @if (!string.IsNullOrEmpty(_tokenInfo?.PricingModelName))
+                                {
+                                    <strong>Plan:</strong> @_tokenInfo.PricingModelName<br>
+                                }
+                                @if (_tokenInfo?.IsSubscription == true)
+                                {
+                                    <span class="badge bg-info">Subscription</span>
+                                }
+                                @if (_tokenInfo?.MaxUsages.HasValue == true)
+                                {
+                                    <strong>Usage:</strong> @($"{_tokenInfo.CurrentUsages} / {_tokenInfo.MaxUsages}")<br>
+                                }
+                                @if (_tokenInfo?.ExpirationDate.HasValue == true)
+                                {
+                                    <strong>Expires:</strong> @_tokenInfo.ExpirationDate.Value.ToString("MMM dd, yyyy")
+                                }
+                            </small>
+                        </div>
+                        @if (_tokenIsOptional)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="ClearToken">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+
+            <EditForm Model="_registrationModel" OnValidSubmit="RegisterUserAsync" OnInvalidSubmit="HandleInvalidSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger mb-2" />
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="firstName">First Name *</label>
+                            <InputText @bind-Value="_registrationModel.FirstName" 
+                                     class="form-control" 
+                                     id="firstName" />
+                            <ValidationMessage For="@(() => _registrationModel.FirstName)" />
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="lastName">Last Name *</label>
+                            <InputText @bind-Value="_registrationModel.LastName" 
+                                     class="form-control" 
+                                     id="lastName" />
+                            <ValidationMessage For="@(() => _registrationModel.LastName)" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="username">Username *</label>
+                    <InputText @bind-Value="_registrationModel.Username" 
+                             class="form-control" 
+                             id="username" 
+                             placeholder="Choose a unique username" />
+                    <ValidationMessage For="@(() => _registrationModel.Username)" />
+                    <small class="text-muted">This will be used to log in to your account</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email Address *</label>
+                    <InputText @bind-Value="_registrationModel.Email" 
+                             class="form-control" 
+                             id="email" 
+                             type="email" />
+                    <ValidationMessage For="@(() => _registrationModel.Email)" />
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password *</label>
+                    <div class="input-group">
+                        <InputText @bind-Value="_registrationModel.Password" 
+                                 class="form-control" 
+                                 id="password" 
+                                 type="@(_showPassword ? "text" : "password")" />
+                        <button type="button" 
+                                class="btn btn-outline-secondary" 
+                                @onclick="TogglePasswordVisibility">
+                            <i class="fas @(_showPassword ? "fa-eye-slash" : "fa-eye")"></i>
+                        </button>
+                    </div>
+                    <ValidationMessage For="@(() => _registrationModel.Password)" />
+                    @if (!string.IsNullOrEmpty(_passwordRequirements))
+                    {
+                        <small class="text-muted">@_passwordRequirements</small>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password *</label>
+                    <InputText @bind-Value="_registrationModel.ConfirmPassword" 
+                             class="form-control" 
+                             id="confirmPassword" 
+                             type="password" />
+                    <ValidationMessage For="@(() => _registrationModel.ConfirmPassword)" />
+                </div>
+
+                @if (!string.IsNullOrEmpty(_registrationError))
+                {
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> @_registrationError
+                    </div>
+                }
+
+                <div class="d-grid gap-2 mt-3">
+                    <button type="submit" 
+                            class="btn btn-success btn-lg" 
+                            disabled="@_isLoading">
+                        @if (_isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        @if (_requiresPayment)
+                        {
+                            <text>Continue to Payment</text>
+                        }
+                        else
+                        {
+                            <text>Create Account</text>
+                        }
+                    </button>
+                    
+                    @if (_tokenIsRequired)
+                    {
+                        <button type="button" 
+                                class="btn btn-link" 
+                                @onclick="ResetForm">
+                            Use Different Token
+                        </button>
+                    }
+                    else if (OnCancel.HasDelegate)
+                    {
+                        <button type="button" 
+                                class="btn btn-link" 
+                                @onclick="HandleCancel">
+                            Cancel
+                        </button>
+                    }
+                </div>
+            </EditForm>
+        </div>
+    }
+    else if (_showRegistrationDisclaimers && _registrationDisclaimers?.Any() == true)
+    {
+        <!-- Disclaimer Acceptance Step -->
+        <div class="disclaimer-section">
+            <h3><i class="fas fa-file-contract me-2"></i>Terms & Agreements</h3>
+            <p class="text-muted">Please review and accept the following before continuing.</p>
+
+            <WildwoodComponents.Blazor.Components.Disclaimer.DisclaimerComponent
+                AppId="@(AppId ?? string.Empty)"
+                Mode="registration"
+                PendingDisclaimers="@_registrationDisclaimers"
+                ShowCancelButton="true"
+                OnDisclaimersAccepted="HandleRegistrationDisclaimersAccepted"
+                OnDisclaimersCancelled="HandleRegistrationDisclaimersCancelled"
+                OnError="HandleDisclaimerError" />
+        </div>
+    }
+    else if (_currentStep == 3 && _requiresPayment && !_paymentComplete)
+    {
+        <!-- Payment Setup Step - Using PaymentComponent -->
+        <div class="payment-section">
+            <div class="mb-3">
+                <button class="btn btn-link p-0" @onclick="BackToAccountStep">
+                    <i class="bi bi-arrow-left me-2"></i>Back to account details
+                </button>
+            </div>
+
+            <h3><i class="fas fa-credit-card me-2"></i>Payment Setup</h3>
+            @if (_registrationPending)
+            {
+                <p class="text-muted">Your account details have been verified. Complete payment to activate your account.</p>
+            }
+            else
+            {
+                <p class="text-muted">Complete your payment to activate your account.</p>
+            }
+
+            <!-- Pricing Summary Card -->
+            <div class="pricing-summary-card mb-4">
+                <div class="pricing-header">
+                    <h5 class="mb-0">@GetPricingDisplayName()</h5>
+                    @if (_registrationResponse?.IsSubscription == true)
+                    {
+                        <span class="badge bg-primary ms-2">Subscription</span>
+                    }
+                </div>
+                <div class="pricing-body">
+                    <div class="price-display">
+                        <span class="price-amount">@FormatPrice(_pricingDetails?.PriceAmount ?? 0)</span>
+                        <span class="price-period">@(_registrationResponse?.IsSubscription == true ? "/month" : " one-time")</span>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_pricingDetails?.PlanDescription))
+                    {
+                        <p class="pricing-description">@_pricingDetails.PlanDescription</p>
+                    }
+                    @if (_registrationResponse?.IsSubscription == true)
+                    {
+                        <div class="subscription-info">
+                            <i class="fas fa-sync-alt me-1"></i>
+                            <small>Your card will be charged monthly. Cancel anytime.</small>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- PaymentComponent Integration -->
+            @if (!string.IsNullOrEmpty(_registrationResponse?.PaymentAppId))
+            {
+                <PaymentComponent AppId="@_registrationResponse.PaymentAppId"
+                                 Amount="@(_pricingDetails?.PriceAmount ?? 0)"
+                                 Currency="@(_pricingDetails?.Currency ?? "USD")"
+                                 Description="@($"Registration: {_pricingDetails?.PlanName}")"
+                                 CustomerId="@_registrationResponse?.UserId"
+                                 CustomerEmail="@_registrationModel.Email"
+                                 PricingModelId="@_registrationResponse?.PricingModelId"
+                                 IsSubscription="@(_registrationResponse?.IsSubscription ?? false)"
+                                 ShowAmount="false"
+                                 OnPaymentSuccess="HandlePaymentSuccess"
+                                 OnPaymentFailure="HandlePaymentFailure"
+                                 OnCancel="SkipPaymentAsync" />
+            }
+            else
+            {
+                <!-- Fallback if no app configured - shouldn't normally happen -->
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Payment configuration is not available. Please contact support.
+                </div>
+                <div class="d-grid gap-2">
+                    <button type="button" 
+                            class="btn btn-outline-secondary"
+                            @onclick="SkipPaymentAsync">
+                        <i class="fas fa-clock me-2"></i>
+                        Set Up Payment Later
+                    </button>
+                </div>
+            }
+        </div>
+    }
+    else if (_registrationSuccessful || (_currentStep == 3 && !_requiresPayment))
+    {
+        <!-- Success Message -->
+        <div class="registration-success-section text-center">
+            @if (_isAutoLoggingIn)
+            {
+                <div class="mb-4">
+                    <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                        <span class="visually-hidden">Logging in...</span>
+                    </div>
+                </div>
+                <h4>Logging you in...</h4>
+                <p class="text-muted">Please wait while we complete your sign in.</p>
+            }
+            else if (_autoLoginComplete)
+            {
+                <div class="mb-4">
+                    <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+                </div>
+                <h4>Welcome!</h4>
+                <p class="text-muted">Your account has been created and you are now logged in.</p>
+                
+                @if (_registrationResponse?.GrantedApps != null && _registrationResponse.GrantedApps.Length > 0)
+                {
+                    <div class="alert alert-info text-start mb-4">
+                        <h6><i class="fas fa-mobile-alt me-2"></i>Apps You Have Access To:</h6>
+                        <ul class="mb-0">
+                            @foreach (var app in _registrationResponse.GrantedApps)
+                            {
+                                <li>@app</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (_paymentComplete)
+                {
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        Payment setup completed successfully!
+                    </div>
+                }
+                else if (_paymentSkipped)
+                {
+                    <div class="alert alert-warning">
+                        <i class="fas fa-clock me-2"></i>
+                        Payment setup skipped. You can complete it later in your account settings.
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="mb-4">
+                    <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+                </div>
+                <h4>Account Created Successfully!</h4>
+                <p class="text-muted">Your account has been created and you've been granted access to the application.</p>
+                
+                @if (_registrationResponse?.GrantedApps != null && _registrationResponse.GrantedApps.Length > 0)
+                {
+                    <div class="alert alert-info text-start mb-4">
+                        <h6><i class="fas fa-mobile-alt me-2"></i>Apps You Have Access To:</h6>
+                        <ul class="mb-0">
+                            @foreach (var app in _registrationResponse.GrantedApps)
+                            {
+                                <li>@app</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (_paymentComplete)
+                {
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        Payment setup completed successfully!
+                    </div>
+                }
+                else if (_paymentSkipped)
+                {
+                    <div class="alert alert-warning">
+                        <i class="fas fa-clock me-2"></i>
+                        Payment setup skipped. You can complete it later in your account settings.
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(_autoLoginError))
+                {
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        @_autoLoginError
+                    </div>
+                }
+                
+                <div class="mt-4">
+                    <button class="btn btn-primary btn-lg" @onclick="NavigateToLogin">
+                        <i class="fas fa-sign-in-alt me-2"></i>
+                        Continue to Login
+                    </button>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Token { get; set; }
+    [Parameter] public string? AppId { get; set; }
+    
+    /// <summary>
+    /// If true, token-based registration is allowed.
+    /// Default is true for backward compatibility.
+    /// </summary>
+    [Parameter] public bool AllowTokenRegistration { get; set; } = true;
+    
+    /// <summary>
+    /// If true, open registration (without token) is allowed.
+    /// Default is false for backward compatibility.
+    /// </summary>
+    [Parameter] public bool AllowOpenRegistration { get; set; } = false;
+    
+    /// <summary>
+    /// Backward compatibility: If true, token is required for registration.
+    /// This is now computed from AllowTokenRegistration and AllowOpenRegistration.
+    /// </summary>
+    [Parameter] public bool RequireToken { get; set; } = true;
+    
+    /// <summary>
+    /// Default pricing model ID for open registration (when no token is used).
+    /// Null means free registration.
+    /// </summary>
+    [Parameter] public string? DefaultPricingModelId { get; set; }
+    
+    /// <summary>
+    /// If true, automatically logs in the user after successful registration.
+    /// Default is true.
+    /// </summary>
+    [Parameter] public bool AutoLogin { get; set; } = true;
+    
+    /// <summary>
+    /// URL to redirect to after successful auto-login. If not set, uses OnAutoLoginSuccess callback.
+    /// </summary>
+    [Parameter] public string? RedirectUrl { get; set; }
+    
+    [Parameter] public EventCallback<RegistrationSuccessEventArgs> OnRegistrationSuccess { get; set; }
+    
+    /// <summary>
+    /// Called when auto-login completes successfully. Provides the AuthenticationResponse.
+    /// </summary>
+    [Parameter] public EventCallback<AuthenticationResponse> OnAutoLoginSuccess { get; set; }
+    
+    [Parameter] public EventCallback<string> OnError { get; set; }
+    
+    /// <summary>
+    /// Called when user wants to cancel/close the registration.
+    /// </summary>
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    /// <summary>
+    /// Determines if token is strictly required (no open registration allowed).
+    /// </summary>
+    private bool _tokenIsRequired => AllowTokenRegistration && !AllowOpenRegistration;
+    
+    /// <summary>
+    /// Determines if token is optional (both token and open registration allowed).
+    /// </summary>
+    private bool _tokenIsOptional => AllowTokenRegistration && AllowOpenRegistration;
+    
+    /// <summary>
+    /// Determines if we should use the token that was validated.
+    /// </summary>
+    private bool _useToken => !string.IsNullOrEmpty(_tokenValue) && _tokenInfo?.IsValid == true;
+
+    private int _currentStep = 1;
+    private bool _tokenValidated = false;
+    private bool _registrationSuccessful = false;
+    private bool _showPassword = false;
+    private bool _isLoading = false;
+    private bool _requiresPayment = false;
+    private bool _paymentComplete = false;
+    private bool _paymentSkipped = false;
+    private bool _isAutoLoggingIn = false;
+    private bool _autoLoginComplete = false;
+    private string _tokenValue = string.Empty;
+    private string _tokenError = string.Empty;
+    private string _registrationError = string.Empty;
+    private string _passwordRequirements = string.Empty;
+    private string _autoLoginError = string.Empty;
+    
+    // Payment transaction tracking - stores transaction IDs from payment to link after registration
+    private string? _pendingPaymentTransactionId = null;
+    private string? _pendingPaymentIntentId = null;
+    
+    private TokenRegistrationModel _registrationModel = new();
+    private TokenValidationResponse? _tokenInfo;
+    private RegistrationSuccessResponse? _registrationResponse;
+    private PricingDetails? _pricingDetails;
+    
+    // Pending registration state - holds validated data until payment completes
+    private bool _registrationPending = false;
+    private ValidationResponse? _validationResponse;
+
+    // Disclaimer state - holds disclaimers to show during registration
+    private bool _showRegistrationDisclaimers = false;
+    private List<PendingDisclaimerModel>? _registrationDisclaimers;
+    private List<DisclaimerAcceptanceResult>? _disclaimerAcceptances;
+    
+    // Cached HTTP client for API calls
+    private HttpClient? _httpClient;
+
+    /// <summary>
+    /// Gets a configured HTTP client with the proper base URL.
+    /// </summary>
+    private HttpClient GetHttpClient()
+    {
+        if (_httpClient == null)
+        {
+            _httpClient = HttpClientFactory.CreateClient();
+            var baseUrl = OptionsAccessor.Value.BaseUrl;
+            if (!string.IsNullOrEmpty(baseUrl))
+            {
+                _httpClient.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            }
+        }
+        return _httpClient;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // If token is provided as parameter, auto-populate and validate
+        if (!string.IsNullOrEmpty(Token))
+        {
+            _tokenValue = Token;
+            await ValidateTokenAsync();
+        }
+        // If token is strictly required (no open registration), stay on step 1
+        else if (_tokenIsRequired)
+        {
+            _currentStep = 1;
+            _tokenValidated = false;
+        }
+        // If open registration is allowed (with or without optional token), skip to account form
+        else if (AllowOpenRegistration)
+        {
+            _tokenValidated = true;
+            _currentStep = 2;
+            
+            // Set up pricing from default pricing model if provided
+            if (!string.IsNullOrEmpty(DefaultPricingModelId))
+            {
+                await LoadDefaultPricingDetailsAsync();
+            }
+            
+            if (!string.IsNullOrEmpty(AppId))
+            {
+                await LoadPasswordRequirementsAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Loads pricing details for open registration using the default pricing model.
+    /// </summary>
+    private async Task LoadDefaultPricingDetailsAsync()
+    {
+        try
+        {
+            // Use the public endpoint which allows anonymous access for registration flow
+            var response = await GetHttpClient().GetAsync($"api/pricingmodels/{DefaultPricingModelId}/public");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var pricingModel = await response.Content.ReadFromJsonAsync<PricingModelResponse>();
+                if (pricingModel != null)
+                {
+                    _requiresPayment = pricingModel.Price > 0;
+                    _pricingDetails = new PricingDetails
+                    {
+                        PlanName = pricingModel.Name,
+                        PlanDescription = pricingModel.Description,
+                        PriceAmount = pricingModel.Price,
+                        Currency = pricingModel.Currency ?? "USD",
+                        IsSubscription = !string.Equals(pricingModel.BillingFrequency, "OneTime", StringComparison.OrdinalIgnoreCase),
+                        BillingFrequency = pricingModel.BillingFrequency
+                    };
+                }
+            }
+            else
+            {
+                Logger.LogWarning("Failed to load pricing model {PricingModelId}. Status: {StatusCode}", DefaultPricingModelId, response.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load default pricing details");
+        }
+    }
+
+    /// <summary>
+    /// Validates token when it's optional (from the account form).
+    /// </summary>
+    private async Task ValidateOptionalTokenAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenValue))
+        {
+            return;
+        }
+        
+        await ValidateTokenAsync();
+        
+        // If valid, update pricing from token
+        if (_tokenInfo?.IsValid == true && _tokenInfo.RequiresPaymentSetup)
+        {
+            _requiresPayment = true;
+            _pricingDetails = new PricingDetails
+            {
+                PlanName = _tokenInfo.PricingModelName,
+                PlanDescription = _tokenInfo.PricingDescription,
+                PriceAmount = _tokenInfo.PriceAmount ?? 0,
+                Currency = _tokenInfo.PriceCurrency ?? "USD",
+                IsSubscription = _tokenInfo.IsSubscription,
+                BillingFrequency = _tokenInfo.BillingFrequency ?? (_tokenInfo.IsSubscription ? "Monthly" : "One-time")
+            };
+        }
+    }
+
+    /// <summary>
+    /// Handles blur event on the optional token field to auto-apply if there's a value.
+    /// </summary>
+    private async Task HandleOptionalTokenBlur()
+    {
+        // Only auto-validate if there's a value and it hasn't already been validated
+        if (!string.IsNullOrWhiteSpace(_tokenValue) && _tokenInfo?.IsValid != true && !_isLoading)
+        {
+            await ValidateOptionalTokenAsync();
+        }
+    }
+
+    /// <summary>
+    /// Clears the validated token and reverts to default pricing.
+    /// </summary>
+    private async Task ClearToken()
+    {
+        _tokenValue = string.Empty;
+        _tokenError = string.Empty;
+        _tokenInfo = null;
+        
+        // Revert to default pricing if available
+        if (!string.IsNullOrEmpty(DefaultPricingModelId))
+        {
+            await LoadDefaultPricingDetailsAsync();
+        }
+        else
+        {
+            _requiresPayment = false;
+            _pricingDetails = null;
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task ValidateTokenAsync()
+    {
+        // Prevent double-clicks
+        if (_isLoading) return;
+
+        try
+        {
+            _tokenError = string.Empty;
+            
+            if (string.IsNullOrWhiteSpace(_tokenValue))
+            {
+                _tokenError = "Please enter a registration token.";
+                StateHasChanged();
+                return;
+            }
+
+            _isLoading = true;
+            StateHasChanged();
+
+            var response = await GetHttpClient().GetAsync($"api/registrationtokens/validate-detailed/{_tokenValue}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var validationResult = await response.Content.ReadFromJsonAsync<TokenValidationResponse>();
+                
+                if (validationResult?.IsValid == true)
+                {
+                    _tokenInfo = validationResult;
+                    _tokenValidated = true;
+                    _requiresPayment = validationResult.RequiresPaymentSetup;
+                    _currentStep = 2;
+                    
+                    if (_requiresPayment)
+                    {
+                        _pricingDetails = new PricingDetails
+                        {
+                            PlanName = validationResult.PricingModelName,
+                            PlanDescription = validationResult.PricingDescription,
+                            PriceAmount = validationResult.PriceAmount ?? 0,
+                            Currency = validationResult.PriceCurrency ?? "USD",
+                            IsSubscription = validationResult.IsSubscription,
+                            BillingFrequency = validationResult.BillingFrequency ?? (validationResult.IsSubscription ? "Monthly" : "One-time")
+                        };
+                    }
+                    
+                    if (!string.IsNullOrEmpty(AppId))
+                    {
+                        await LoadPasswordRequirementsAsync();
+                    }
+                }
+                else
+                {
+                    _tokenError = validationResult?.ErrorMessage ?? "Invalid registration token.";
+                }
+            }
+            else
+            {
+                _tokenError = "Unable to validate token. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error validating token");
+            _tokenError = "An error occurred while validating the token.";
+            await OnError.InvokeAsync(ex.Message);
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadPasswordRequirementsAsync()
+    {
+        try
+        {
+            var response = await GetHttpClient().GetAsync($"api/auth/password-requirements/{AppId}");
+            if (response.IsSuccessStatusCode)
+            {
+                _passwordRequirements = await response.Content.ReadAsStringAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load password requirements");
+        }
+    }
+
+    private async Task RegisterUserAsync()
+    {
+        try
+        {
+            _isLoading = true;
+            _registrationError = string.Empty;
+            
+            // Step 1: Validate registration data first (without creating the user)
+            var validationRequest = new ValidateRegistrationRequest
+            {
+                Username = _registrationModel.Username,
+                Email = _registrationModel.Email,
+                Password = _registrationModel.Password,
+                Token = _useToken ? _tokenValue : null,
+                AppId = AppId
+            };
+
+            var validationResponse = await GetHttpClient().PostAsJsonAsync("api/userregistration/validate", validationRequest);
+            
+            if (!validationResponse.IsSuccessStatusCode)
+            {
+                _registrationError = "Unable to validate registration. Please try again.";
+                return;
+            }
+
+            var validation = await validationResponse.Content.ReadFromJsonAsync<ValidationResponse>();
+            
+            if (validation == null || !validation.IsValid)
+            {
+                _registrationError = validation?.ErrorMessage ?? "Validation failed. Please check your information.";
+                return;
+            }
+
+            _validationResponse = validation;
+
+            // Step 2: Check for registration disclaimers
+            try
+            {
+                var disclaimerResponse = await GetHttpClient().GetFromJsonAsync<PendingDisclaimersResponse>(
+                    $"api/disclaimeracceptance/pending/{AppId}?showOn=registration");
+
+                if (disclaimerResponse?.HasPendingDisclaimers == true && disclaimerResponse.Disclaimers.Any())
+                {
+                    _registrationDisclaimers = disclaimerResponse.Disclaimers;
+                    _showRegistrationDisclaimers = true;
+                    Logger.LogInformation("Registration disclaimers found: {Count}", _registrationDisclaimers.Count);
+                    return;
+                }
+            }
+            catch (Exception disclaimerEx)
+            {
+                Logger.LogWarning(disclaimerEx, "Failed to load registration disclaimers, continuing without them");
+            }
+
+            // Step 3: Determine if payment is required
+            bool requiresPayment = validation.RequiresPayment;
+
+            // Update pricing details from validation response
+            if (requiresPayment)
+            {
+                _requiresPayment = true;
+                _pricingDetails = new PricingDetails
+                {
+                    PlanName = validation.PricingModelName,
+                    PriceAmount = validation.PriceAmount ?? 0,
+                    Currency = validation.Currency ?? "USD",
+                    IsSubscription = validation.IsSubscription
+                };
+
+                // Store pending registration state - we'll complete registration after payment
+                _registrationPending = true;
+                _currentStep = 3;
+
+                // Create a temporary registration response with payment info for the PaymentComponent
+                _registrationResponse = new RegistrationSuccessResponse
+                {
+                    Success = true,
+                    RequiresPaymentSetup = true,
+                    IsSubscription = validation.IsSubscription,
+                    PaymentAppId = validation.PaymentAppId ?? AppId,
+                    PricingModelId = validation.PricingModelId,
+                    PricingModelName = validation.PricingModelName,
+                    GrantedApps = validation.GrantedApps
+                };
+
+                Logger.LogInformation("Registration validated, payment required. Deferring user creation until payment completes.");
+                return;
+            }
+
+            // Step 4: No payment required - complete registration immediately
+            await CompleteRegistrationAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error during registration");
+            _registrationError = "An error occurred during registration. Please try again.";
+            await OnError.InvokeAsync(ex.Message);
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Called when user accepts registration disclaimers. Proceeds to payment or completes registration.
+    /// </summary>
+    private async Task HandleRegistrationDisclaimersAccepted(List<DisclaimerAcceptanceResult> acceptances)
+    {
+        _disclaimerAcceptances = acceptances;
+        _showRegistrationDisclaimers = false;
+        Logger.LogInformation("Registration disclaimers accepted: {Count}", acceptances.Count);
+
+        // Continue to payment if required, otherwise complete registration
+        if (_validationResponse?.RequiresPayment == true)
+        {
+            _requiresPayment = true;
+            _pricingDetails = new PricingDetails
+            {
+                PlanName = _validationResponse.PricingModelName,
+                PriceAmount = _validationResponse.PriceAmount ?? 0,
+                Currency = _validationResponse.Currency ?? "USD",
+                IsSubscription = _validationResponse.IsSubscription
+            };
+
+            _registrationPending = true;
+            _currentStep = 3;
+
+            _registrationResponse = new RegistrationSuccessResponse
+            {
+                Success = true,
+                RequiresPaymentSetup = true,
+                IsSubscription = _validationResponse.IsSubscription,
+                PaymentAppId = _validationResponse.PaymentAppId ?? AppId,
+                PricingModelId = _validationResponse.PricingModelId,
+                PricingModelName = _validationResponse.PricingModelName,
+                GrantedApps = _validationResponse.GrantedApps
+            };
+        }
+        else
+        {
+            await CompleteRegistrationAsync();
+        }
+    }
+
+    /// <summary>
+    /// Called when user cancels disclaimer acceptance. Returns to the registration form.
+    /// </summary>
+    private void HandleRegistrationDisclaimersCancelled()
+    {
+        _showRegistrationDisclaimers = false;
+        _registrationDisclaimers = null;
+        _disclaimerAcceptances = null;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Called when an error occurs in the disclaimer component.
+    /// </summary>
+    private async Task HandleDisclaimerError(string error)
+    {
+        Logger.LogWarning("Disclaimer error during registration: {Error}", error);
+        _registrationError = error;
+        _showRegistrationDisclaimers = false;
+        await OnError.InvokeAsync(error);
+    }
+
+    /// <summary>
+    /// Completes the user registration by calling the API to create the user.
+    /// Called either directly (when no payment required) or after successful payment.
+    /// </summary>
+    private async Task CompleteRegistrationAsync()
+    {
+        try
+        {
+            _isLoading = true;
+            _registrationError = string.Empty;
+            
+            HttpResponseMessage response;
+            
+            // Use token-based registration if a valid token was provided (even when optional)
+            if (_useToken && !string.IsNullOrEmpty(_tokenValue))
+            {
+                // Token-based registration
+                var registrationRequest = new TokenRegistrationRequest
+                {
+                    Token = _tokenValue,
+                    FirstName = _registrationModel.FirstName,
+                    LastName = _registrationModel.LastName,
+                    Email = _registrationModel.Email,
+                    Password = _registrationModel.Password,
+                    AppId = AppId,
+                    Platform = "Web",
+                    DeviceInfo = "Browser",
+                    Username = _registrationModel.Username,
+                    DisclaimerAcceptances = _disclaimerAcceptances
+                };
+
+                response = await GetHttpClient().PostAsJsonAsync("api/userregistration/register-with-token", registrationRequest);
+            }
+            else
+            {
+                // Open registration (without token)
+                var registrationRequest = new OpenRegistrationRequest
+                {
+                    FirstName = _registrationModel.FirstName,
+                    LastName = _registrationModel.LastName,
+                    Email = _registrationModel.Email,
+                    Password = _registrationModel.Password,
+                    AppId = AppId,
+                    Platform = "Web",
+                    DeviceInfo = "Browser",
+                    Username = _registrationModel.Username,
+                    PricingModelId = DefaultPricingModelId,
+                    DisclaimerAcceptances = _disclaimerAcceptances
+                };
+
+                response = await GetHttpClient().PostAsJsonAsync("api/userregistration/register", registrationRequest);
+            }
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<RegistrationSuccessResponse>();
+                
+                if (result?.Success == true)
+                {
+                    _registrationResponse = result;
+                    _registrationPending = false;
+                    _registrationSuccessful = true;
+                    
+                    await OnRegistrationSuccess.InvokeAsync(new RegistrationSuccessEventArgs
+                    {
+                        UserId = result.UserId,
+                        Email = _registrationModel.Email,
+                        RequiresStripeSetup = result.RequiresStripeSetup,
+                        RequiresPaymentSetup = result.RequiresPaymentSetup,
+                        IsSubscription = result.IsSubscription
+                    });
+                    
+                    // Trigger auto-login if enabled
+                    if (AutoLogin)
+                    {
+                        await PerformAutoLoginAsync();
+                    }
+                }
+                else
+                {
+                    _registrationError = result?.Message ?? "Registration failed. Please try again.";
+                }
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Logger.LogWarning("Registration failed with status {StatusCode}. Response: {ErrorContent}", 
+                    response.StatusCode, errorContent);
+                
+                try
+                {
+                    var errorResult = System.Text.Json.JsonSerializer.Deserialize<RegistrationSuccessResponse>(
+                        errorContent, 
+                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    
+                    if (!string.IsNullOrEmpty(errorResult?.Message))
+                    {
+                        _registrationError = errorResult.Message;
+                    }
+                    else
+                    {
+                        _registrationError = $"Registration failed: {response.StatusCode}";
+                    }
+                }
+                catch (System.Text.Json.JsonException)
+                {
+                    if (!string.IsNullOrWhiteSpace(errorContent) && errorContent.Length < 500)
+                    {
+                        _registrationError = $"Registration failed: {errorContent}";
+                    }
+                    else
+                    {
+                        _registrationError = $"Registration failed: {response.StatusCode}";
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error completing registration");
+            _registrationError = "An error occurred during registration. Please try again.";
+            await OnError.InvokeAsync(ex.Message);
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadPricingDetailsAsync()
+    {
+        try
+        {
+            var response = await GetHttpClient().GetAsync($"api/registrationpayment/pricing/{_tokenValue}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                _pricingDetails = await response.Content.ReadFromJsonAsync<PricingDetails>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load pricing details");
+        }
+    }
+
+    private async Task HandlePaymentSuccess(PaymentSuccessEventArgs args)
+    {
+        Logger.LogInformation("Payment completed: TransactionId={TransactionId}, PaymentIntentId={PaymentIntentId}", 
+            args.TransactionId, args.PaymentIntentId);
+        
+        // Store transaction IDs for linking after registration
+        _pendingPaymentTransactionId = args.TransactionId;
+        _pendingPaymentIntentId = args.PaymentIntentId;
+        
+        // If registration was pending (deferred until payment), complete it now
+        if (_registrationPending)
+        {
+            Logger.LogInformation("Registration was pending. Completing user registration after successful payment.");
+            await CompleteRegistrationAsync();
+            
+            if (!_registrationSuccessful)
+            {
+                // Registration failed after payment - this is a problem
+                Logger.LogError("Registration failed after successful payment. TransactionId={TransactionId}", args.TransactionId);
+                return;
+            }
+            
+            // Link the payment transaction to the newly created user
+            await LinkPaymentTransactionToUserAsync();
+        }
+        
+        _paymentComplete = true;
+        _registrationSuccessful = true;
+        StateHasChanged();
+        
+        if (AutoLogin)
+        {
+            await PerformAutoLoginAsync();
+        }
+    }
+
+    /// <summary>
+    /// Links a pending payment transaction to the newly registered user.
+    /// Called after CompleteRegistrationAsync succeeds when payment was made before registration.
+    /// </summary>
+    private async Task LinkPaymentTransactionToUserAsync()
+    {
+        // Determine which transaction ID to use for linking
+        var externalTransactionId = _pendingPaymentIntentId ?? _pendingPaymentTransactionId;
+        var userId = _registrationResponse?.UserId;
+        
+        if (string.IsNullOrEmpty(externalTransactionId))
+        {
+            Logger.LogWarning("No payment transaction ID available to link to user");
+            return;
+        }
+        
+        if (string.IsNullOrEmpty(userId))
+        {
+            Logger.LogWarning("No user ID available to link payment transaction to");
+            return;
+        }
+        
+        try
+        {
+            Logger.LogInformation("Linking payment transaction {ExternalTransactionId} to user {UserId}",
+                externalTransactionId, userId);
+            
+            var linked = await PaymentProviderService.LinkTransactionToUserAsync(
+                externalTransactionId, 
+                userId,
+                _tokenInfo?.CompanyClientId);
+            
+            if (linked)
+            {
+                Logger.LogInformation("Successfully linked payment transaction {ExternalTransactionId} to user {UserId}",
+                    externalTransactionId, userId);
+            }
+            else
+            {
+                Logger.LogWarning("Failed to link payment transaction {ExternalTransactionId} to user {UserId}. " +
+                    "The transaction was created but may not be associated with the user in the database.",
+                    externalTransactionId, userId);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log but don't fail registration - the payment was still successful
+            Logger.LogError(ex, "Error linking payment transaction {ExternalTransactionId} to user {UserId}. " +
+                "Registration completed successfully but transaction link failed.",
+                externalTransactionId, userId);
+        }
+        finally
+        {
+            // Clear the pending transaction IDs
+            _pendingPaymentTransactionId = null;
+            _pendingPaymentIntentId = null;
+        }
+    }
+
+    private async Task HandlePaymentFailure(PaymentFailureEventArgs args)
+    {
+        Logger.LogWarning("Payment failed: {Error}", args.ErrorMessage);
+        await Task.CompletedTask;
+    }
+
+    private async Task SkipPaymentAsync()
+    {
+        try
+        {
+            // If registration was pending (deferred until payment), complete it now
+            if (_registrationPending)
+            {
+                Logger.LogInformation("Registration was pending. Completing user registration (payment skipped).");
+                await CompleteRegistrationAsync();
+                
+                if (!_registrationSuccessful)
+                {
+                    // Registration failed - stay on payment screen to retry or show error
+                    Logger.LogError("Registration failed when payment was skipped.");
+                    return;
+                }
+            }
+
+            // Only call the skip endpoint if we have a UserId (registration completed)
+            if (!string.IsNullOrEmpty(_registrationResponse?.UserId))
+            {
+                var skipRequest = new SkipPaymentRequest
+                {
+                    UserId = _registrationResponse.UserId,
+                    RegistrationToken = _tokenValue,
+                    Reason = "User chose to skip during registration"
+                };
+
+                await GetHttpClient().PostAsJsonAsync("api/registrationpayment/skip", skipRequest);
+            }
+
+            _paymentSkipped = true;
+            _registrationSuccessful = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Error skipping payment (continuing anyway)");
+            _paymentSkipped = true;
+            _registrationSuccessful = true;
+        }
+        
+        StateHasChanged();
+        
+        if (AutoLogin)
+        {
+            await PerformAutoLoginAsync();
+        }
+    }
+
+    private async Task PerformAutoLoginAsync()
+    {
+        try
+        {
+            _isAutoLoggingIn = true;
+            _autoLoginError = string.Empty;
+            StateHasChanged();
+
+            var loginRequest = new LoginRequest
+            {
+                Username = _registrationModel.Username,
+                Email = _registrationModel.Email,
+                Password = _registrationModel.Password,
+                AppId = AppId,
+                Platform = "Web",
+                DeviceInfo = "Browser"
+            };
+
+            var authResponse = await AuthService.LoginAsync(loginRequest);
+            
+            if (authResponse != null && !string.IsNullOrEmpty(authResponse.JwtToken))
+            {
+                _autoLoginComplete = true;
+                Logger.LogInformation("Auto-login successful for user {Email}", _registrationModel.Email);
+                
+                await OnAutoLoginSuccess.InvokeAsync(authResponse);
+                
+                if (!string.IsNullOrEmpty(RedirectUrl))
+                {
+                    await JSRuntime.InvokeVoidAsync("eval", $"window.location.href = '{RedirectUrl}'");
+                }
+            }
+            else
+            {
+                _autoLoginError = "Auto-login completed but no session was created. Please log in manually.";
+                Logger.LogWarning("Auto-login returned no JWT token for user {Email}", _registrationModel.Email);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Auto-login failed for user {Email}", _registrationModel.Email);
+            _autoLoginError = "Could not log you in automatically. Please use the login page to sign in.";
+            await OnError.InvokeAsync($"Auto-login failed: {ex.Message}");
+        }
+        finally
+        {
+            _isAutoLoggingIn = false;
+            StateHasChanged();
+        }
+    }
+
+    private void BackToAccountStep()
+    {
+        _currentStep = 2;
+        StateHasChanged();
+    }
+
+    private async Task HandleCancel()
+    {
+        await OnCancel.InvokeAsync();
+    }
+
+    private void TogglePasswordVisibility()
+    {
+        _showPassword = !_showPassword;
+    }
+
+    private void HandleInvalidSubmit()
+    {
+        Logger.LogWarning("Form validation failed - invalid submit detected");
+        _registrationError = "Please correct the validation errors above.";
+        StateHasChanged();
+    }
+
+    private async Task HandleTokenKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ValidateTokenAsync();
+        }
+    }
+
+    private void ResetForm()
+    {
+        _currentStep = 1;
+        _tokenValidated = false;
+        _registrationSuccessful = false;
+        _requiresPayment = false;
+        _paymentComplete = false;
+        _paymentSkipped = false;
+        _isAutoLoggingIn = false;
+        _autoLoginComplete = false;
+        _registrationPending = false;
+        _tokenValue = string.Empty;
+        _tokenError = string.Empty;
+        _registrationError = string.Empty;
+        _autoLoginError = string.Empty;
+        _pendingPaymentTransactionId = null;
+        _pendingPaymentIntentId = null;
+        _registrationModel = new TokenRegistrationModel();
+        _tokenInfo = null;
+        _registrationResponse = null;
+        _pricingDetails = null;
+        _validationResponse = null;
+    }
+
+    private async Task NavigateToLogin()
+    {
+        if (!string.IsNullOrEmpty(AppId))
+        {
+            await JSRuntime.InvokeVoidAsync("eval", $"window.location.href = '/login?appId={AppId}'");
+        }
+        else
+        {
+            await JSRuntime.InvokeVoidAsync("eval", "window.location.href = '/login'");
+        }
+    }
+
+    private string FormatPrice(decimal amount)
+    {
+        var currency = _pricingDetails?.Currency ?? "USD";
+        return currency switch
+        {
+            "USD" => $"${amount:F2}",
+            "EUR" => $"�{amount:F2}",
+            "GBP" => $"�{amount:F2}",
+            _ => $"{currency} {amount:F2}"
+        };
+    }
+
+    /// <summary>
+    /// Gets a user-friendly display name for the pricing plan.
+    /// Returns "Pricing" for generic or missing plan names.
+    /// </summary>
+    private string GetPricingDisplayName()
+    {
+        var planName = _pricingDetails?.PlanName ?? _registrationResponse?.PricingModelName;
+        
+        // Filter out generic names and return "Pricing" instead
+        if (string.IsNullOrWhiteSpace(planName) || 
+            planName.Equals("Default Pricing", StringComparison.OrdinalIgnoreCase) ||
+            planName.Equals("Default", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Pricing";
+        }
+        
+        return planName;
+    }
+
+    // Models
+    public class TokenRegistrationModel
+    {
+        [Required(ErrorMessage = "First name is required")]
+        [StringLength(50)]
+        public string FirstName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Last name is required")]
+        [StringLength(50)]
+        public string LastName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Username is required")]
+        [StringLength(50, MinimumLength = 3)]
+        [RegularExpression(@"^[a-zA-Z0-9_.-]+$", ErrorMessage = "Username can only contain letters, numbers, underscores, dots, and hyphens")]
+        public string Username { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Password is required")]
+        [StringLength(100, MinimumLength = 8)]
+        public string Password { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Please confirm your password")]
+        [Compare(nameof(Password), ErrorMessage = "Passwords do not match")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
+    public class TokenValidationResponse
+    {
+        public bool IsValid { get; set; }
+        public string? ErrorMessage { get; set; }
+        public string? AssignedRole { get; set; }
+        public string? RestrictedToAppId { get; set; }
+        public List<string> RestrictedToAppIds { get; set; } = new();
+        public string? AppName { get; set; }
+        public string? RestrictedToAppName { get; set; }
+        public List<string> RestrictedToAppNames { get; set; } = new();
+        public string? CompanyClientId { get; set; }
+        public string? CompanyClientName { get; set; }
+        public string? CompanyName { get; set; }
+        public string? PricingModelName { get; set; }
+        public string? PricingDescription { get; set; }
+        public decimal? PriceAmount { get; set; }
+        public string? PriceCurrency { get; set; }
+        public string? BillingFrequency { get; set; }
+        public bool IsSubscription { get; set; }
+        public bool RequiresPaymentSetup { get; set; }
+        public int? MaxUsages { get; set; }
+        public int CurrentUsages { get; set; }
+        public DateTime? ExpirationDate { get; set; }
+        public bool RequiresStripeSetup { get; set; }
+    }
+
+    public class TokenRegistrationRequest
+    {
+        public string Token { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string? AppId { get; set; }
+        public string? Platform { get; set; }
+        public string? DeviceInfo { get; set; }
+        public List<DisclaimerAcceptanceResult>? DisclaimerAcceptances { get; set; }
+    }
+
+    public class OpenRegistrationRequest
+    {
+        public string Username { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string? AppId { get; set; }
+        public string? Platform { get; set; }
+        public string? DeviceInfo { get; set; }
+        public string? PricingModelId { get; set; }
+        public List<DisclaimerAcceptanceResult>? DisclaimerAcceptances { get; set; }
+    }
+
+    public class RegistrationSuccessResponse
+    {
+        public bool Success { get; set; }
+        public string? UserId { get; set; }
+        public string? Message { get; set; }
+        public bool RequiresStripeSetup { get; set; }
+        public bool RequiresPaymentSetup { get; set; }
+        public bool IsSubscription { get; set; }
+        public string? PaymentProviderId { get; set; }
+        public string? PaymentProviderName { get; set; }
+        public int? PaymentProviderType { get; set; }
+        public string? PaymentPublishableKey { get; set; }
+        public string? PaymentAppId { get; set; }
+        public string? PricingModelId { get; set; }
+        public string? PricingModelName { get; set; }
+        public string[]? GrantedApps { get; set; }
+    }
+
+    public class PricingDetails
+    {
+        public string? PlanName { get; set; }
+        public string? PlanDescription { get; set; }
+        public decimal PriceAmount { get; set; }
+        public string Currency { get; set; } = "USD";
+        public string? BillingFrequency { get; set; }
+        public bool IsSubscription { get; set; }
+    }
+
+    public class PricingModelResponse
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public decimal Price { get; set; }
+        public string BillingFrequency { get; set; } = "Monthly";
+        public string? Currency { get; set; } = "USD";
+        public bool IsActive { get; set; }
+    }
+
+    public class SkipPaymentRequest
+    {
+        public string UserId { get; set; } = string.Empty;
+        public string RegistrationToken { get; set; } = string.Empty;
+        public string? Reason { get; set; }
+    }
+
+    /// <summary>
+    /// Request to validate registration data before payment.
+    /// </summary>
+    public class ValidateRegistrationRequest
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string? Token { get; set; }
+        public string? AppId { get; set; }
+    }
+
+    public class RegistrationSuccessEventArgs
+    {
+        public string? UserId { get; set; }
+        public string? Email { get; set; }
+        public bool RequiresStripeSetup { get; set; }
+        public bool RequiresPaymentSetup { get; set; }
+        public bool IsSubscription { get; set; }
+    }
+
+    /// <summary>
+    /// Response from the pre-validation API endpoint.
+    /// Used to validate registration data before payment.
+    /// </summary>
+    public class ValidationResponse
+    {
+        public bool IsValid { get; set; }
+        public bool UsernameAvailable { get; set; } = true;
+        public bool EmailAvailable { get; set; } = true;
+        public bool PasswordValid { get; set; } = true;
+        public List<string>? PasswordErrors { get; set; }
+        public string? ErrorMessage { get; set; }
+        public string? ErrorCode { get; set; }
+        
+        // Pricing information
+        public bool RequiresPayment { get; set; }
+        public bool IsSubscription { get; set; }
+        public string? PricingModelId { get; set; }
+        public string? PricingModelName { get; set; }
+        public decimal? PriceAmount { get; set; }
+        public string? Currency { get; set; }
+        public string[]? GrantedApps { get; set; }
+        public string? PaymentAppId { get; set; }
+    }
+}
