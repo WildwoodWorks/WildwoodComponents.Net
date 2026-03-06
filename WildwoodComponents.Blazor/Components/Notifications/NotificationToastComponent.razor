@@ -1,0 +1,325 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inherits BaseWildwoodComponent
+@inject INotificationService NotificationService
+
+<div class="@GetRootCssClasses() notification-toast-container">
+    @if (notifications.Any())
+    {
+        <div class="toast-stack">
+            @foreach (var notification in notifications.Where(n => n.IsVisible))
+            {
+                <div class="toast @GetToastClasses(notification)" role="alert" data-notification-id="@notification.Id">
+                    <div class="toast-header">
+                        <i class="@GetIconClass(notification.Type) me-2"></i>
+                        <strong class="me-auto">@notification.Title</strong>
+                        @if (notification.Timestamp.HasValue)
+                        {
+                            <small class="text-muted">@GetTimeAgo(notification.Timestamp.Value)</small>
+                        }
+                        @if (notification.IsDismissible)
+                        {
+                            <button type="button" class="btn-close" @onclick="() => DismissNotificationAsync(notification.Id)"></button>
+                        }
+                    </div>
+                    <div class="toast-body">
+                        @if (!string.IsNullOrEmpty(notification.Message))
+                        {
+                            <p class="mb-2">@notification.Message</p>
+                        }
+                        @if (notification.Actions?.Any() == true)
+                        {
+                            <div class="toast-actions">
+                                @foreach (var action in notification.Actions)
+                                {
+                                    <button type="button" 
+                                            class="btn btn-sm @GetActionButtonClass(action.Style)" 
+                                            @onclick="() => HandleActionAsync(notification, action)"
+                                            disabled="@IsLoading">
+                                        @action.Text
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .notification-toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1050;
+        max-width: 400px;
+    }
+
+    .toast-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .toast {
+        opacity: 1;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border: none;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+
+    .toast.success {
+        border-left: 4px solid var(--bs-success);
+    }
+
+    .toast.error {
+        border-left: 4px solid var(--bs-danger);
+    }
+
+    .toast.warning {
+        border-left: 4px solid var(--bs-warning);
+    }
+
+    .toast.info {
+        border-left: 4px solid var(--bs-info);
+    }
+
+    .toast-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .toast-actions .btn {
+        padding: 4px 12px;
+    }
+</style>
+
+@code {
+    [Parameter] public int MaxNotifications { get; set; } = 5;
+    [Parameter] public int DefaultDuration { get; set; } = 5000;
+    [Parameter] public NotificationPosition Position { get; set; } = NotificationPosition.TopRight;
+    [Parameter] public bool AutoDismiss { get; set; } = true;
+    [Parameter] public EventCallback<NotificationActionArgs> OnActionClicked { get; set; }
+    [Parameter] public EventCallback<string> OnNotificationDismissed { get; set; }
+
+    private List<ToastNotification> notifications = new();
+    private readonly Dictionary<string, System.Threading.Timer> autoHideTimers = new();
+
+    protected override async Task OnComponentInitializedAsync()
+    {
+        // Subscribe to notification service events
+        NotificationService.OnNotificationAdded += HandleNotificationAdded;
+        NotificationService.OnNotificationRemoved += HandleNotificationRemoved;
+        NotificationService.OnNotificationUpdated += HandleNotificationUpdated;
+    }
+
+    public async Task ShowNotificationAsync(string title, string message, NotificationType type = NotificationType.Info)
+    {
+        await ExecuteAsync(async () =>
+        {
+            var notification = new ToastNotification
+            {
+                Id = Guid.NewGuid().ToString(),
+                Title = title,
+                Message = message,
+                Type = type,
+                Timestamp = DateTime.Now,
+                IsVisible = true,
+                IsDismissible = true
+            };
+
+            await AddNotificationAsync(notification);
+        }, "Showing notification");
+    }
+
+    public async Task ShowNotificationAsync(ToastNotification notification)
+    {
+        await ExecuteAsync(async () =>
+        {
+            await AddNotificationAsync(notification);
+        }, "Adding custom notification");
+    }
+
+    private async Task AddNotificationAsync(ToastNotification notification)
+    {
+        // Ensure we don't exceed max notifications
+        while (notifications.Count >= MaxNotifications)
+        {
+            var oldest = notifications.FirstOrDefault();
+            if (oldest != null)
+            {
+                await DismissNotificationAsync(oldest.Id);
+            }
+        }
+
+        notifications.Add(notification);
+        StateHasChanged();
+
+        // Set up auto-dismiss timer
+        if (AutoDismiss && notification.Duration.HasValue && notification.Duration.Value > 0)
+        {
+            var timer = new System.Threading.Timer(async _ =>
+            {
+                await InvokeAsync(() => DismissNotificationAsync(notification.Id));
+            }, null, notification.Duration.Value, Timeout.Infinite);
+
+            autoHideTimers[notification.Id] = timer;
+        }
+        else if (AutoDismiss && DefaultDuration > 0)
+        {
+            var timer = new System.Threading.Timer(async _ =>
+            {
+                await InvokeAsync(() => DismissNotificationAsync(notification.Id));
+            }, null, DefaultDuration, Timeout.Infinite);
+
+            autoHideTimers[notification.Id] = timer;
+        }
+    }
+
+    private async Task DismissNotificationAsync(string notificationId)
+    {
+        await ExecuteAsync(async () =>
+        {
+            var notification = notifications.FirstOrDefault(n => n.Id == notificationId);
+            if (notification != null)
+            {
+                notifications.Remove(notification);
+                
+                // Clean up timer
+                if (autoHideTimers.TryGetValue(notificationId, out var timer))
+                {
+                    timer.Dispose();
+                    autoHideTimers.Remove(notificationId);
+                }
+
+                await OnNotificationDismissed.InvokeAsync(notificationId);
+                StateHasChanged();
+            }
+        }, "Dismissing notification");
+    }
+
+    private async Task HandleActionAsync(ToastNotification notification, NotificationAction action)
+    {
+        await ExecuteAsync(async () =>
+        {
+            var args = new NotificationActionArgs
+            {
+                NotificationId = notification.Id,
+                ActionId = action.Id,
+                ActionText = action.Text,
+                Data = action.Data
+            };
+
+            await OnActionClicked.InvokeAsync(args);
+
+            // Dismiss notification if action specifies it
+            if (action.DismissOnClick)
+            {
+                await DismissNotificationAsync(notification.Id);
+            }
+        }, $"Handling notification action: {action.Text}");
+    }
+
+    private void HandleNotificationAdded(object? sender, ToastNotification notification)
+    {
+        InvokeAsync(() => AddNotificationAsync(notification));
+    }
+
+    private void HandleNotificationRemoved(object? sender, string notificationId)
+    {
+        InvokeAsync(() => DismissNotificationAsync(notificationId));
+    }
+
+    private void HandleNotificationUpdated(object? sender, ToastNotification notification)
+    {
+        InvokeAsync(() =>
+        {
+            var existing = notifications.FirstOrDefault(n => n.Id == notification.Id);
+            if (existing != null)
+            {
+                var index = notifications.IndexOf(existing);
+                notifications[index] = notification;
+                StateHasChanged();
+            }
+        });
+    }
+
+    private string GetToastClasses(ToastNotification notification)
+    {
+        var classes = new List<string> { "toast", "show" };
+        classes.Add(notification.Type.ToString().ToLowerInvariant());
+        
+        if (!string.IsNullOrEmpty(notification.CssClass))
+        {
+            classes.Add(notification.CssClass);
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    private string GetIconClass(NotificationType type)
+    {
+        return type switch
+        {
+            NotificationType.Success => "bi bi-check-circle-fill text-success",
+            NotificationType.Error => "bi bi-exclamation-triangle-fill text-danger",
+            NotificationType.Warning => "bi bi-exclamation-triangle-fill text-warning",
+            NotificationType.Info => "bi bi-info-circle-fill text-info",
+            _ => "bi bi-info-circle-fill text-info"
+        };
+    }
+
+    private string GetActionButtonClass(NotificationActionStyle style)
+    {
+        return style switch
+        {
+            NotificationActionStyle.Primary => "btn-primary",
+            NotificationActionStyle.Secondary => "btn-secondary",
+            NotificationActionStyle.Success => "btn-success",
+            NotificationActionStyle.Danger => "btn-danger",
+            NotificationActionStyle.Warning => "btn-warning",
+            NotificationActionStyle.Info => "btn-info",
+            NotificationActionStyle.Light => "btn-light",
+            NotificationActionStyle.Dark => "btn-dark",
+            _ => "btn-outline-primary"
+        };
+    }
+
+    private string GetTimeAgo(DateTime timestamp)
+    {
+        var timeSpan = DateTime.Now - timestamp;
+        
+        if (timeSpan.TotalMinutes < 1)
+            return "just now";
+        if (timeSpan.TotalMinutes < 60)
+            return $"{(int)timeSpan.TotalMinutes}m ago";
+        if (timeSpan.TotalHours < 24)
+            return $"{(int)timeSpan.TotalHours}h ago";
+        
+        return timestamp.ToString("MMM dd, HH:mm");
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            // Clean up timers
+            foreach (var timer in autoHideTimers.Values)
+            {
+                timer.Dispose();
+            }
+            autoHideTimers.Clear();
+
+            // Unsubscribe from events
+            NotificationService.OnNotificationAdded -= HandleNotificationAdded;
+            NotificationService.OnNotificationRemoved -= HandleNotificationRemoved;
+            NotificationService.OnNotificationUpdated -= HandleNotificationUpdated;
+        }
+        base.Dispose(disposing);
+    }
+}
