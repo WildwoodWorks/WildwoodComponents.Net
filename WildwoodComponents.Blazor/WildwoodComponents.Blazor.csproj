@@ -1,0 +1,84 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+    <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <RootNamespace>WildwoodComponents.Blazor</RootNamespace>
+
+    <!-- Package Metadata -->
+    <PackageId>WildwoodComponents.Blazor</PackageId>
+    <Version>1.1.0</Version>
+    <Authors>Wildwood Development Team</Authors>
+    <Company>Wildwood</Company>
+    <Product>WildwoodComponents.Blazor</Product>
+    <Description>A comprehensive Blazor component library featuring BaseWildwoodComponent architecture for automatic error handling, loading states, and theme management. Includes authentication, forms, AI chat, secure messaging, notifications, payments, and subscription components with built-in theming and multi-platform support.</Description>
+    <PackageTags>blazor;components;authentication;forms;ui;theme;maui;web;basecomponent;errorhandling;loadingstates;ai;chat;messaging;notifications;payments;subscriptions</PackageTags>
+    <RepositoryUrl>https://github.com/wildwood/WildwoodComponents.Blazor</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/wildwood/WildwoodComponents.Blazor</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- PackageIcon>icon.png</PackageIcon -->
+
+    <!-- Build Configuration -->
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+
+    <!-- Documentation -->
+    <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.AspNetCore.Components" />
+    <Using Include="Microsoft.AspNetCore.Components.Web" />
+    <Using Include="Microsoft.AspNetCore.Components.Forms" />
+    <Using Include="Microsoft.AspNetCore.Components.Authorization" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+    <SupportedPlatform Include="android" />
+    <SupportedPlatform Include="ios" />    <SupportedPlatform Include="maccatalyst" />
+    <SupportedPlatform Include="windows" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WildwoodComponents.Shared\WildwoodComponents.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Forms" Version="10.0.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.2" />
+    <PackageReference Include="Microsoft.JSInterop" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.2" />
+  </ItemGroup>
+
+  <!-- Package content files -->
+  <ItemGroup>
+    <None Include=".github\copilot-instructions.md" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <!-- None Include="icon.png" Pack="true" PackagePath="\" Condition="Exists('icon.png')" / -->
+    <None Include="docs\**\*" Pack="true" PackagePath="docs\" Condition="Exists('docs')" />
+    <None Include="examples\**\*" Pack="true" PackagePath="examples\" Condition="Exists('examples')" />
+  </ItemGroup>
+
+  <!-- Embedded Payment Provider Scripts -->
+  <ItemGroup>
+    <EmbeddedResource Include="Scripts\PaymentScriptBase.js" LogicalName="WildwoodComponents.Blazor.Scripts.PaymentScriptBase.js" />
+    <EmbeddedResource Include="Scripts\StripePaymentScript.js" LogicalName="WildwoodComponents.Blazor.Scripts.StripePaymentScript.js" />
+    <EmbeddedResource Include="Scripts\PayPalPaymentScript.js" LogicalName="WildwoodComponents.Blazor.Scripts.PayPalPaymentScript.js" />
+    <EmbeddedResource Include="Scripts\ApplePayPaymentScript.js" LogicalName="WildwoodComponents.Blazor.Scripts.ApplePayPaymentScript.js" />
+    <EmbeddedResource Include="Scripts\GooglePayPaymentScript.js" LogicalName="WildwoodComponents.Blazor.Scripts.GooglePayPaymentScript.js" />
+  </ItemGroup>
+
+</Project>
