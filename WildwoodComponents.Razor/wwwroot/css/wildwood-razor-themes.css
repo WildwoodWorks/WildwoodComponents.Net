@@ -1,0 +1,177 @@
+/* WildwoodComponents.Razor Theme System
+ *
+ * This file provides the same --ww-* CSS custom properties used by WildwoodComponents.
+ * Both libraries share the same variable names so consuming apps can use a single
+ * theme override file for either library.
+ *
+ * HOW TO OVERRIDE:
+ * Include your app's override CSS AFTER this file:
+ * :root {
+ *     --ww-primary: var(--my-app-primary, #0d6efd);
+ *     --ww-bg-secondary: var(--my-app-bg-secondary, #f8f9fa);
+ * }
+ *
+ * KEPT IN SYNC WITH: WildwoodComponents/wwwroot/css/wildwood-themes.css
+ */
+
+/* ========================================
+   DEFAULT THEME
+   Bootstrap 5 compatible defaults
+   ======================================== */
+:root {
+    /* Primary colors */
+    --ww-primary: #D4882C;
+    --ww-primary-dark: #B8720F;
+    --ww-primary-light: #E8A33C;
+
+    /* Status colors */
+    --ww-success: #28a745;
+    --ww-danger: #dc3545;
+    --ww-warning: #ffc107;
+    --ww-info: #17a2b8;
+
+    /* Background colors */
+    --ww-bg-primary: #ffffff;
+    --ww-bg-secondary: #f8f9fa;
+    --ww-bg-tertiary: #e9ecef;
+
+    /* Text colors */
+    --ww-text-primary: #212529;
+    --ww-text-secondary: #6c757d;
+    --ww-text-muted: #6c757d;
+    --ww-text-inverse: #ffffff;
+
+    /* Input/Form colors */
+    --ww-input-bg: #ffffff;
+    --ww-focus-ring: rgba(212, 136, 44, 0.25);
+    --ww-focus-border: #D4A853;
+    --ww-focus-shadow: rgba(212, 168, 83, 0.25);
+
+    /* Alert backgrounds */
+    --ww-info-bg: rgba(23, 162, 184, 0.15);
+    --ww-info-text: #055160;
+    --ww-danger-bg: rgba(220, 53, 69, 0.15);
+    --ww-danger-text: #842029;
+    --ww-success-bg: rgba(40, 167, 69, 0.15);
+    --ww-success-text: #0f5132;
+    --ww-warning-bg: rgba(255, 193, 7, 0.15);
+    --ww-warning-text: #664d03;
+
+    /* Button text colors */
+    --ww-btn-primary-text: #ffffff;
+    --ww-btn-success-text: #ffffff;
+
+    /* Border colors */
+    --ww-border-color: #dee2e6;
+    --ww-border-light: rgba(0, 0, 0, 0.125);
+
+    /* Border radius */
+    --ww-border-radius: 0.375rem;
+    --ww-border-radius-sm: 0.25rem;
+    --ww-border-radius-lg: 0.5rem;
+
+    /* Shadows */
+    --ww-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    --ww-shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    --ww-shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+}
+
+/* ========================================
+   COMMON COMPONENT STYLES
+   Base styles for ViewComponent markup
+   ======================================== */
+
+.ww-btn-primary {
+    background-color: var(--ww-primary);
+    border: none;
+    color: var(--ww-btn-primary-text, white);
+    box-shadow: var(--ww-shadow-sm);
+    transition: all 0.3s ease;
+    border-radius: var(--ww-border-radius);
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+}
+
+.ww-btn-primary:hover {
+    background-color: var(--ww-primary-dark);
+    box-shadow: var(--ww-shadow);
+}
+
+.ww-form-control:focus {
+    border-color: var(--ww-focus-border);
+    box-shadow: 0 0 0 0.25rem var(--ww-focus-shadow);
+}
+
+.ww-card {
+    border-radius: var(--ww-border-radius-lg);
+    border: 1px solid var(--ww-border-color);
+    box-shadow: var(--ww-shadow-sm);
+    background: var(--ww-bg-primary);
+}
+
+.ww-card-header {
+    background-color: #343a40;
+    color: var(--ww-text-inverse);
+    padding: 1.25rem;
+    border-bottom: 1px solid var(--ww-border-color);
+    border-radius: var(--ww-border-radius-lg) var(--ww-border-radius-lg) 0 0;
+}
+
+.ww-card-header h2 {
+    margin-bottom: 0.25rem;
+    font-size: 1.5rem;
+}
+
+.ww-card-header p {
+    margin-bottom: 0;
+    opacity: 0.85;
+}
+
+.ww-card-body {
+    padding: 1.5rem;
+}
+
+.ww-alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--ww-border-radius);
+    margin-bottom: 1rem;
+}
+
+.ww-alert-info {
+    background-color: var(--ww-info-bg);
+    border: 1px solid var(--ww-info);
+    color: var(--ww-info-text);
+}
+
+.ww-alert-danger {
+    background-color: var(--ww-danger-bg);
+    border: 1px solid var(--ww-danger);
+    color: var(--ww-danger-text);
+}
+
+.ww-alert-success {
+    background-color: var(--ww-success-bg);
+    border: 1px solid var(--ww-success);
+    color: var(--ww-success-text);
+}
+
+.ww-alert-warning {
+    background-color: var(--ww-warning-bg);
+    border: 1px solid var(--ww-warning);
+    color: var(--ww-warning-text);
+}
+
+/* Loading spinner */
+.ww-spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid var(--ww-border-color);
+    border-top-color: var(--ww-primary);
+    border-radius: 50%;
+    animation: ww-spin 0.6s linear infinite;
+}
+
+@keyframes ww-spin {
+    to { transform: rotate(360deg); }
+}
