@@ -1,0 +1,675 @@
+@page "/subscription-demo"
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@using WildwoodComponents.Blazor.Components.Payment
+@inherits BaseWildwoodComponent
+@inject ISubscriptionService SubscriptionService
+@inject IPaymentProviderService PaymentProviderService
+
+<div class="@GetRootCssClasses() subscription-component">
+    @if (IsLoading && ShowLoadingStates)
+    {
+        <div class="subscription-loading text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">@(_loadingMessage ?? "Loading subscription plans...")</p>
+        </div>
+    }
+    else if (_currentStep == SubscriptionStep.PlanSelection)
+    {
+        <!-- Plan Selection -->
+        <div class="plan-selection">
+            @if (!string.IsNullOrEmpty(Title))
+            {
+                <h3 class="text-center mb-4">@Title</h3>
+            }
+            
+            @if (!string.IsNullOrEmpty(Subtitle))
+            {
+                <p class="text-center text-muted mb-4">@Subtitle</p>
+            }
+
+            <!-- Billing Cycle Toggle -->
+            @if (ShowBillingToggle && _availablePlans.Count > 0)
+            {
+                <div class="billing-toggle text-center mb-4">
+                    <div class="btn-group" role="group">
+                        <button type="button" 
+                                class="btn @(_selectedBillingCycle == "monthly" ? "btn-primary" : "btn-outline-primary")"
+                                @onclick="@(() => SetBillingCycle("monthly"))">
+                            Monthly
+                        </button>
+                        <button type="button" 
+                                class="btn @(_selectedBillingCycle == "annually" ? "btn-primary" : "btn-outline-primary")"
+                                @onclick="@(() => SetBillingCycle("annually"))">
+                            Annually
+                            @if (AnnualDiscount > 0)
+                            {
+                                <span class="badge bg-success ms-1">Save @AnnualDiscount%</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            }
+
+            <!-- Plans Grid -->
+            <div class="plans-grid row justify-content-center">
+                @foreach (var plan in _availablePlans)
+                {
+                    var isCurrentPlan = _currentSubscription?.PlanId == plan.Id;
+                    var isSelected = _selectedPlan?.Id == plan.Id;
+                    
+                    <div class="col-md-4 mb-4">
+                        <div class="plan-card card h-100 @(plan.IsRecommended ? "border-primary" : "") @(isSelected ? "selected" : "")">
+                            @if (plan.IsRecommended)
+                            {
+                                <div class="plan-badge bg-primary text-white text-center py-1">
+                                    <small>Most Popular</small>
+                                </div>
+                            }
+                            <div class="card-body text-center">
+                                <h5 class="plan-name">@plan.Name</h5>
+                                <div class="plan-price my-3">
+                                    @if (plan.IsFree)
+                                    {
+                                        <span class="price-amount">Free</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="price-currency">@GetCurrencySymbol(Currency)</span>
+                                        <span class="price-amount">@GetDisplayPrice(plan)</span>
+                                        <span class="price-period">/@(_selectedBillingCycle == "annually" ? "year" : "month")</span>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(plan.Description))
+                                {
+                                    <p class="plan-description text-muted">@plan.Description</p>
+                                }
+                                <ul class="plan-features list-unstyled text-start">
+                                    @if (plan.Features != null)
+                                    {
+                                        @foreach (var feature in plan.Features)
+                                        {
+                                            <li class="mb-2">
+                                                <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                                @feature
+                                            </li>
+                                        }
+                                    }
+                                </ul>
+                            </div>
+                            <div class="card-footer bg-transparent border-0 text-center pb-3">
+                                @if (isCurrentPlan)
+                                {
+                                    <button class="btn btn-outline-secondary w-100" disabled>
+                                        Current Plan
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn @(plan.IsRecommended ? "btn-primary" : "btn-outline-primary") w-100"
+                                            @onclick="() => SelectPlan(plan)">
+                                        @if (plan.IsFree)
+                                        {
+                                            <text>Get Started Free</text>
+                                        }
+                                        else if (_currentSubscription != null)
+                                        {
+                                            <text>Switch to @plan.Name</text>
+                                        }
+                                        else
+                                        {
+                                            <text>Choose @plan.Name</text>
+                                        }
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Current Subscription Info -->
+            @if (_currentSubscription != null)
+            {
+                <div class="current-subscription mt-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h6 class="mb-1">Current Subscription</h6>
+                                    <p class="mb-0">
+                                        <strong>@_currentSubscription.PlanName</strong> - 
+                                        <span class="badge @GetStatusBadgeClass(_currentSubscription.Status)">@_currentSubscription.Status</span>
+                                    </p>
+                                    @if (_currentSubscription.NextBillingDate.HasValue)
+                                    {
+                                        <small class="text-muted">Next billing: @_currentSubscription.NextBillingDate.Value.ToString("MMM dd, yyyy")</small>
+                                    }
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    @if (_currentSubscription.Status == SubscriptionStatus.Active)
+                                    {
+                                        <button class="btn btn-outline-danger btn-sm" @onclick="ShowCancelConfirmation">
+                                            Cancel Subscription
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else if (_currentStep == SubscriptionStep.Payment)
+    {
+        <!-- Payment Step -->
+        <div class="payment-step">
+            <div class="mb-4">
+                <button class="btn btn-link p-0" @onclick="BackToPlanSelection">
+                    <i class="bi bi-arrow-left me-2"></i>Back to plans
+                </button>
+            </div>
+
+            <div class="row">
+                <div class="col-md-7">
+                    <h4>Complete Your Subscription</h4>
+                    <p class="text-muted">You're subscribing to the <strong>@_selectedPlan?.Name</strong> plan.</p>
+                    
+                    <!-- Payment Component Integration -->
+                    <PaymentComponent AppId="@AppId"
+                                     Amount="@GetPaymentAmount()"
+                                     Currency="@Currency"
+                                     Description="@($"{_selectedPlan?.Name} Subscription")"
+                                     CustomerId="@CustomerId"
+                                     CustomerEmail="@CustomerEmail"
+                                     PricingModelId="@_selectedPlan?.Id"
+                                     IsSubscription="true"
+                                     ShowAmount="false"
+                                     RequireBillingAddress="@RequireBillingAddress"
+                                     OnPaymentSuccess="HandlePaymentSuccess"
+                                     OnPaymentFailure="HandlePaymentFailure"
+                                     OnCancel="BackToPlanSelection" />
+                </div>
+                <div class="col-md-5">
+                    <!-- Order Summary -->
+                    <div class="order-summary card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Order Summary</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>@_selectedPlan?.Name Plan</span>
+                                <span>@FormatAmount(GetPaymentAmount(), Currency)</span>
+                            </div>
+                            @if (_selectedBillingCycle == "annually" && AnnualDiscount > 0)
+                            {
+                                <div class="d-flex justify-content-between mb-2 text-success">
+                                    <span>Annual Discount (@AnnualDiscount%)</span>
+                                    <span>-@FormatAmount(GetDiscountAmount(), Currency)</span>
+                                </div>
+                            }
+                            <hr>
+                            <div class="d-flex justify-content-between fw-bold">
+                                <span>Total</span>
+                                <span>@FormatAmount(GetPaymentAmount(), Currency)</span>
+                            </div>
+                            <small class="text-muted">
+                                Billed @(_selectedBillingCycle == "annually" ? "annually" : "monthly")
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Trial Info -->
+                    @if (_selectedPlan?.TrialDays > 0)
+                    {
+                        <div class="alert alert-info mt-3">
+                            <i class="bi bi-gift me-2"></i>
+                            <strong>@_selectedPlan.TrialDays-day free trial</strong>
+                            <p class="mb-0 small">You won't be charged until your trial ends.</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+    else if (_currentStep == SubscriptionStep.Success)
+    {
+        <!-- Success -->
+        <div class="subscription-success text-center py-5">
+            <div class="mb-4">
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+            </div>
+            <h3>Welcome to @_selectedPlan?.Name!</h3>
+            <p class="text-muted">Your subscription is now active.</p>
+            
+            @if (_selectedPlan?.TrialDays.HasValue == true && _selectedPlan.TrialDays.Value > 0)
+            {
+                <div class="alert alert-info d-inline-block">
+                    <i class="bi bi-calendar me-2"></i>
+                    Your free trial ends on @DateTime.Now.AddDays(_selectedPlan.TrialDays.Value).ToString("MMMM dd, yyyy")
+                </div>
+            }
+
+            @if (OnSubscriptionSuccess.HasDelegate)
+            {
+                <div class="mt-4">
+                    <button class="btn btn-primary btn-lg" @onclick="HandleSuccessContinue">
+                        Get Started
+                    </button>
+                </div>
+            }
+        </div>
+    }
+    else if (_currentStep == SubscriptionStep.CancelConfirmation)
+    {
+        <!-- Cancel Confirmation -->
+        <div class="cancel-confirmation">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                    <h4 class="mt-3">Cancel Subscription?</h4>
+                    <p class="text-muted">Are you sure you want to cancel your <strong>@_currentSubscription?.PlanName</strong> subscription?</p>
+                    <p class="text-muted">You'll continue to have access until @_currentSubscription?.NextBillingDate?.ToString("MMMM dd, yyyy").</p>
+                    <div class="mt-4">
+                        <button class="btn btn-outline-secondary me-2" @onclick="BackToPlanSelection">
+                            Keep Subscription
+                        </button>
+                        <button class="btn btn-danger" @onclick="ConfirmCancellation" disabled="@_isProcessing">
+                            @if (_isProcessing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            Yes, Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Error Display -->
+    @if (!string.IsNullOrEmpty(ErrorMessage) && EnableErrorHandling)
+    {
+        <div class="alert alert-danger mt-3">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            @ErrorMessage
+            <button type="button" class="btn-close float-end" @onclick="ClearError"></button>
+        </div>
+    }
+</div>
+
+@code {
+    // Required Parameters
+    [Parameter, EditorRequired] public string AppId { get; set; } = string.Empty;
+    
+    // Optional Parameters
+    [Parameter] public string? CustomerId { get; set; }
+    [Parameter] public string? CustomerEmail { get; set; }
+    [Parameter] public string Currency { get; set; } = "USD";
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public bool ShowBillingToggle { get; set; } = true;
+    [Parameter] public int AnnualDiscount { get; set; } = 20;
+    [Parameter] public bool RequireBillingAddress { get; set; } = false;
+    
+    // Events
+    [Parameter] public EventCallback<SubscriptionSuccessEventArgs> OnSubscriptionSuccess { get; set; }
+    [Parameter] public EventCallback<string> OnSubscriptionCancelled { get; set; }
+    [Parameter] public new EventCallback<ComponentErrorEventArgs> OnError { get; set; }
+
+    // Private state - use WildwoodComponents.Models types
+    private List<SubscriptionPlan> _availablePlans = new();
+    private SubscriptionPlan? _selectedPlan;
+    private WildwoodComponents.Blazor.Models.Subscription? _currentSubscription;
+    private SubscriptionStep _currentStep = SubscriptionStep.PlanSelection;
+    private string _selectedBillingCycle = "monthly";
+    private string? _loadingMessage;
+    private bool _isProcessing;
+
+    private enum SubscriptionStep
+    {
+        PlanSelection,
+        Payment,
+        Success,
+        CancelConfirmation
+    }
+
+    protected override async Task OnComponentInitializedAsync()
+    {
+        await LoadSubscriptionData();
+    }
+
+    private async Task LoadSubscriptionData()
+    {
+        _loadingMessage = "Loading subscription plans...";
+        await SetLoadingAsync(true);
+
+        try
+        {
+            // Load available plans
+            _availablePlans = await SubscriptionService.GetAvailablePlansAsync();
+
+            // Load current subscription if customer ID provided
+            if (!string.IsNullOrEmpty(CustomerId))
+            {
+                _currentSubscription = await SubscriptionService.GetCurrentSubscriptionAsync(CustomerId);
+            }
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex, "Loading subscription data");
+        }
+        finally
+        {
+            await SetLoadingAsync(false);
+        }
+    }
+
+    private void SetBillingCycle(string cycle)
+    {
+        _selectedBillingCycle = cycle;
+        StateHasChanged();
+    }
+
+    private void SelectPlan(SubscriptionPlan plan)
+    {
+        _selectedPlan = plan;
+        
+        if (plan.IsFree)
+        {
+            // Free plan - subscribe directly
+            _ = SubscribeToFreePlan(plan);
+        }
+        else
+        {
+            // Paid plan - go to payment
+            _currentStep = SubscriptionStep.Payment;
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task SubscribeToFreePlan(SubscriptionPlan plan)
+    {
+        _isProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await SubscriptionService.SubscribeToPlanAsync(CustomerId ?? "", plan.Id);
+            
+            if (result.IsSuccess)
+            {
+                _currentStep = SubscriptionStep.Success;
+                await NotifySubscriptionSuccess(result.Subscription?.Id);
+            }
+            else
+            {
+                await HandleErrorAsync(new Exception(result.ErrorMessage ?? "Subscription failed"), "Free plan subscription");
+            }
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex, "Free plan subscription");
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private void BackToPlanSelection()
+    {
+        _currentStep = SubscriptionStep.PlanSelection;
+        StateHasChanged();
+    }
+
+    private async Task HandlePaymentSuccess(PaymentSuccessEventArgs args)
+    {
+        try
+        {
+            // Create subscription after successful payment
+            var result = await SubscriptionService.SubscribeToPlanAsync(
+                CustomerId ?? "", 
+                _selectedPlan!.Id);
+
+            if (result.IsSuccess)
+            {
+                _currentStep = SubscriptionStep.Success;
+                await NotifySubscriptionSuccess(result.Subscription?.Id);
+            }
+            else
+            {
+                await HandleErrorAsync(new Exception(result.ErrorMessage ?? "Subscription creation failed"), "Creating subscription");
+            }
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex, "Completing subscription");
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task HandlePaymentFailure(PaymentFailureEventArgs args)
+    {
+        await HandleErrorAsync(new Exception(args.ErrorMessage ?? "Payment failed"), "Payment processing");
+    }
+
+    private void ShowCancelConfirmation()
+    {
+        _currentStep = SubscriptionStep.CancelConfirmation;
+        StateHasChanged();
+    }
+
+    private async Task ConfirmCancellation()
+    {
+        if (_currentSubscription == null)
+            return;
+
+        _isProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await SubscriptionService.CancelSubscriptionAsync(_currentSubscription.Id);
+            
+            if (result.IsSuccess)
+            {
+                _currentSubscription.Status = SubscriptionStatus.Cancelled;
+                _currentStep = SubscriptionStep.PlanSelection;
+                
+                if (OnSubscriptionCancelled.HasDelegate)
+                {
+                    await OnSubscriptionCancelled.InvokeAsync(_currentSubscription.Id);
+                }
+            }
+            else
+            {
+                await HandleErrorAsync(new Exception(result.ErrorMessage ?? "Cancellation failed"), "Cancelling subscription");
+            }
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex, "Cancelling subscription");
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task NotifySubscriptionSuccess(string? subscriptionId)
+    {
+        if (OnSubscriptionSuccess.HasDelegate)
+        {
+            await OnSubscriptionSuccess.InvokeAsync(new SubscriptionSuccessEventArgs
+            {
+                SubscriptionId = subscriptionId,
+                PlanId = _selectedPlan?.Id,
+                PlanName = _selectedPlan?.Name,
+                BillingCycle = _selectedBillingCycle
+            });
+        }
+    }
+
+    private async Task HandleSuccessContinue()
+    {
+        await NotifySubscriptionSuccess(_currentSubscription?.Id);
+    }
+
+    private decimal GetPaymentAmount()
+    {
+        if (_selectedPlan == null) return 0;
+        
+        var basePrice = _selectedPlan.Price;
+        
+        if (_selectedBillingCycle == "annually")
+        {
+            var annualPrice = basePrice * 12;
+            var discount = annualPrice * (AnnualDiscount / 100m);
+            return annualPrice - discount;
+        }
+        
+        return basePrice;
+    }
+
+    private decimal GetDiscountAmount()
+    {
+        if (_selectedPlan == null || _selectedBillingCycle != "annually") return 0;
+        
+        var annualPrice = _selectedPlan.Price * 12;
+        return annualPrice * (AnnualDiscount / 100m);
+    }
+
+    private string GetDisplayPrice(SubscriptionPlan plan)
+    {
+        if (_selectedBillingCycle == "annually")
+        {
+            var annualPrice = plan.Price * 12;
+            var discount = annualPrice * (AnnualDiscount / 100m);
+            return (annualPrice - discount).ToString("N0");
+        }
+        
+        return plan.Price.ToString("N0");
+    }
+
+    private static string GetCurrencySymbol(string currency)
+    {
+        return currency.ToUpperInvariant() switch
+        {
+            "USD" => "$",
+            "EUR" => "€",
+            "GBP" => "£",
+            "JPY" => "¥",
+            "INR" => "?",
+            _ => currency
+        };
+    }
+
+    private static string FormatAmount(decimal amount, string currency)
+    {
+        return currency.ToUpperInvariant() switch
+        {
+            "USD" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-US")),
+            "EUR" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("de-DE")),
+            "GBP" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-GB")),
+            _ => $"{currency} {amount:N2}"
+        };
+    }
+
+    private static string GetStatusBadgeClass(SubscriptionStatus status)
+    {
+        return status switch
+        {
+            SubscriptionStatus.Active => "bg-success",
+            SubscriptionStatus.Cancelled => "bg-secondary",
+            SubscriptionStatus.PendingPayment => "bg-warning",
+            SubscriptionStatus.Trial => "bg-info",
+            SubscriptionStatus.Paused => "bg-secondary",
+            SubscriptionStatus.Expired => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    // Event Args class
+    public class SubscriptionSuccessEventArgs
+    {
+        public string? SubscriptionId { get; set; }
+        public string? PlanId { get; set; }
+        public string? PlanName { get; set; }
+        public string? BillingCycle { get; set; }
+    }
+}
+
+<style>
+.subscription-component {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.plan-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.plan-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.plan-card.selected {
+    border-color: var(--ww-primary, #0d6efd) !important;
+    box-shadow: 0 0 0 2px var(--ww-primary, #0d6efd);
+}
+
+.plan-badge {
+    margin: -1px;
+    border-radius: var(--ww-border-radius, 0.375rem) var(--ww-border-radius, 0.375rem) 0 0;
+}
+
+.plan-name {
+    color: var(--ww-text-primary, #212529);
+}
+
+.plan-price {
+    color: var(--ww-text-primary, #212529);
+}
+
+.price-amount {
+    font-size: 2.5rem;
+    font-weight: 700;
+}
+
+.price-currency {
+    font-size: 1.5rem;
+    vertical-align: super;
+}
+
+.price-period {
+    font-size: 1rem;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.plan-features li {
+    font-size: 0.9rem;
+}
+
+.order-summary {
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+.subscription-success {
+    background: var(--ww-success-bg, rgba(25, 135, 84, 0.1));
+    border-radius: var(--ww-border-radius, 0.5rem);
+}
+
+.billing-toggle .btn {
+    padding: 0.5rem 1.5rem;
+}
+</style>
