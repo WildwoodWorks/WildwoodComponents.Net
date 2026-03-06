@@ -1,0 +1,78 @@
+@inherits LayoutComponentBase
+@inject AuthenticationStateProvider AuthStateProvider
+@inject TestSuiteAuthService AuthService
+@inject DebugHubConnectionService DebugHub
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<div class="wrapper">
+    <AuthorizeView>
+        <Authorized>
+            <!-- Sidebar -->
+            <nav id="sidebar">
+                <div class="sidebar-header">
+                    <h3 class="mb-0">Wildwood</h3>
+                    <small class="text-muted-light">Components Test Suite - Blazor</small>
+                </div>
+                <NavMenu />
+            </nav>
+
+            <!-- Page Content -->
+            <div id="content">
+                <!-- Top Navigation -->
+                <nav class="navbar navbar-expand-lg navbar-light bg-light py-1">
+                    <div class="container-fluid">
+                        <span class="navbar-text small">
+                            <i class="fas fa-flask me-1"></i> Component Test Suite
+                        </span>
+                        <div class="d-flex align-items-center">
+                            <span class="text-muted small me-3">
+                                <i class="fas fa-user-circle me-1"></i>
+                                @context.User.Identity?.Name
+                            </span>
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="HandleLogout">
+                                <i class="fas fa-sign-out-alt me-1"></i> Logout
+                            </button>
+                        </div>
+                    </div>
+                </nav>
+
+                <div class="container-fluid py-3">
+                    @Body
+                </div>
+            </div>
+        </Authorized>
+        <NotAuthorized>
+            <RedirectToLogin />
+        </NotAuthorized>
+    </AuthorizeView>
+</div>
+
+@code {
+    private bool _hubConnected;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_hubConnected)
+        {
+            _hubConnected = true;
+            await DebugHub.ConnectAsync();
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        await DebugHub.DisconnectAsync();
+        await AuthService.LogoutAsync();
+        if (AuthStateProvider is TestSuiteAuthStateProvider provider)
+        {
+            provider.NotifyStateChanged();
+        }
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DebugHub.DisposeAsync();
+    }
+}
