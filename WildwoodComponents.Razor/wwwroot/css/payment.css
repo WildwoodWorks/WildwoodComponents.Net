@@ -1,0 +1,233 @@
+/*
+ * PaymentViewComponent Styles
+ *
+ * Uses --ww-* CSS variables for theming.
+ * Razor Pages equivalent of PaymentComponent.razor.css.
+ *
+ * Includes styling for:
+ * - Stripe Elements (card input)
+ * - PayPal Buttons
+ * - Apple Pay / Google Pay buttons
+ * - Generic payment forms
+ * - Provider selection
+ */
+
+/* ===== Main Container ===== */
+.ww-payment-component {
+    max-width: 500px;
+    margin: 0 auto;
+    font-family: var(--ww-font-family, system-ui, -apple-system, sans-serif);
+}
+
+/* ===== Amount Display ===== */
+.ww-payment-amount-display {
+    background: var(--ww-bg-tertiary, #f8f9fa);
+    padding: 1.5rem;
+    border-radius: var(--ww-border-radius, 0.5rem);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+}
+
+.ww-payment-amount-display .amount-value {
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-payment-amount-display .text-muted {
+    color: var(--ww-text-muted, #6c757d) !important;
+}
+
+/* ===== Provider Selection ===== */
+.ww-payment-providers {
+    margin-bottom: 1.5rem;
+}
+
+.ww-payment-providers .form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+.provider-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.provider-option {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    border: 2px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius-sm, 0.375rem);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--ww-bg-primary, #ffffff);
+}
+
+.provider-option:hover {
+    border-color: var(--ww-primary, #0d6efd);
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+.provider-option.selected {
+    border-color: var(--ww-primary, #0d6efd);
+    background: rgba(13, 110, 253, 0.05);
+    box-shadow: 0 0 0 3px var(--ww-focus-ring, rgba(13, 110, 253, 0.25));
+}
+
+.provider-icon {
+    font-size: 1.5rem;
+    width: 40px;
+    text-align: center;
+    color: var(--ww-text-secondary, #6c757d);
+    flex-shrink: 0;
+}
+
+.provider-option.selected .provider-icon {
+    color: var(--ww-primary, #0d6efd);
+}
+
+.provider-name {
+    flex: 1;
+    font-weight: 500;
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ===== Form Controls ===== */
+.ww-payment-form-content .form-label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-payment-form-content .form-control {
+    background: var(--ww-input-bg, #ffffff);
+    border-color: var(--ww-border-color, #dee2e6);
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-payment-form-content .form-control:focus {
+    border-color: var(--ww-focus-border, #86b7fe);
+    box-shadow: 0 0 0 0.25rem var(--ww-focus-ring, rgba(13, 110, 253, 0.25));
+}
+
+/* ===== Stripe Element ===== */
+.stripe-element {
+    padding: 0.75rem;
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius-sm, 0.375rem);
+    background: var(--ww-input-bg, #ffffff);
+    transition: border-color 0.15s ease;
+}
+
+.stripe-element:focus-within,
+.stripe-element.StripeElement--focus {
+    border-color: var(--ww-focus-border, #86b7fe);
+    box-shadow: 0 0 0 0.25rem var(--ww-focus-ring, rgba(13, 110, 253, 0.25));
+}
+
+.stripe-element.StripeElement--invalid {
+    border-color: var(--ww-danger, #dc3545);
+}
+
+/* ===== PayPal Buttons ===== */
+.paypal-buttons-container {
+    min-height: 50px;
+}
+
+/* ===== Apple Pay ===== */
+.apple-pay-button {
+    -webkit-appearance: -apple-pay-button;
+    -apple-pay-button-type: plain;
+    width: 100%;
+    min-height: 48px;
+    border-radius: var(--ww-border-radius-sm, 0.375rem);
+    cursor: pointer;
+}
+
+.apple-pay-button-black {
+    -apple-pay-button-style: black;
+}
+
+/* ===== Submit Button ===== */
+.ww-payment-submit .btn {
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.ww-payment-submit .btn-primary {
+    background: var(--ww-primary, #0d6efd);
+    border-color: var(--ww-primary, #0d6efd);
+    color: var(--ww-btn-primary-text, white);
+}
+
+.ww-payment-submit .btn-primary:hover:not(:disabled) {
+    background: var(--ww-primary-dark, #0b5ed7);
+    border-color: var(--ww-primary-dark, #0b5ed7);
+}
+
+.ww-payment-submit .btn-primary:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+/* ===== Success State ===== */
+.ww-payment-success .bi-check-circle-fill {
+    color: var(--ww-success, #198754);
+}
+
+.ww-payment-success h4 {
+    color: var(--ww-success, #198754);
+}
+
+.ww-payment-success .ww-payment-txn-id code {
+    background: var(--ww-bg-tertiary, #f8f9fa);
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.85rem;
+}
+
+/* ===== Error State ===== */
+.ww-payment-error .alert-danger {
+    background: var(--ww-danger-bg, #f8d7da);
+    border-color: var(--ww-danger, #dc3545);
+    color: var(--ww-danger, #dc3545);
+}
+
+/* ===== Billing Address ===== */
+.ww-billing-address h6 {
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ===== Security Notice ===== */
+.ww-payment-security {
+    color: var(--ww-text-muted, #6c757d);
+}
+
+/* ===== Loading ===== */
+.ww-payment-loading .spinner-border {
+    color: var(--ww-primary, #0d6efd) !important;
+}
+
+.ww-payment-loading .text-muted {
+    color: var(--ww-text-muted, #6c757d) !important;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 576px) {
+    .ww-payment-component {
+        max-width: 100%;
+        padding: 0 0.5rem;
+    }
+
+    .provider-option {
+        padding: 0.75rem;
+    }
+
+    .ww-payment-amount-display {
+        padding: 1rem;
+    }
+}
