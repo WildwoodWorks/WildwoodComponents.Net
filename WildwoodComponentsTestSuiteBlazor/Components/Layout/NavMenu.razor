@@ -1,0 +1,144 @@
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<ul class="list-unstyled components">
+    <!-- Dashboard -->
+    <li class="@GetActiveClass("/")">
+        <a href="/">
+            <i class="fas fa-tachometer-alt me-2"></i><span>Dashboard</span>
+        </a>
+    </li>
+
+    <!-- Authentication -->
+    <li class="@GetParentActiveClass(new[] { "/test/authentication", "/test/authentication-demo", "/test/token-registration", "/test/two-factor" })">
+        <a href="#authSubmenu" data-bs-toggle="collapse"
+           aria-expanded="@IsParentExpanded(new[] { "/test/authentication", "/test/authentication-demo", "/test/token-registration", "/test/two-factor" })"
+           class="dropdown-toggle">
+            <i class="fas fa-shield-alt me-2"></i><span>Authentication</span>
+        </a>
+        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/authentication", "/test/authentication-demo", "/test/token-registration", "/test/two-factor" })" id="authSubmenu">
+            <li class="@GetActiveClass("/test/authentication")">
+                <a href="/test/authentication"><span>AuthenticationComponent</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/authentication-demo")">
+                <a href="/test/authentication-demo"><span>AuthenticationDemo</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/token-registration")">
+                <a href="/test/token-registration"><span>TokenRegistration</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/two-factor")">
+                <a href="/test/two-factor"><span>TwoFactorSettings</span></a>
+            </li>
+        </ul>
+    </li>
+
+    <!-- AI -->
+    <li class="@GetParentActiveClass(new[] { "/test/ai-chat", "/test/ai-chat-demo", "/test/ai-flow" })">
+        <a href="#aiSubmenu" data-bs-toggle="collapse"
+           aria-expanded="@IsParentExpanded(new[] { "/test/ai-chat", "/test/ai-chat-demo", "/test/ai-flow" })"
+           class="dropdown-toggle">
+            <i class="fas fa-robot me-2"></i><span>AI</span>
+        </a>
+        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/ai-chat", "/test/ai-chat-demo", "/test/ai-flow" })" id="aiSubmenu">
+            <li class="@GetActiveClass("/test/ai-chat")">
+                <a href="/test/ai-chat"><span>AIChatComponent</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/ai-chat-demo")">
+                <a href="/test/ai-chat-demo"><span>AIChatDemo</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/ai-flow")">
+                <a href="/test/ai-flow"><span>AIFlowComponent</span></a>
+            </li>
+        </ul>
+    </li>
+
+    <!-- Messaging -->
+    <li class="@GetParentActiveClass(new[] { "/test/messaging", "/test/messaging-demo" })">
+        <a href="#messagingSubmenu" data-bs-toggle="collapse"
+           aria-expanded="@IsParentExpanded(new[] { "/test/messaging", "/test/messaging-demo" })"
+           class="dropdown-toggle">
+            <i class="fas fa-comments me-2"></i><span>Messaging</span>
+        </a>
+        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/messaging", "/test/messaging-demo" })" id="messagingSubmenu">
+            <li class="@GetActiveClass("/test/messaging")">
+                <a href="/test/messaging"><span>SecureMessaging</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/messaging-demo")">
+                <a href="/test/messaging-demo"><span>SecureMessagingDemo</span></a>
+            </li>
+        </ul>
+    </li>
+
+    <!-- Notifications -->
+    <li class="@GetParentActiveClass(new[] { "/test/notification", "/test/notification-toast" })">
+        <a href="#notifSubmenu" data-bs-toggle="collapse"
+           aria-expanded="@IsParentExpanded(new[] { "/test/notification", "/test/notification-toast" })"
+           class="dropdown-toggle">
+            <i class="fas fa-bell me-2"></i><span>Notifications</span>
+        </a>
+        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/notification", "/test/notification-toast" })" id="notifSubmenu">
+            <li class="@GetActiveClass("/test/notification")">
+                <a href="/test/notification"><span>NotificationComponent</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/notification-toast")">
+                <a href="/test/notification-toast"><span>NotificationToast</span></a>
+            </li>
+        </ul>
+    </li>
+
+    <!-- Payment -->
+    <li class="@GetParentActiveClass(new[] { "/test/payment", "/test/payment-form", "/test/subscription", "/test/subscription-manager" })">
+        <a href="#paymentSubmenu" data-bs-toggle="collapse"
+           aria-expanded="@IsParentExpanded(new[] { "/test/payment", "/test/payment-form", "/test/subscription", "/test/subscription-manager" })"
+           class="dropdown-toggle">
+            <i class="fas fa-credit-card me-2"></i><span>Payment</span>
+        </a>
+        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/payment", "/test/payment-form", "/test/subscription", "/test/subscription-manager" })" id="paymentSubmenu">
+            <li class="@GetActiveClass("/test/payment")">
+                <a href="/test/payment"><span>PaymentComponent</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/payment-form")">
+                <a href="/test/payment-form"><span>PaymentForm</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/subscription")">
+                <a href="/test/subscription"><span>Subscription</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/subscription-manager")">
+                <a href="/test/subscription-manager"><span>SubscriptionManager</span></a>
+            </li>
+        </ul>
+    </li>
+</ul>
+
+@code {
+    private string _currentPath = "";
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        _currentPath = new Uri(Navigation.Uri).AbsolutePath.ToLower();
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        _currentPath = new Uri(e.Location).AbsolutePath.ToLower();
+        StateHasChanged();
+    }
+
+    private string GetActiveClass(string path) =>
+        _currentPath == path.ToLower() || (_currentPath == "/" && path == "/") ? "active" : "";
+
+    private string GetParentActiveClass(string[] childPaths) =>
+        childPaths.Any(p => _currentPath.StartsWith(p.ToLower())) ? "has-active-child" : "";
+
+    private string GetParentShowClass(string[] childPaths) =>
+        childPaths.Any(p => _currentPath.StartsWith(p.ToLower())) ? "show" : "";
+
+    private string IsParentExpanded(string[] childPaths) =>
+        childPaths.Any(p => _currentPath.StartsWith(p.ToLower())) ? "true" : "false";
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+}
