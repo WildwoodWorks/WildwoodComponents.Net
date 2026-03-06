@@ -1,0 +1,274 @@
+@rendermode InteractiveServer
+@inject IDebugEventService DebugService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="debug-panel">
+    <div class="card">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <h6 class="mb-0"><i class="fas fa-bug me-2"></i>Debug Output</h6>
+            <span class="badge bg-secondary">@allEntries.Count</span>
+        </div>
+        <div class="card-body">
+            <!-- Tabs -->
+            <ul class="nav nav-tabs" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link @(activeTab == "http" ? "active" : "")" @onclick='() => activeTab = "http"'>
+                        HTTP
+                        @if (httpEntries.Count > 0)
+                        {
+                            <span class="badge bg-success">@httpEntries.Count</span>
+                        }
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link @(activeTab == "lifecycle" ? "active" : "")" @onclick='() => activeTab = "lifecycle"'>
+                        Lifecycle
+                        @if (lifecycleEntries.Count > 0)
+                        {
+                            <span class="badge bg-info">@lifecycleEntries.Count</span>
+                        }
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link @(activeTab == "signalr" ? "active" : "")" @onclick='() => activeTab = "signalr"'>
+                        SignalR
+                        @if (signalrEntries.Count > 0)
+                        {
+                            <span class="badge" style="background-color: #7B5EA7;">@signalrEntries.Count</span>
+                        }
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Toolbar -->
+            <div class="debug-toolbar">
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input" type="checkbox" id="autoScroll" @bind="autoScroll" />
+                    <label class="form-check-label" for="autoScroll" style="font-size: 0.75rem;">Auto-scroll</label>
+                </div>
+                <button class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.7rem;" @onclick="CopyAll">
+                    <i class="fas fa-copy me-1"></i>Copy
+                </button>
+                <button class="btn btn-outline-danger btn-sm py-0 px-2" style="font-size: 0.7rem;" @onclick="ClearAll">
+                    <i class="fas fa-trash me-1"></i>Clear
+                </button>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="tab-content" id="debugScrollArea">
+                @if (activeTab == "http")
+                {
+                    @if (httpEntries.Count == 0)
+                    {
+                        <div class="empty-state">
+                            <i class="fas fa-exchange-alt mb-2" style="font-size: 1.5rem;"></i>
+                            <div>No HTTP traffic captured yet</div>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var entry in httpEntries)
+                        {
+                            <div class="debug-entry @(expandedEntryId == entry.Id ? "expanded" : "")" @onclick="() => ToggleEntry(entry.Id)">
+                                <div class="entry-header">
+                                    <span class="entry-timestamp">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
+                                    <span class="badge @GetHttpBadgeClass(entry.StatusCode)">@entry.StatusCode</span>
+                                    <span class="fw-bold">@entry.Method</span>
+                                    <span class="text-truncate" style="max-width: 300px;">@entry.Url</span>
+                                    <span class="text-muted ms-auto">@(entry.DurationMs)ms</span>
+                                </div>
+                                @if (expandedEntryId == entry.Id)
+                                {
+                                    <div class="entry-details">@FormatHttpDetails(entry)</div>
+                                }
+                            </div>
+                        }
+                    }
+                }
+                else if (activeTab == "lifecycle")
+                {
+                    @if (lifecycleEntries.Count == 0)
+                    {
+                        <div class="empty-state">
+                            <i class="fas fa-heartbeat mb-2" style="font-size: 1.5rem;"></i>
+                            <div>No lifecycle events captured yet</div>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var entry in lifecycleEntries)
+                        {
+                            <div class="debug-entry @(expandedEntryId == entry.Id ? "expanded" : "")" @onclick="() => ToggleEntry(entry.Id)">
+                                <div class="entry-header">
+                                    <span class="entry-timestamp">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
+                                    <span class="badge badge-lifecycle">@entry.EventType</span>
+                                    <span>@entry.ComponentName</span>
+                                </div>
+                                @if (expandedEntryId == entry.Id && !string.IsNullOrEmpty(entry.Details))
+                                {
+                                    <div class="entry-details">@entry.Details</div>
+                                }
+                            </div>
+                        }
+                    }
+                }
+                else if (activeTab == "signalr")
+                {
+                    @if (signalrEntries.Count == 0)
+                    {
+                        <div class="empty-state">
+                            <i class="fas fa-broadcast-tower mb-2" style="font-size: 1.5rem;"></i>
+                            <div>No SignalR messages captured yet</div>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var entry in signalrEntries)
+                        {
+                            <div class="debug-entry @(expandedEntryId == entry.Id ? "expanded" : "")" @onclick="() => ToggleEntry(entry.Id)">
+                                <div class="entry-header">
+                                    <span class="entry-timestamp">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
+                                    <span class="badge badge-signalr">@entry.Direction</span>
+                                    <span class="fw-bold">@entry.MethodName</span>
+                                </div>
+                                @if (expandedEntryId == entry.Id && !string.IsNullOrEmpty(entry.Payload))
+                                {
+                                    <div class="entry-details">@entry.Payload</div>
+                                }
+                            </div>
+                        }
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? ComponentFilter { get; set; }
+
+    private string activeTab = "http";
+    private bool autoScroll = true;
+    private string? expandedEntryId;
+
+    private List<DebugEntry> allEntries = new();
+    private List<HttpTrafficEntry> httpEntries = new();
+    private List<LifecycleEvent> lifecycleEntries = new();
+    private List<SignalRMessage> signalrEntries = new();
+
+    protected override void OnInitialized()
+    {
+        DebugService.OnNewEntry += HandleNewEntry;
+        RefreshEntries();
+    }
+
+    private void HandleNewEntry(object? sender, DebugEntry entry)
+    {
+        // Skip lifecycle events that don't match the component filter
+        if (ComponentFilter != null && entry is LifecycleEvent le && le.ComponentName != ComponentFilter) return;
+        InvokeAsync(() =>
+        {
+            RefreshEntries();
+            StateHasChanged();
+            if (autoScroll) ScrollToBottom();
+        });
+    }
+
+    private void RefreshEntries()
+    {
+        allEntries = DebugService.GetAllEntries().ToList();
+        httpEntries = allEntries.OfType<HttpTrafficEntry>().ToList();
+        lifecycleEntries = allEntries.OfType<LifecycleEvent>().ToList();
+        if (ComponentFilter != null)
+        {
+            lifecycleEntries = lifecycleEntries.Where(e => e.ComponentName == ComponentFilter).ToList();
+        }
+        signalrEntries = allEntries.OfType<SignalRMessage>().ToList();
+    }
+
+    private void ToggleEntry(string id)
+    {
+        expandedEntryId = expandedEntryId == id ? null : id;
+    }
+
+    private async void ScrollToBottom()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("debugPanel.scrollToBottom", "debugScrollArea");
+        }
+        catch { }
+    }
+
+    private async Task CopyAll()
+    {
+        var currentEntries = activeTab switch
+        {
+            "http" => httpEntries.Cast<DebugEntry>().ToList(),
+            "lifecycle" => lifecycleEntries.Cast<DebugEntry>().ToList(),
+            "signalr" => signalrEntries.Cast<DebugEntry>().ToList(),
+            _ => allEntries
+        };
+
+        var text = string.Join("\n", currentEntries.Select(e => e switch
+        {
+            HttpTrafficEntry h => $"[{h.Timestamp:HH:mm:ss.fff}] {h.StatusCode} {h.Method} {h.Url} ({h.DurationMs}ms)",
+            LifecycleEvent l => $"[{l.Timestamp:HH:mm:ss.fff}] {l.EventType} {l.ComponentName} {l.Details}",
+            SignalRMessage s => $"[{s.Timestamp:HH:mm:ss.fff}] {s.Direction} {s.MethodName} {s.Payload}",
+            _ => e.ToString()
+        }));
+
+        try
+        {
+            await JS.InvokeVoidAsync("debugPanel.copyToClipboard", text);
+        }
+        catch { }
+    }
+
+    private void ClearAll()
+    {
+        DebugService.Clear();
+        RefreshEntries();
+    }
+
+    private string GetHttpBadgeClass(int statusCode) => statusCode switch
+    {
+        >= 200 and < 300 => "badge-http-2xx",
+        >= 300 and < 400 => "badge-http-3xx",
+        >= 400 and < 500 => "badge-http-4xx",
+        >= 500 => "badge-http-5xx",
+        _ => "bg-secondary"
+    };
+
+    private string FormatHttpDetails(HttpTrafficEntry entry)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"URL: {entry.Url}");
+        sb.AppendLine($"Method: {entry.Method}");
+        sb.AppendLine($"Status: {entry.StatusCode}");
+        sb.AppendLine($"Duration: {entry.DurationMs}ms");
+        if (!string.IsNullOrEmpty(entry.RequestHeaders))
+        {
+            sb.AppendLine($"\n--- Request Headers ---\n{entry.RequestHeaders}");
+        }
+        if (!string.IsNullOrEmpty(entry.RequestBody))
+        {
+            sb.AppendLine($"\n--- Request Body ---\n{entry.RequestBody}");
+        }
+        if (!string.IsNullOrEmpty(entry.ResponseHeaders))
+        {
+            sb.AppendLine($"\n--- Response Headers ---\n{entry.ResponseHeaders}");
+        }
+        if (!string.IsNullOrEmpty(entry.ResponseBody))
+        {
+            sb.AppendLine($"\n--- Response Body ---\n{entry.ResponseBody}");
+        }
+        return sb.ToString();
+    }
+
+    public void Dispose()
+    {
+        DebugService.OnNewEntry -= HandleNewEntry;
+    }
+}
