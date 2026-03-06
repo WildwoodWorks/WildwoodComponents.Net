@@ -1,0 +1,533 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Authentication
+@using WildwoodComponents.Blazor.Components.Payment
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inherits BaseWildwoodComponent
+
+<div class="@GetRootCssClasses() app-tier-component">
+    @if (IsLoading && ShowLoadingStates)
+    {
+        <div class="app-tier-loading text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">@(_loadingMessage ?? "Loading plans...")</p>
+        </div>
+    }
+    else if (_currentStep == AppTierComponentStep.TierSelection)
+    {
+        <!-- Tier Selection -->
+        <div class="tier-selection">
+            @if (!string.IsNullOrEmpty(Title))
+            {
+                <h3 class="text-center mb-2">@Title</h3>
+            }
+
+            @if (!string.IsNullOrEmpty(Subtitle))
+            {
+                <p class="text-center text-muted mb-4">@Subtitle</p>
+            }
+
+            <!-- Billing Cycle Toggle -->
+            @if (ShowBillingToggle && HasMonthlyAndAnnualPricing())
+            {
+                <div class="billing-toggle text-center mb-4">
+                    <div class="btn-group" role="group">
+                        <button type="button"
+                                class="btn @(_selectedBillingCycle == "monthly" ? "btn-primary" : "btn-outline-primary")"
+                                @onclick="@(() => SetBillingCycle("monthly"))">
+                            Monthly
+                        </button>
+                        <button type="button"
+                                class="btn @(_selectedBillingCycle == "annually" ? "btn-primary" : "btn-outline-primary")"
+                                @onclick="@(() => SetBillingCycle("annually"))">
+                            Annually
+                            @if (AnnualDiscount > 0)
+                            {
+                                <span class="badge bg-success ms-1">Save @AnnualDiscount%</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            }
+
+            <!-- Tier Cards Grid -->
+            <div class="tier-grid row justify-content-center">
+                @foreach (var tier in _tiers)
+                {
+                    var isCurrentPlan = IsTierCurrentPlan(tier);
+                    var price = GetDisplayPrice(tier, _selectedBillingCycle, AnnualDiscount);
+
+                    <div class="col-md-4 mb-4">
+                        <div class="tier-card card h-100 @(tier.IsDefault ? "border-primary recommended" : "") @(isCurrentPlan ? "current-plan" : "")">
+                            @if (tier.IsDefault && !isCurrentPlan)
+                            {
+                                <div class="tier-badge @GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
+                                    <small>Recommended</small>
+                                </div>
+                            }
+                            @if (isCurrentPlan)
+                            {
+                                <div class="tier-badge bg-success text-white text-center py-1">
+                                    <small>Current Plan</small>
+                                </div>
+                            }
+                            <div class="card-body text-center">
+                                @if (!string.IsNullOrEmpty(tier.IconClass))
+                                {
+                                    <div class="tier-icon mb-2">
+                                        <i class="@tier.IconClass" style="font-size: 2rem;"></i>
+                                    </div>
+                                }
+                                <h5 class="tier-name">@tier.Name</h5>
+
+                                <div class="tier-price my-3">
+                                    @if (tier.IsFreeTier)
+                                    {
+                                        <span class="price-amount">Free</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="price-currency">@GetCurrencySymbol(Currency)</span>
+                                        <span class="price-amount">@price.ToString("N0")</span>
+                                        <span class="price-period">@GetPricePeriod(_selectedBillingCycle)</span>
+                                    }
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(tier.Description))
+                                {
+                                    <p class="tier-description text-muted small">@tier.Description</p>
+                                }
+
+                                <!-- Features List -->
+                                @if (tier.Features.Count > 0)
+                                {
+                                    <ul class="tier-features list-unstyled text-start mt-3">
+                                        @foreach (var feature in tier.Features)
+                                        {
+                                            <li class="mb-2">
+                                                @if (feature.IsEnabled)
+                                                {
+                                                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi bi-x-circle text-muted me-2"></i>
+                                                }
+                                                <span class="@(!feature.IsEnabled ? "text-muted" : "")">
+                                                    @(string.IsNullOrEmpty(feature.DisplayName) ? feature.FeatureCode : feature.DisplayName)
+                                                </span>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+
+                                <!-- Limits List -->
+                                @if (tier.Limits.Count > 0)
+                                {
+                                    <ul class="tier-limits list-unstyled text-start">
+                                        @foreach (var limit in tier.Limits)
+                                        {
+                                            <li class="mb-1 small text-muted">
+                                                <i class="bi bi-speedometer2 me-1"></i>
+                                                @(string.IsNullOrEmpty(limit.DisplayName) ? limit.LimitCode : limit.DisplayName):
+                                                <strong>@limit.MaxValueDisplay</strong>
+                                                @if (!string.IsNullOrEmpty(limit.Unit))
+                                                {
+                                                    <text> @limit.Unit</text>
+                                                }
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </div>
+                            <div class="card-footer bg-transparent border-0 text-center pb-3">
+                                @if (isCurrentPlan)
+                                {
+                                    <button class="btn btn-outline-secondary w-100" disabled>
+                                        Current Plan
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn @(tier.IsDefault ? "btn-primary" : "btn-outline-primary") w-100"
+                                            @onclick="() => SelectTier(tier)">
+                                        @if (tier.IsFreeTier)
+                                        {
+                                            <text>Get Started Free</text>
+                                        }
+                                        else if (_currentSubscription != null && _currentSubscription.IsActive)
+                                        {
+                                            <text>Switch to @tier.Name</text>
+                                        }
+                                        else
+                                        {
+                                            <text>Choose @tier.Name</text>
+                                        }
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Current Subscription Info -->
+            @if (ShowCurrentPlan && _currentSubscription != null && _currentSubscription.IsActive)
+            {
+                <div class="current-subscription mt-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h6 class="mb-1">Current Subscription</h6>
+                                    <p class="mb-0">
+                                        <strong>@_currentSubscription.TierName</strong>
+                                        <span class="badge bg-success ms-2">@_currentSubscription.Status</span>
+                                    </p>
+                                    @if (_currentSubscription.CurrentPeriodEnd.HasValue)
+                                    {
+                                        <small class="text-muted">
+                                            Renews: @_currentSubscription.CurrentPeriodEnd.Value.ToString("MMM dd, yyyy")
+                                        </small>
+                                    }
+                                    @if (!string.IsNullOrEmpty(_currentSubscription.PendingTierName))
+                                    {
+                                        <div class="mt-1">
+                                            <span class="badge bg-info">
+                                                Changing to @_currentSubscription.PendingTierName
+                                                @if (_currentSubscription.PendingChangeDate.HasValue)
+                                                {
+                                                    <text> on @_currentSubscription.PendingChangeDate.Value.ToString("MMM dd")</text>
+                                                }
+                                            </span>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <button class="btn btn-outline-danger btn-sm" @onclick="ShowCancelConfirmation">
+                                        Cancel Subscription
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Add-Ons Section -->
+            @if (ShowAddOns && _addOns.Count > 0)
+            {
+                <div class="add-ons-section mt-5">
+                    <h4 class="text-center mb-4">Add-Ons</h4>
+                    <div class="row justify-content-center">
+                        @foreach (var addOn in _addOns)
+                        {
+                            var isSubscribed = IsAddOnSubscribed(addOn);
+                            var isBundled = IsAddOnBundled(addOn);
+                            var pricing = GetDefaultAddOnPricing(addOn);
+
+                            <div class="col-md-4 mb-3">
+                                <div class="card h-100 addon-card @(isSubscribed || isBundled ? "border-success" : "")">
+                                    <div class="card-body">
+                                        @if (!string.IsNullOrEmpty(addOn.IconClass))
+                                        {
+                                            <i class="@addOn.IconClass me-2"></i>
+                                        }
+                                        <h6 class="d-inline">@addOn.Name</h6>
+
+                                        @if (isBundled)
+                                        {
+                                            <span class="badge bg-success ms-2">Included</span>
+                                        }
+                                        else if (isSubscribed)
+                                        {
+                                            <span class="badge bg-success ms-2">Active</span>
+                                        }
+
+                                        @if (!string.IsNullOrEmpty(addOn.Description))
+                                        {
+                                            <p class="text-muted small mt-2 mb-2">@addOn.Description</p>
+                                        }
+
+                                        @if (pricing != null && !isBundled)
+                                        {
+                                            <p class="mb-2">
+                                                <strong>@GetCurrencySymbol(Currency)@pricing.Price.ToString("N2")</strong>
+                                                <span class="text-muted small">/ @pricing.BillingFrequency.ToLower()</span>
+                                            </p>
+                                        }
+
+                                        <!-- Add-on features -->
+                                        @if (addOn.Features.Count > 0)
+                                        {
+                                            <ul class="list-unstyled small mb-0">
+                                                @foreach (var feature in addOn.Features)
+                                                {
+                                                    <li>
+                                                        <i class="bi bi-check text-success me-1"></i>
+                                                        @(string.IsNullOrEmpty(feature.DisplayName) ? feature.FeatureCode : feature.DisplayName)
+                                                    </li>
+                                                }
+                                            </ul>
+                                        }
+                                    </div>
+                                    @if (!isBundled)
+                                    {
+                                        <div class="card-footer bg-transparent border-0 text-center pb-3">
+                                            @if (isSubscribed)
+                                            {
+                                                <button class="btn btn-outline-secondary btn-sm w-100" disabled>
+                                                    Subscribed
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-outline-primary btn-sm w-100"
+                                                        disabled="@(_currentSubscription == null || !_currentSubscription.IsActive)">
+                                                    Add to Plan
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else if (_currentStep == AppTierComponentStep.Registration)
+    {
+        <!-- Registration Step -->
+        <div class="registration-step">
+            <div class="mb-4">
+                <button class="btn btn-link p-0" @onclick="BackToTierSelection">
+                    <i class="bi bi-arrow-left me-2"></i>Back to plans
+                </button>
+            </div>
+
+            <div class="row justify-content-center">
+                <div class="col-md-7">
+                    <h4 class="text-center mb-2">Create Your Account</h4>
+                    <p class="text-center text-muted mb-4">
+                        Sign in or register to subscribe to the <strong>@_selectedTier?.Name</strong> plan.
+                    </p>
+
+                    <WildwoodComponents.Blazor.Components.Authentication.AuthenticationComponent
+                        AppId="@AppId"
+                        OnAuthenticationSuccess="HandleAuthenticationSuccess"
+                        OnAuthenticationError="HandleAuthenticationError" />
+                </div>
+                <div class="col-md-5">
+                    <!-- Selected Plan Summary -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Selected Plan</h6>
+                        </div>
+                        <div class="card-body text-center">
+                            @if (_selectedTier != null)
+                            {
+                                @if (!string.IsNullOrEmpty(_selectedTier.IconClass))
+                                {
+                                    <div class="tier-icon mb-2">
+                                        <i class="@_selectedTier.IconClass" style="font-size: 2rem;"></i>
+                                    </div>
+                                }
+                                <h5>@_selectedTier.Name</h5>
+                                <div class="tier-price my-2">
+                                    @if (_selectedTier.IsFreeTier)
+                                    {
+                                        <span class="price-amount">Free</span>
+                                    }
+                                    else if (_selectedPricing != null)
+                                    {
+                                        <span class="price-currency">@GetCurrencySymbol(Currency)</span>
+                                        <span class="price-amount">@_selectedPricing.Price.ToString("N0")</span>
+                                        <span class="price-period">@GetPricePeriod(_selectedBillingCycle)</span>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(_selectedTier.Description))
+                                {
+                                    <p class="text-muted small">@_selectedTier.Description</p>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (_currentStep == AppTierComponentStep.Payment)
+    {
+        <!-- Payment Step -->
+        <div class="payment-step">
+            <div class="mb-4">
+                <button class="btn btn-link p-0" @onclick="BackToTierSelection">
+                    <i class="bi bi-arrow-left me-2"></i>Back to plans
+                </button>
+            </div>
+
+            <div class="row">
+                <div class="col-md-7">
+                    <h4>Complete Your Subscription</h4>
+                    <p class="text-muted">You're subscribing to the <strong>@_selectedTier?.Name</strong> plan.</p>
+
+                    @if (_currentSubscription != null && _currentSubscription.IsActive)
+                    {
+                        <div class="alert alert-info mb-3">
+                            <i class="bi bi-info-circle me-2"></i>
+                            You are upgrading from <strong>@_currentSubscription.TierName</strong> to <strong>@_selectedTier?.Name</strong>.
+                        </div>
+                    }
+
+                    <!-- PaymentComponent Integration -->
+                    <PaymentComponent AppId="@AppId"
+                                     Amount="@GetPaymentAmount()"
+                                     Currency="@Currency"
+                                     Description="@($"{_selectedTier?.Name} Subscription")"
+                                     CustomerId="@CustomerId"
+                                     CustomerEmail="@CustomerEmail"
+                                     PricingModelId="@_selectedPricing?.PricingModelId"
+                                     IsSubscription="true"
+                                     ShowAmount="false"
+                                     RequireBillingAddress="@RequireBillingAddress"
+                                     OnPaymentSuccess="HandlePaymentSuccess"
+                                     OnPaymentFailure="HandlePaymentFailure"
+                                     OnCancel="BackToTierSelection" />
+                </div>
+                <div class="col-md-5">
+                    <!-- Order Summary -->
+                    <div class="order-summary card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Order Summary</h6>
+                        </div>
+                        <div class="card-body">
+                            @if (_selectedTier != null)
+                            {
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>@_selectedTier.Name Plan</span>
+                                    <span>@GetCurrencySymbol(Currency)@GetPaymentAmount().ToString("N2")</span>
+                                </div>
+                            }
+                            @if (_selectedPricing != null)
+                            {
+                                <small class="text-muted d-block mb-2">
+                                    Billed @_selectedPricing.BillingFrequencyLabel.ToLower()
+                                </small>
+                            }
+                            <hr />
+                            <div class="d-flex justify-content-between fw-bold">
+                                <span>Total</span>
+                                <span>@GetCurrencySymbol(Currency)@GetPaymentAmount().ToString("N2")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Selected Tier Features -->
+                    @if (_selectedTier != null && _selectedTier.Features.Count > 0)
+                    {
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                <h6 class="mb-0">What's Included</h6>
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-unstyled mb-0">
+                                    @foreach (var feature in _selectedTier.Features)
+                                    {
+                                        @if (feature.IsEnabled)
+                                        {
+                                            <li class="mb-1">
+                                                <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                                @(string.IsNullOrEmpty(feature.DisplayName) ? feature.FeatureCode : feature.DisplayName)
+                                            </li>
+                                        }
+                                    }
+                                </ul>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+    else if (_currentStep == AppTierComponentStep.Success)
+    {
+        <!-- Success -->
+        <div class="tier-success text-center py-5">
+            <div class="mb-4">
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+            </div>
+            <h3>Welcome to @_selectedTier?.Name!</h3>
+            <p class="text-muted">Your subscription is now active.</p>
+
+            @if (_currentSubscription?.TrialEndDate.HasValue == true)
+            {
+                <div class="alert alert-info d-inline-block">
+                    <i class="bi bi-calendar me-2"></i>
+                    Your free trial ends on @_currentSubscription.TrialEndDate.Value.ToString("MMMM dd, yyyy")
+                </div>
+            }
+
+            <div class="mt-4">
+                @if (OnTierSelected.HasDelegate)
+                {
+                    <button class="btn btn-primary btn-lg" @onclick="HandleSuccessContinue">
+                        Get Started
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-primary btn-lg" @onclick="BackToTierSelection">
+                        View Plans
+                    </button>
+                }
+            </div>
+        </div>
+    }
+    else if (_currentStep == AppTierComponentStep.CancelConfirmation)
+    {
+        <!-- Cancel Confirmation -->
+        <div class="cancel-confirmation">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                    <h4 class="mt-3">Cancel Subscription?</h4>
+                    <p class="text-muted">
+                        Are you sure you want to cancel your <strong>@_currentSubscription?.TierName</strong> subscription?
+                    </p>
+                    @if (_currentSubscription?.CurrentPeriodEnd.HasValue == true)
+                    {
+                        <p class="text-muted">
+                            You'll continue to have access until @_currentSubscription.CurrentPeriodEnd.Value.ToString("MMMM dd, yyyy").
+                        </p>
+                    }
+                    <div class="mt-4">
+                        <button class="btn btn-outline-secondary me-2" @onclick="BackToTierSelection">
+                            Keep Subscription
+                        </button>
+                        <button class="btn btn-danger" @onclick="ConfirmCancellation" disabled="@_isProcessing">
+                            @if (_isProcessing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            Yes, Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Error Display -->
+    @if (!string.IsNullOrEmpty(ErrorMessage) && EnableErrorHandling)
+    {
+        <div class="alert alert-danger mt-3">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            @ErrorMessage
+            <button type="button" class="btn-close float-end" @onclick="ClearError"></button>
+        </div>
+    }
+</div>
