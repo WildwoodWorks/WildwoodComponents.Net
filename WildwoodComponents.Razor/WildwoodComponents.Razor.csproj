@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <RootNamespace>WildwoodComponents.Razor</RootNamespace>
+
+    <!-- Package Metadata -->
+    <PackageId>WildwoodComponents.Razor</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Wildwood Development Team</Authors>
+    <Company>Wildwood</Company>
+    <Product>WildwoodComponents.Razor</Product>
+    <Description>A Razor Pages-native component library providing ViewComponents for authentication, AI proxy, and more. The Razor Pages sibling of the Blazor-based WildwoodComponents, sharing the same --ww-* CSS theming system and WildwoodAPI service layer.</Description>
+    <PackageTags>razor;viewcomponents;authentication;ai;forms;theme;web</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WildwoodComponents.Shared\WildwoodComponents.Shared.csproj" />
+  </ItemGroup>
+
+  <!-- All required packages (Http, Logging, Configuration, DI, Json) are provided by the FrameworkReference -->
+
+</Project>
