@@ -1,0 +1,119 @@
+@page "/"
+@rendermode InteractiveServer
+@inject IDebugEventService DebugService
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<PageTitle>Dashboard - Wildwood Components Test Suite</PageTitle>
+
+<h4 class="page-header"><i class="fas fa-tachometer-alt me-2"></i>Dashboard</h4>
+
+<div class="row dashboard-stats mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="stat-icon"><i class="fas fa-puzzle-piece"></i></div>
+            <div class="stat-value">15</div>
+            <div class="stat-label">Components</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="stat-icon"><i class="fas fa-layer-group"></i></div>
+            <div class="stat-value">5</div>
+            <div class="stat-label">Categories</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="stat-icon"><i class="fas fa-exchange-alt"></i></div>
+            <div class="stat-value">@httpCount</div>
+            <div class="stat-label">HTTP Calls</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="stat-icon"><i class="fas fa-heartbeat"></i></div>
+            <div class="stat-value">@lifecycleCount</div>
+            <div class="stat-label">Lifecycle Events</div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-list me-2"></i>Component Categories</h6>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th class="ps-3">Category</th>
+                            <th>Components</th>
+                            <th>Test Pages</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="ps-3"><i class="fas fa-shield-alt me-2 text-primary"></i>Authentication</td>
+                            <td>4</td>
+                            <td><a href="/test/authentication">View</a></td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3"><i class="fas fa-robot me-2 text-primary"></i>AI</td>
+                            <td>3</td>
+                            <td><a href="/test/ai-chat">View</a></td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3"><i class="fas fa-comments me-2 text-primary"></i>Messaging</td>
+                            <td>2</td>
+                            <td><a href="/test/messaging">View</a></td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3"><i class="fas fa-bell me-2 text-primary"></i>Notifications</td>
+                            <td>2</td>
+                            <td><a href="/test/notification">View</a></td>
+                        </tr>
+                        <tr>
+                            <td class="ps-3"><i class="fas fa-credit-card me-2 text-primary"></i>Payment</td>
+                            <td>4</td>
+                            <td><a href="/test/payment">View</a></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Quick Start</h6>
+            </div>
+            <div class="card-body">
+                <p class="small mb-2">This test suite renders each WildwoodComponent on its own page with:</p>
+                <ul class="small mb-0">
+                    <li><strong>Settings Panel</strong> -- Configure component parameters in real-time</li>
+                    <li><strong>Live Component</strong> -- The actual rendered WildwoodComponent</li>
+                    <li><strong>Debug Panel</strong> -- HTTP traffic, lifecycle events, and SignalR messages</li>
+                </ul>
+                <hr />
+                <p class="small text-muted mb-0">
+                    <i class="fas fa-lightbulb me-1"></i>
+                    Open multiple browsers with different user accounts to test messaging and collaboration features.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private int httpCount;
+    private int lifecycleCount;
+
+    protected override void OnInitialized()
+    {
+        var entries = DebugService.GetAllEntries();
+        httpCount = entries.Count(e => e is HttpTrafficEntry);
+        lifecycleCount = entries.Count(e => e is LifecycleEvent);
+    }
+}
