@@ -1,0 +1,105 @@
+@page "/test/notification"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Notifications
+@using WildwoodComponents.Blazor.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="Notification Config" ComponentName="NotificationComponent" IconClass="fas fa-bell"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">API Base URL</label>
+            <input class="form-control form-control-sm" @bind="apiBaseUrl" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">App ID</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Auth Token</label>
+            <input type="password" class="form-control form-control-sm" @bind="authToken" />
+        </div>
+        <hr class="my-2" />
+        <h6 class="small fw-bold">Notification Types</h6>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="enableBrowser" @bind="enableBrowserNotifications" />
+            <label class="form-check-label" for="enableBrowser">Browser Notifications</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="enableEmail" @bind="enableEmailNotifications" />
+            <label class="form-check-label" for="enableEmail">Email Notifications</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="enableSms" @bind="enableSmsNotifications" />
+            <label class="form-check-label" for="enableSms">SMS Notifications</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="enablePush" @bind="enablePushNotifications" />
+            <label class="form-check-label" for="enablePush">Push Notifications</label>
+        </div>
+    </Settings>
+    <Component>
+        @* NotificationComponent is a demo page; it renders its own full configuration UI.
+           We embed it here for interactive testing within the test suite wrapper. *@
+        <NotificationComponent />
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string apiBaseUrl = "";
+    private string appId = "";
+    private string authToken = "";
+    private bool enableBrowserNotifications = true;
+    private bool enableEmailNotifications = false;
+    private bool enableSmsNotifications = false;
+    private bool enablePushNotifications = false;
+
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        apiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "https://localhost:7046/api";
+        authToken = await StateStorage.GetItemAsync("wildwood_auth_token") ?? "";
+        LifecycleTracker.TrackInitialized("NotificationComponent");
+        AddEvent("NotificationComponent initialized");
+    }
+
+    private void ApplySettings()
+    {
+        AddEvent($"Settings applied - API: {apiBaseUrl}, App: {appId}");
+        StateHasChanged();
+    }
+
+    private void ResetSettings()
+    {
+        apiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "https://localhost:7046/api";
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        enableBrowserNotifications = true;
+        enableEmailNotifications = false;
+        enableSmsNotifications = false;
+        enablePushNotifications = false;
+        AddEvent("Settings reset to defaults");
+        StateHasChanged();
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
