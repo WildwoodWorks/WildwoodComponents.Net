@@ -1,0 +1,166 @@
+@namespace WildwoodComponents.Blazor.Components.AI
+@inherits WildwoodComponents.Blazor.Components.Base.BaseWildwoodComponent
+
+<div class="@GetRootCssClasses() aiflow-component" @attributes="AdditionalAttributes">
+    @if (IsLoading)
+    {
+        <div class="aiflow-loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Loading flow...</p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="aiflow-error alert alert-danger">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            @ErrorMessage
+        </div>
+    }
+    else if (CurrentFlow != null)
+    {
+        <div class="aiflow-header">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <i class="@CurrentFlow.IconClass" style="color: @CurrentFlow.Color; font-size: 1.5rem;"></i>
+                <h5 class="mb-0">@CurrentFlow.Name</h5>
+            </div>
+            @if (!string.IsNullOrEmpty(CurrentFlow.Description))
+            {
+                <p class="text-muted small mb-3">@CurrentFlow.Description</p>
+            }
+        </div>
+
+        @if (CurrentExecution == null || CurrentExecution.Status == "completed" || CurrentExecution.Status == "failed" || CurrentExecution.Status == "cancelled")
+        {
+            <!-- Input Form -->
+            @if (InputFields.Count > 0)
+            {
+                <div class="aiflow-input-form mb-3">
+                    @foreach (var field in InputFields)
+                    {
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold">
+                                @field.Label
+                                @if (field.Required)
+                                {
+                                    <span class="text-danger">*</span>
+                                }
+                            </label>
+                            @if (field.Type == "textarea")
+                            {
+                                <textarea class="form-control form-control-sm"
+                                    placeholder="@field.Placeholder"
+                                    @bind="InputValues[field.Name]"
+                                    rows="3"></textarea>
+                            }
+                            else
+                            {
+                                <input type="@field.Type" class="form-control form-control-sm"
+                                    placeholder="@field.Placeholder"
+                                    @bind="InputValues[field.Name]" />
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            <button class="btn btn-primary" @onclick="ExecuteFlowAsync" disabled="@IsExecuting">
+                @if (IsExecuting)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    <span>Executing...</span>
+                }
+                else
+                {
+                    <i class="fas fa-play me-1"></i>
+                    <span>Execute Flow</span>
+                }
+            </button>
+        }
+
+        @if (CurrentExecution != null)
+        {
+            <!-- Execution Progress -->
+            <div class="aiflow-execution mt-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="badge @GetStatusBadgeClass(CurrentExecution.Status)">
+                        @CurrentExecution.Status.ToUpperInvariant()
+                    </span>
+                    @if (CurrentExecution.DurationMs.HasValue)
+                    {
+                        <span class="text-muted small">@($"{CurrentExecution.DurationMs / 1000.0:F1}s")</span>
+                    }
+                    @if (CurrentExecution.Status == "running")
+                    {
+                        <button class="btn btn-outline-danger btn-sm" @onclick="CancelExecutionAsync">
+                            <i class="fas fa-stop me-1"></i>Cancel
+                        </button>
+                    }
+                </div>
+
+                <!-- Step Progress -->
+                @if (CurrentExecution.StepExecutions.Count > 0)
+                {
+                    <div class="aiflow-steps">
+                        @foreach (var step in CurrentExecution.StepExecutions)
+                        {
+                            <div class="aiflow-step d-flex align-items-center gap-2 py-1 px-2 mb-1 rounded @GetStepRowClass(step.Status)">
+                                <i class="@GetStepStatusIcon(step.Status)"></i>
+                                <span class="small flex-grow-1">@(step.StepName ?? $"Step {step.StepOrder}")</span>
+                                @if (step.DurationMs.HasValue)
+                                {
+                                    <span class="text-muted small">@($"{step.DurationMs}ms")</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Output -->
+                @if (CurrentExecution.Status == "completed" && !string.IsNullOrEmpty(CurrentExecution.OutputDataJson))
+                {
+                    <div class="aiflow-output mt-3 p-3 bg-light rounded">
+                        <h6 class="small fw-semibold mb-2">Output</h6>
+                        @if (TryGetFormattedOutput(CurrentExecution.OutputDataJson, out var formattedOutput))
+                        {
+                            @if (formattedOutput.ContainsKey("response"))
+                            {
+                                <div class="mb-2">@((MarkupString)FormatTextOutput(formattedOutput["response"]))</div>
+                            }
+                            @if (formattedOutput.ContainsKey("audioBase64"))
+                            {
+                                <audio controls class="w-100 mb-2">
+                                    <source src="@($"data:audio/{(formattedOutput.ContainsKey("format") ? formattedOutput["format"] : "mp3")};base64,{formattedOutput["audioBase64"]}")" />
+                                </audio>
+                            }
+                            @foreach (var kvp in GetFilteredOutputEntries(formattedOutput))
+                            {
+                                <div class="small text-muted"><strong>@kvp.Key:</strong> @kvp.Value</div>
+                            }
+                        }
+                        else
+                        {
+                            <pre class="mb-0 small" style="white-space: pre-wrap;">@CurrentExecution.OutputDataJson</pre>
+                        }
+                    </div>
+                }
+
+                <!-- Error -->
+                @if (CurrentExecution.Status == "failed" && !string.IsNullOrEmpty(CurrentExecution.ErrorMessage))
+                {
+                    <div class="aiflow-error-detail mt-3 alert alert-danger small">
+                        @CurrentExecution.ErrorMessage
+                    </div>
+                }
+            </div>
+        }
+    }
+    else
+    {
+        <div class="aiflow-empty text-center text-muted py-4">
+            <i class="fas fa-project-diagram fa-2x mb-2"></i>
+            <p>No flow configured</p>
+        </div>
+    }
+</div>
