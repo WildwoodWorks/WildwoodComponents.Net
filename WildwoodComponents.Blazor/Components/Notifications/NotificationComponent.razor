@@ -1,0 +1,391 @@
+@page "/notifications-demo"
+@inject IJSRuntime JSRuntime
+
+<div class="container-fluid p-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">Notification Component Demo</h1>
+            
+            <!-- Configuration Panel -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Notification Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="apiUrl" class="form-label">API Base URL</label>
+                                <input @bind="apiBaseUrl" id="apiUrl" class="form-control" placeholder="https://localhost:7001/api" />
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="appId" class="form-label">App ID</label>
+                                <input @bind="appId" id="appId" class="form-control" placeholder="Enter your app ID" />
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="authToken" class="form-label">Authentication Token</label>
+                                <input @bind="authToken" id="authToken" class="form-control" type="password" placeholder="Bearer token for API access" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label class="form-label">Notification Types</label>
+                                <div class="form-check">
+                                    <input @bind="config.EnableBrowserNotifications" class="form-check-input" type="checkbox" id="enableBrowser">
+                                    <label class="form-check-label" for="enableBrowser">Browser Notifications</label>
+                                </div>
+                                <div class="form-check">
+                                    <input @bind="config.EnableEmailNotifications" class="form-check-input" type="checkbox" id="enableEmail">
+                                    <label class="form-check-label" for="enableEmail">Email Notifications</label>
+                                </div>
+                                <div class="form-check">
+                                    <input @bind="config.EnableSmsNotifications" class="form-check-input" type="checkbox" id="enableSms">
+                                    <label class="form-check-label" for="enableSms">SMS Notifications</label>
+                                </div>
+                                <div class="form-check">
+                                    <input @bind="config.EnablePushNotifications" class="form-check-input" type="checkbox" id="enablePush">
+                                    <label class="form-check-label" for="enablePush">Push Notifications</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Email Configuration -->
+                    @if (config.EnableEmailNotifications)
+                    {
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <h6>Email Configuration</h6>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="smtpHost" class="form-label">SMTP Host</label>
+                                    <input @bind="config.SmtpHost" id="smtpHost" class="form-control" placeholder="smtp.gmail.com" />
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label for="smtpPort" class="form-label">SMTP Port</label>
+                                    <input @bind="config.SmtpPort" id="smtpPort" class="form-control" type="number" placeholder="587" />
+                                </div>
+                                <div class="form-check">
+                                    <input @bind="config.SmtpUseSsl" class="form-check-input" type="checkbox" id="smtpSsl">
+                                    <label class="form-check-label" for="smtpSsl">Use SSL</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="fromEmail" class="form-label">From Email</label>
+                                    <input @bind="config.FromEmail" id="fromEmail" class="form-control" placeholder="noreply@yourapp.com" />
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label for="fromName" class="form-label">From Name</label>
+                                    <input @bind="config.FromName" id="fromName" class="form-control" placeholder="Your App Name" />
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    
+                    <!-- Actions -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <button @onclick="SaveConfiguration" class="btn btn-primary me-2" disabled="@isLoading">
+                                @if (isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                Save Configuration
+                            </button>
+                            <button @onclick="LoadConfiguration" class="btn btn-secondary me-2" disabled="@isLoading">
+                                Load Configuration
+                            </button>
+                            <button @onclick="QuickTestNotification" class="btn btn-success" disabled="@isLoading">
+                                Test Notification
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Test Notification Panel -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Test Notifications</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="testTitle" class="form-label">Notification Title</label>
+                                <input @bind="testNotification.Title" id="testTitle" class="form-control" placeholder="Test Notification" />
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="testMessage" class="form-label">Message</label>
+                                <textarea @bind="testNotification.Message" id="testMessage" class="form-control" rows="3" placeholder="This is a test notification message"></textarea>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="testType" class="form-label">Notification Type</label>
+                                <select @bind="testNotification.Type" id="testType" class="form-control">
+                                    <option value="info">Info</option>
+                                    <option value="success">Success</option>
+                                    <option value="warning">Warning</option>
+                                    <option value="error">Error</option>
+                                </select>
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="testRecipient" class="form-label">Test Recipient (Email/Phone)</label>
+                                <input @bind="testNotification.Recipient" id="testRecipient" class="form-control" placeholder="test@example.com or +1234567890" />
+                            </div>
+                        </div>
+                    </div>
+                    <button @onclick="SendTestNotification" class="btn btn-warning" disabled="@isLoading">
+                        Send Test Notification
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Status and Logs -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Status & Logs</h5>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(statusMessage))
+                    {
+                        <div class="alert @GetAlertClass()" role="alert">
+                            @statusMessage
+                        </div>
+                    }
+                    
+                    @if (logs.Any())
+                    {
+                        <h6>Recent Activity:</h6>
+                        <div class="log-container" style="max-height: 300px; overflow-y: auto;">
+                            @foreach (var log in logs.OrderByDescending(l => l.Timestamp))
+                            {
+                                <div class="log-entry mb-2 p-2 border-start border-3 @GetLogBorderClass(log.Level)">
+                                    <small class="text-muted">@log.Timestamp.ToString("HH:mm:ss")</small>
+                                    <div>@log.Message</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string apiBaseUrl = "https://localhost:7001/api";
+    private string appId = "";
+    private string authToken = "";
+    private bool isLoading = false;
+    private string statusMessage = "";
+    private string statusType = "info";
+    
+    private NotificationConfig config = new();
+    private TestNotification testNotification = new();
+    private List<LogEntry> logs = new();
+    
+    protected override void OnInitialized()
+    {
+        // Initialize with default values
+        config.SmtpPort = 587;
+        config.SmtpUseSsl = true;
+        config.EnableBrowserNotifications = true;
+        config.FromName = "Wildwood App";
+        
+        testNotification.Title = "Test Notification";
+        testNotification.Message = "This is a test notification from the Wildwood Components demo.";
+        testNotification.Type = "info";
+        
+        AddLog("Component initialized", "info");
+    }
+    
+    private async Task LoadConfiguration()
+    {
+        if (string.IsNullOrEmpty(appId))
+        {
+            SetStatus("Please enter an App ID", "warning");
+            return;
+        }
+        
+        isLoading = true;
+        try
+        {
+            // Simulate API call to load configuration
+            await Task.Delay(1000);
+            SetStatus("Configuration loaded successfully", "success");
+            AddLog($"Loaded configuration for app: {appId}", "success");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Error loading configuration: {ex.Message}", "danger");
+            AddLog($"Error loading configuration: {ex.Message}", "error");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+    
+    private async Task SaveConfiguration()
+    {
+        if (string.IsNullOrEmpty(appId))
+        {
+            SetStatus("Please enter an App ID", "warning");
+            return;
+        }
+        
+        isLoading = true;
+        try
+        {
+            // Simulate API call to save configuration
+            await Task.Delay(1000);
+            SetStatus("Configuration saved successfully", "success");
+            AddLog($"Saved configuration for app: {appId}", "success");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Error saving configuration: {ex.Message}", "danger");
+            AddLog($"Error saving configuration: {ex.Message}", "error");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+    
+    private async Task QuickTestNotification()
+    {
+        isLoading = true;
+        try
+        {
+            if (config.EnableBrowserNotifications)
+            {
+                await ShowBrowserNotification();
+            }
+            
+            AddLog("Test notification sent", "success");
+            SetStatus("Test notification sent successfully", "success");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Error sending test notification: {ex.Message}", "danger");
+            AddLog($"Error sending test notification: {ex.Message}", "error");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+    
+    private async Task SendTestNotification()
+    {
+        if (string.IsNullOrEmpty(testNotification.Recipient))
+        {
+            SetStatus("Please enter a recipient", "warning");
+            return;
+        }
+        
+        isLoading = true;
+        try
+        {
+            // Simulate sending notification
+            await Task.Delay(1500);
+            AddLog($"Test notification sent to {testNotification.Recipient}", "success");
+            SetStatus("Test notification sent successfully", "success");
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Error sending notification: {ex.Message}", "danger");
+            AddLog($"Error sending notification: {ex.Message}", "error");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+    
+    private async Task ShowBrowserNotification()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("showNotification", testNotification.Title, testNotification.Message);
+        }
+        catch (Exception ex)
+        {
+            // Log error without using Logger service
+            Console.WriteLine($"Error showing browser notification: {ex.Message}");
+        }
+    }
+    
+    private void SetStatus(string message, string type)
+    {
+        statusMessage = message;
+        statusType = type;
+        StateHasChanged();
+    }
+    
+    private void AddLog(string message, string level)
+    {
+        logs.Add(new LogEntry
+        {
+            Message = message,
+            Level = level,
+            Timestamp = DateTime.Now
+        });
+        StateHasChanged();
+    }
+    
+    private string GetAlertClass()
+    {
+        return statusType switch
+        {
+            "success" => "alert-success",
+            "warning" => "alert-warning",
+            "danger" => "alert-danger",
+            _ => "alert-info"
+        };
+    }
+    
+    private string GetLogBorderClass(string level)
+    {
+        return level switch
+        {
+            "success" => "border-success",
+            "warning" => "border-warning",
+            "error" => "border-danger",
+            _ => "border-info"
+        };
+    }
+    
+    public class NotificationConfig
+    {
+        public bool EnableBrowserNotifications { get; set; }
+        public bool EnableEmailNotifications { get; set; }
+        public bool EnableSmsNotifications { get; set; }
+        public bool EnablePushNotifications { get; set; }
+        public string SmtpHost { get; set; } = "";
+        public int SmtpPort { get; set; }
+        public bool SmtpUseSsl { get; set; }
+        public string FromEmail { get; set; } = "";
+        public string FromName { get; set; } = "";
+    }
+    
+    public class TestNotification
+    {
+        public string Title { get; set; } = "";
+        public string Message { get; set; } = "";
+        public string Type { get; set; } = "info";
+        public string Recipient { get; set; } = "";
+    }
+    
+    public class LogEntry
+    {
+        public string Message { get; set; } = "";
+        public string Level { get; set; } = "";
+        public DateTime Timestamp { get; set; }
+    }
+}
