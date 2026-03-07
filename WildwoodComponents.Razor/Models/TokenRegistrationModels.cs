@@ -129,6 +129,7 @@ public class ValidateRegistrationRequest
     public string Password { get; set; } = string.Empty;
     public string? Token { get; set; }
     public string? AppId { get; set; }
+    public string? PricingModelId { get; set; }
 }
 
 public class RegistrationValidationResponse

@@ -901,7 +901,8 @@
                 Email = _registrationModel.Email,
                 Password = _registrationModel.Password,
                 Token = _useToken ? _tokenValue : null,
-                AppId = AppId
+                AppId = AppId,
+                PricingModelId = DefaultPricingModelId
             };
 
             var validationResponse = await GetHttpClient().PostAsJsonAsync("api/userregistration/validate", validationRequest);
@@ -1640,6 +1641,7 @@
         public string Password { get; set; } = string.Empty;
         public string? Token { get; set; }
         public string? AppId { get; set; }
+        public string? PricingModelId { get; set; }
     }
 
     public class RegistrationSuccessEventArgs
