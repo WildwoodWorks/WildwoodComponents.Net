@@ -63,6 +63,7 @@ namespace WildwoodComponents.Blazor.Services
         Task<AuthenticationResponse> RegisterAsync(RegistrationRequest request);
         Task<AuthenticationResponse> RegisterWithTokenAsync(RegistrationRequest request);
         Task<AuthenticationResponse> AuthenticateWithProviderAsync(string providerName, string appId);
+        Task<string?> GetOAuthAuthorizeUrlAsync(string providerName, string appId);
         Task<List<AuthProvider>> GetAvailableProvidersAsync();
         Task<List<AuthProvider>> GetAvailableProvidersAsync(string appId);
         Task<CaptchaConfiguration?> GetCaptchaConfigurationAsync(string appId);
@@ -100,6 +101,15 @@ namespace WildwoodComponents.Blazor.Services
         /// Verifies a 2FA recovery code
         /// </summary>
         Task<TwoFactorVerifyResponse> VerifyTwoFactorRecoveryCodeAsync(string sessionId, string recoveryCode, string ipAddress);
+    }
+
+    /// <summary>
+    /// Response from the OAuth authorize URL endpoint.
+    /// </summary>
+    internal class OAuthAuthorizeResponse
+    {
+        [JsonPropertyName("authorizationUrl")]
+        public string? AuthorizationUrl { get; set; }
     }
 
     public class AuthenticationService : IAuthenticationService
@@ -456,9 +466,42 @@ namespace WildwoodComponents.Blazor.Services
 
         public Task<AuthenticationResponse> AuthenticateWithProviderAsync(string providerName, string appId)
         {
-            // This would typically redirect to OAuth provider
-            // For now, throw not implemented
-            throw new NotImplementedException("OAuth provider authentication not yet implemented");
+            // The OAuth popup flow is handled by the component directly:
+            // 1. Call GetOAuthAuthorizeUrlAsync to get the authorization URL
+            // 2. Open the URL in a popup via JS interop (wildwoodOAuth.openPopup)
+            // 3. The callback endpoint handles code exchange and returns AuthenticationResponse
+            // 4. The popup posts the response back via postMessage
+            //
+            // This method is kept for interface compatibility. If you need to authenticate
+            // with a provider token directly, use LoginAsync with ProviderName/ProviderToken set.
+            throw new InvalidOperationException(
+                "OAuth authentication is handled via popup flow. " +
+                "Use GetOAuthAuthorizeUrlAsync + JS interop instead.");
+        }
+
+        public async Task<string?> GetOAuthAuthorizeUrlAsync(string providerName, string appId)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync(
+                    $"api/auth/oauth/{appId}/authorize?provider={Uri.EscapeDataString(providerName)}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<OAuthAuthorizeResponse>();
+                    return result?.AuthorizationUrl;
+                }
+
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Failed to get OAuth authorize URL for {Provider}. Status: {Status}, Response: {Response}",
+                    providerName, response.StatusCode, errorContent);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting OAuth authorize URL for {Provider}", providerName);
+                return null;
+            }
         }
 
         public async Task<List<AuthProvider>> GetAvailableProvidersAsync()

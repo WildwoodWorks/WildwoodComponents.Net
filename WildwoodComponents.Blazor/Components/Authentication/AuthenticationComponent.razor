@@ -872,10 +872,52 @@
     {
         await ExecuteAsync(async () =>
         {
-            var response = await AuthService.AuthenticateWithProviderAsync(provider.Name, AppId ?? "");
+            // Step 1: Get the OAuth authorization URL from the API
+            var authUrl = await AuthService.GetOAuthAuthorizeUrlAsync(provider.Name, AppId ?? "");
+            if (string.IsNullOrEmpty(authUrl))
+            {
+                throw new InvalidOperationException($"Failed to get authorization URL for {provider.DisplayName}. The provider may not be configured correctly.");
+            }
+
+            // Step 2: Open the OAuth popup and wait for the callback result
+            var callbackResult = await JS.InvokeAsync<System.Text.Json.JsonElement>("wildwoodOAuth.openPopup", authUrl);
+
+            // Step 3: Parse the callback result
+            var success = false;
+            if (callbackResult.TryGetProperty("success", out var successProp))
+            {
+                success = successProp.GetBoolean();
+            }
+
+            if (!success)
+            {
+                var errorMsg = "Authentication was cancelled or failed.";
+                if (callbackResult.TryGetProperty("error", out var errorProp))
+                {
+                    errorMsg = errorProp.GetString() ?? errorMsg;
+                }
+                throw new InvalidOperationException(errorMsg);
+            }
+
+            // Step 4: Deserialize the AuthenticationResponse from the callback
+            if (!callbackResult.TryGetProperty("response", out var responseProp))
+            {
+                throw new InvalidOperationException("OAuth callback did not return an authentication response.");
+            }
+
+            var responseJson = responseProp.GetRawText();
+            var response = System.Text.Json.JsonSerializer.Deserialize<AuthenticationResponse>(responseJson, new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (response == null)
+            {
+                throw new InvalidOperationException("Failed to parse authentication response from OAuth callback.");
+            }
 
             // Check if disclaimer acceptance is required
-            if (response.RequiresDisclaimerAcceptance && response.PendingDisclaimers?.Any() == true)
+            if (response.RequiresDisclaimerAcceptance && response.PendingDisclaimers?.Count > 0)
             {
                 _pendingAuthResponse = response;
                 _pendingDisclaimers = response.PendingDisclaimers;
