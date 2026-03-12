@@ -152,11 +152,7 @@ namespace WildwoodComponents.Blazor.Services
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
                     _logger.LogError("AI API call failed: {StatusCode} - {Content}", response.StatusCode, errorContent);
-                    return new AIChatResponse
-                    {
-                        IsError = true,
-                        ErrorMessage = $"API call failed: {response.StatusCode}"
-                    };
+                    return ParseErrorResponse(response.StatusCode, errorContent);
                 }
             }
             catch (HttpRequestException) when (_authFailureFired)
@@ -210,11 +206,7 @@ namespace WildwoodComponents.Blazor.Services
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
                     _logger.LogError("AI API file call failed: {StatusCode} - {Content}", response.StatusCode, errorContent);
-                    return new AIChatResponse
-                    {
-                        IsError = true,
-                        ErrorMessage = $"API call failed: {response.StatusCode}"
-                    };
+                    return ParseErrorResponse(response.StatusCode, errorContent);
                 }
             }
             catch (HttpRequestException) when (_authFailureFired)
@@ -230,6 +222,76 @@ namespace WildwoodComponents.Blazor.Services
                     ErrorMessage = $"Network error: {ex.Message}"
                 };
             }
+        }
+
+        /// <summary>
+        /// Parses an API error response body to extract a user-friendly error message and error code.
+        /// Handles the structured error JSON format: { "error": "...", "limitCode": "...", "currentUsage": N, "maxValue": N, ... }
+        /// </summary>
+        private AIChatResponse ParseErrorResponse(System.Net.HttpStatusCode statusCode, string errorContent)
+        {
+            var response = new AIChatResponse { IsError = true };
+
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(errorContent) && errorContent.TrimStart().StartsWith("{"))
+                {
+                    using var doc = JsonDocument.Parse(errorContent);
+                    var root = doc.RootElement;
+
+                    // Extract error code (e.g., "AI_TOKENS", "AI_REQUESTS")
+                    if (root.TryGetProperty("limitCode", out var limitCode))
+                    {
+                        response.ErrorCode = limitCode.GetString();
+                    }
+
+                    // Build a user-friendly message from the structured error
+                    if (root.TryGetProperty("error", out var errorMsg))
+                    {
+                        var message = errorMsg.GetString() ?? $"API call failed: {statusCode}";
+
+                        // Append usage details if available
+                        if (root.TryGetProperty("currentUsage", out var usage) &&
+                            root.TryGetProperty("maxValue", out var maxVal))
+                        {
+                            var unit = root.TryGetProperty("unit", out var unitProp) ? unitProp.GetString() : "units";
+                            message += $" ({usage.GetInt64():N0}/{maxVal.GetInt64():N0} {unit})";
+                        }
+
+                        // Append period end if available
+                        if (root.TryGetProperty("periodEnd", out var periodEnd))
+                        {
+                            var periodEndStr = periodEnd.GetString();
+                            if (DateTime.TryParse(periodEndStr, out var periodEndDate))
+                            {
+                                message += $". Resets {periodEndDate:MMM d, yyyy}";
+                            }
+                        }
+
+                        response.ErrorMessage = message;
+                        return response;
+                    }
+
+                    // Fallback: try generic "message" or "statusMessage" fields
+                    if (root.TryGetProperty("statusMessage", out var statusMsg))
+                    {
+                        response.ErrorMessage = statusMsg.GetString() ?? $"API call failed: {statusCode}";
+                        return response;
+                    }
+                    if (root.TryGetProperty("message", out var msg))
+                    {
+                        response.ErrorMessage = msg.GetString() ?? $"API call failed: {statusCode}";
+                        return response;
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // Error body wasn't valid JSON - fall through to default
+            }
+
+            response.ErrorMessage = $"API call failed: {statusCode}";
+            return response;
         }
 
         public async Task<List<AIConfiguration>> GetConfigurationsAsync(string? configurationType = null)

@@ -550,6 +550,11 @@ namespace WildwoodComponents.Blazor.Models
         public DateTime CreatedAt { get; set; }
         public bool IsError { get; set; }
         public string? ErrorMessage { get; set; }
+        /// <summary>
+        /// Structured error code from the API (e.g., "AI_TOKENS", "RATE_LIMIT").
+        /// Allows callers to distinguish error types without parsing the message string.
+        /// </summary>
+        public string? ErrorCode { get; set; }
     }
 
     // Extension Methods Helper Class
