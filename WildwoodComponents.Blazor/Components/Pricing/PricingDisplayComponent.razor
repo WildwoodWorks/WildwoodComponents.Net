@@ -1,0 +1,184 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inherits BaseWildwoodComponent
+
+<div class="@GetRootCssClasses() ww-apptier-component ww-pricing-display @CssClass">
+    @* Header *@
+    @if (!string.IsNullOrEmpty(Title) || !string.IsNullOrEmpty(Subtitle))
+    {
+        <div class="ww-apptier-header-section">
+            @if (!string.IsNullOrEmpty(Title))
+            {
+                <h2 class="ww-apptier-title">@Title</h2>
+            }
+            @if (!string.IsNullOrEmpty(Subtitle))
+            {
+                <p class="ww-apptier-subtitle">@Subtitle</p>
+            }
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(ErrorMessage) && EnableErrorHandling)
+    {
+        <div class="ww-alert ww-alert-danger">@ErrorMessage</div>
+    }
+
+    @* Billing Toggle *@
+    @if (ShowBillingToggle && HasAnnualPricing())
+    {
+        <div class="ww-apptier-billing-toggle">
+            <span class="@(!_billingAnnual ? "ww-billing-active" : "")">Monthly</span>
+            <button type="button"
+                    class="ww-toggle @(_billingAnnual ? "ww-toggle-on" : "")"
+                    @onclick="ToggleBilling"
+                    aria-label="Toggle annual billing">
+                <span class="ww-toggle-slider"></span>
+            </button>
+            <span class="@(_billingAnnual ? "ww-billing-active" : "")">
+                Annual
+                @if (GetMaxAnnualDiscount() > 0)
+                {
+                    <span class="ww-badge ww-badge-success ww-badge-sm">Save up to @GetMaxAnnualDiscount()%</span>
+                }
+            </span>
+        </div>
+    }
+
+    @* Tiers Grid *@
+    @if (IsLoading && ShowLoadingStates)
+    {
+        <div class="ww-apptier-loading">
+            <div class="ww-spinner"></div>
+            <span>Loading plans...</span>
+        </div>
+    }
+    else
+    {
+        <div class="ww-tier-grid">
+            @foreach (var tier in _tiers)
+            {
+                var pricing = GetPricing(tier);
+                var discount = _billingAnnual ? GetAnnualDiscount(tier) : (int?)null;
+                var enterprise = IsEnterpriseTier(tier);
+
+                <div class="ww-tier-card @(tier.IsDefault ? "ww-tier-default" : "")">
+                    @if (tier.IsDefault)
+                    {
+                        <div class="ww-tier-default-badge">Popular</div>
+                    }
+                    <div class="ww-tier-header">
+                        @if (!string.IsNullOrEmpty(tier.IconClass))
+                        {
+                            <span class="ww-tier-icon @tier.IconClass"></span>
+                        }
+                        <h3>@tier.Name</h3>
+                        @if (!string.IsNullOrEmpty(tier.BadgeColor))
+                        {
+                            <span class="ww-badge ww-badge-@tier.BadgeColor">@tier.Status</span>
+                        }
+                        <div class="ww-tier-price">
+                            @if (enterprise)
+                            {
+                                <span class="ww-tier-price-amount">Custom</span>
+                            }
+                            else if (tier.IsFreeTier && pricing == null)
+                            {
+                                <span class="ww-tier-price-amount">Free</span>
+                            }
+                            else if (pricing != null)
+                            {
+                                <span class="ww-tier-price-amount">@FormatPrice(pricing.Price)</span>
+                                <span class="ww-tier-price-interval">/@(pricing.BillingFrequency?.ToLower() ?? "month")</span>
+                            }
+                        </div>
+                        @if (discount.HasValue && discount.Value > 0)
+                        {
+                            <div class="ww-tier-discount">Save @discount%</div>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(tier.Description))
+                    {
+                        <p class="ww-tier-description">@tier.Description</p>
+                    }
+
+                    @* Features *@
+                    @if (ShowFeatureComparison && tier.Features.Count > 0)
+                    {
+                        <ul class="ww-tier-features">
+                            @foreach (var f in tier.Features)
+                            {
+                                <li class="ww-tier-feature-item @(!f.IsEnabled ? "ww-tier-feature-disabled" : "")">
+                                    @if (f.IsEnabled)
+                                    {
+                                        <svg class="ww-tier-feature-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                            <polyline points="20 6 9 17 4 12" />
+                                        </svg>
+                                    }
+                                    else
+                                    {
+                                        <svg class="ww-tier-feature-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                            <line x1="18" y1="6" x2="6" y2="18" />
+                                            <line x1="6" y1="6" x2="18" y2="18" />
+                                        </svg>
+                                    }
+                                    <span>@(string.IsNullOrEmpty(f.DisplayName) ? f.FeatureCode : f.DisplayName)</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+
+                    @* Limits *@
+                    @if (ShowLimits && tier.Limits.Count > 0)
+                    {
+                        <div class="ww-tier-limits">
+                            @foreach (var l in tier.Limits)
+                            {
+                                <div class="ww-tier-limit-item">
+                                    <span class="ww-tier-limit-value">@l.MaxValueDisplay</span>
+                                    <span class="ww-tier-limit-name">
+                                        @(string.IsNullOrEmpty(l.DisplayName) ? l.LimitCode : l.DisplayName)
+                                        @if (!string.IsNullOrEmpty(l.Unit))
+                                        {
+                                            <text> (@l.Unit)</text>
+                                        }
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <div class="ww-tier-footer">
+                        @if (enterprise && !string.IsNullOrEmpty(EnterpriseContactUrl))
+                        {
+                            <a href="@EnterpriseContactUrl"
+                               class="ww-btn ww-btn-outline ww-btn-block"
+                               @(EnterpriseContactUrl.StartsWith("http") ? "target=\"_blank\" rel=\"noopener noreferrer\"" : "")>
+                                Contact Sales
+                            </a>
+                        }
+                        else if (enterprise)
+                        {
+                            <button type="button" class="ww-btn ww-btn-outline ww-btn-block" @onclick="() => HandleSelectTier(tier)">
+                                Contact Sales
+                            </button>
+                        }
+                        else if (tier.IsFreeTier)
+                        {
+                            <button type="button" class="ww-btn @(tier.IsDefault ? "ww-btn-primary" : "ww-btn-outline") ww-btn-block" @onclick="() => HandleSelectTier(tier)">
+                                Get Started
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="ww-btn @(tier.IsDefault ? "ww-btn-primary" : "ww-btn-outline") ww-btn-block" @onclick="() => HandleSelectTier(tier)">
+                                Subscribe
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>

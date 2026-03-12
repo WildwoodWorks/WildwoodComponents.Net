@@ -1,0 +1,99 @@
+/* OverageSummaryComponent - Scoped CSS
+   New component (no JS counterpart CSS exists) */
+
+::deep .ww-overage-summary {
+    background: var(--ww-warning-bg, rgba(255, 193, 7, 0.15));
+    border: 1px solid var(--ww-warning, #ffc107);
+    border-radius: var(--ww-border-radius, 0.375rem);
+    padding: 1.25rem;
+}
+
+::deep .ww-overage-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    color: var(--ww-warning-text, #664d03);
+}
+
+::deep .ww-overage-header svg {
+    flex-shrink: 0;
+    color: var(--ww-warning, #ffc107);
+}
+
+::deep .ww-overage-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ww-warning-text, #664d03);
+}
+
+/* Overage items */
+::deep .ww-overage-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+::deep .ww-overage-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+::deep .ww-overage-item:last-child {
+    border-bottom: none;
+}
+
+::deep .ww-overage-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+::deep .ww-overage-item-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-overage-item-count {
+    font-size: 0.8rem;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+::deep .ww-overage-item-cost {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--ww-danger, #dc3545);
+}
+
+/* Total */
+::deep .ww-overage-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.75rem;
+    border-top: 2px solid rgba(0, 0, 0, 0.12);
+    margin-top: 0.25rem;
+}
+
+::deep .ww-overage-total-label {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-overage-total-amount {
+    font-weight: 700;
+    font-size: 1.125rem;
+    color: var(--ww-danger, #dc3545);
+}
+
+/* Rate note */
+::deep .ww-overage-rate-note {
+    margin: 0.5rem 0 0;
+}

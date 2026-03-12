@@ -1,0 +1,59 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inherits BaseWildwoodComponent
+
+@* Only render if there are actual overages *@
+@if (_overageItems.Count > 0)
+{
+    <div class="@GetRootCssClasses() ww-overage-summary @CssClass">
+        <div class="ww-overage-header">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <h4 class="ww-overage-title">Overage Charges</h4>
+        </div>
+
+        <div class="ww-overage-items">
+            @foreach (var item in _overageItems)
+            {
+                <div class="ww-overage-item">
+                    <div class="ww-overage-item-info">
+                        <span class="ww-overage-item-name">@item.DisplayName</span>
+                        <span class="ww-overage-item-count">
+                            @item.OverageCount.ToString("N0") over limit
+                            @if (!string.IsNullOrEmpty(item.Unit))
+                            {
+                                <text> (@item.Unit)</text>
+                            }
+                        </span>
+                    </div>
+                    <div class="ww-overage-item-cost">
+                        $@item.Cost.ToString("N2")
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="ww-overage-total">
+            <span class="ww-overage-total-label">Estimated Total</span>
+            <span class="ww-overage-total-amount">$@_totalCost.ToString("N2")</span>
+        </div>
+
+        <p class="ww-overage-rate-note ww-text-muted ww-text-sm">
+            Rate: $@OverageRate.ToString("N4") per unit
+        </p>
+
+        @if (OnViewDetails.HasDelegate)
+        {
+            <button type="button" class="ww-btn ww-btn-link ww-btn-sm" @onclick="OnViewDetails">
+                View Details
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6" />
+                </svg>
+            </button>
+        }
+    </div>
+}

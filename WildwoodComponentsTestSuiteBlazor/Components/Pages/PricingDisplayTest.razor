@@ -1,0 +1,128 @@
+@page "/test/pricing-display"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Pricing
+@using WildwoodComponents.Blazor.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+
+<ComponentTestPage PageTitle="PricingDisplayComponent Test" ComponentName="PricingDisplayComponent" IconClass="fas fa-tags"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">AppId</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Title</label>
+            <input class="form-control form-control-sm" @bind="title" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Subtitle</label>
+            <input class="form-control form-control-sm" @bind="subtitle" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Currency</label>
+            <select class="form-select form-select-sm" @bind="currency">
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+                <option value="JPY">JPY</option>
+                <option value="INR">INR</option>
+            </select>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Enterprise Contact URL</label>
+            <input class="form-control form-control-sm" @bind="enterpriseContactUrl" />
+        </div>
+        <hr class="my-2" />
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="showBillingToggle" id="chkPricingBilling" />
+            <label class="form-check-label small" for="chkPricingBilling">Show Billing Toggle</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="showFeatureComparison" id="chkPricingFeatures" />
+            <label class="form-check-label small" for="chkPricingFeatures">Show Feature Comparison</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="showLimits" id="chkPricingLimits" />
+            <label class="form-check-label small" for="chkPricingLimits">Show Limits</label>
+        </div>
+    </Settings>
+    <Component>
+        <PricingDisplayComponent AppId="@appId"
+                                 Title="@title"
+                                 Subtitle="@subtitle"
+                                 Currency="@currency"
+                                 ShowBillingToggle="@showBillingToggle"
+                                 ShowFeatureComparison="@showFeatureComparison"
+                                 ShowLimits="@showLimits"
+                                 EnterpriseContactUrl="@enterpriseContactUrl"
+                                 OnSelectTier="HandleTierSelected"
+                                 OnError="HandleError" />
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string appId = "";
+    private string title = "Choose Your Plan";
+    private string subtitle = "Get started with the plan that fits your needs";
+    private string currency = "USD";
+    private string enterpriseContactUrl = "";
+    private bool showBillingToggle = true;
+    private bool showFeatureComparison = true;
+    private bool showLimits = true;
+    private List<EventEntry> events = new();
+
+    protected override void OnInitialized()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        LifecycleTracker.TrackInitialized("PricingDisplayComponent");
+    }
+
+    private void HandleTierSelected(PricingTierSelectedEventArgs args)
+    {
+        var pricing = args.SelectedPricing;
+        var msg = $"Tier selected: {args.Tier.Name} (ID: {args.Tier.Id})" +
+                  (pricing != null ? $" - {pricing.Price:C}/{pricing.BillingFrequency}" : " - No pricing");
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("PricingDisplayComponent", "OnSelectTier", msg);
+        StateHasChanged();
+    }
+
+    private void HandleError(ComponentErrorEventArgs args)
+    {
+        var msg = $"Error: {args.Exception.Message}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackError("PricingDisplayComponent", args.Exception.Message);
+        StateHasChanged();
+    }
+
+    private void ApplySettings() { StateHasChanged(); }
+
+    private void ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        title = "Choose Your Plan";
+        subtitle = "Get started with the plan that fits your needs";
+        currency = "USD";
+        enterpriseContactUrl = "";
+        showBillingToggle = true;
+        showFeatureComparison = true;
+        showLimits = true;
+        events.Clear();
+        StateHasChanged();
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}

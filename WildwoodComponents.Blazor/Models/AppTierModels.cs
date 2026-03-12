@@ -24,5 +24,11 @@ namespace WildwoodComponents.Blazor.Models
         public string Action { get; set; } = string.Empty; // "subscribed", "changed", "cancelled"
     }
 
+    public class PricingTierSelectedEventArgs : EventArgs
+    {
+        public AppTierModel Tier { get; set; } = default!;
+        public AppTierPricingModel? SelectedPricing { get; set; }
+    }
+
     #endregion
 }

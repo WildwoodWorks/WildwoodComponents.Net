@@ -1,0 +1,114 @@
+@page "/test/signup-subscription"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Registration
+@using WildwoodComponents.Blazor.Models
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+
+<ComponentTestPage PageTitle="SignupWithSubscriptionComponent Test" ComponentName="SignupWithSubscriptionComponent" IconClass="fas fa-user-plus"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">AppId</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Pre-Selected Tier ID</label>
+            <input class="form-control form-control-sm" @bind="preSelectedTierId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Registration Token</label>
+            <input class="form-control form-control-sm" @bind="registrationToken" />
+        </div>
+        <hr class="my-2" />
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="requireToken" id="chkSignupRequireToken" />
+            <label class="form-check-label small" for="chkSignupRequireToken">Require Token</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="allowOpenRegistration" id="chkSignupAllowOpen" />
+            <label class="form-check-label small" for="chkSignupAllowOpen">Allow Open Registration</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="skipTierSelection" id="chkSignupSkipTier" />
+            <label class="form-check-label small" for="chkSignupSkipTier">Skip Tier Selection</label>
+        </div>
+    </Settings>
+    <Component>
+        <SignupWithSubscriptionComponent AppId="@appId"
+                                          PreSelectedTierId="@preSelectedTierId"
+                                          RegistrationToken="@registrationToken"
+                                          RequireToken="@requireToken"
+                                          AllowOpenRegistration="@allowOpenRegistration"
+                                          SkipTierSelection="@skipTierSelection"
+                                          OnComplete="HandleComplete"
+                                          OnCancel="HandleCancel"
+                                          OnError="HandleError" />
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string appId = "";
+    private string preSelectedTierId = "";
+    private string registrationToken = "";
+    private bool requireToken = false;
+    private bool allowOpenRegistration = true;
+    private bool skipTierSelection = false;
+    private List<EventEntry> events = new();
+
+    protected override void OnInitialized()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        LifecycleTracker.TrackInitialized("SignupWithSubscriptionComponent");
+    }
+
+    private void HandleComplete()
+    {
+        var msg = "Signup flow completed successfully";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("SignupWithSubscriptionComponent", "OnComplete", msg);
+        StateHasChanged();
+    }
+
+    private void HandleCancel()
+    {
+        var msg = "Signup flow cancelled";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("SignupWithSubscriptionComponent", "OnCancel", msg);
+        StateHasChanged();
+    }
+
+    private void HandleError(ComponentErrorEventArgs args)
+    {
+        var msg = $"Error: {args.Exception.Message}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackError("SignupWithSubscriptionComponent", args.Exception.Message);
+        StateHasChanged();
+    }
+
+    private void ApplySettings() { StateHasChanged(); }
+
+    private void ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        preSelectedTierId = "";
+        registrationToken = "";
+        requireToken = false;
+        allowOpenRegistration = true;
+        skipTierSelection = false;
+        events.Clear();
+        StateHasChanged();
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}

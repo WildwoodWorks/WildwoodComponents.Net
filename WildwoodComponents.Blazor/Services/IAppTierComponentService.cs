@@ -23,6 +23,12 @@ namespace WildwoodComponents.Blazor.Services
         Task<bool> SubscribeToAddOnAsync(string appId, string addOnId, string? pricingId, string? paymentTransactionId);
         Task<bool> CancelAddOnSubscriptionAsync(string subscriptionId);
 
+        // Public tier browsing (no auth required)
+        Task<List<AppTierModel>> GetPublicTiersAsync(string appId);
+
+        // Usage tracking
+        Task<List<AppTierLimitStatusModel>> GetAllLimitStatusesAsync(string appId);
+
         // Feature gating
         Task<Dictionary<string, bool>> GetUserFeaturesAsync(string appId);
         Task<AppFeatureCheckResultModel?> CheckFeatureAsync(string appId, string featureCode);

@@ -1,0 +1,123 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.AppTier
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inherits BaseWildwoodComponent
+
+<div class="@GetRootCssClasses() ww-signup-subscription @CssClass">
+    @* Step Indicator *@
+    @if (_currentStep != SignupStep.Success)
+    {
+        <div class="ww-step-indicator">
+            <div class="ww-steps">
+                @for (int i = 0; i < _stepConfig.Count; i++)
+                {
+                    var stepDef = _stepConfig[i];
+                    var isActive = GetStepIndex(_currentStep) >= i;
+                    var isCompleted = GetStepIndex(_currentStep) > i;
+
+                    <div class="ww-step-group">
+                        @if (i > 0)
+                        {
+                            <div class="ww-step-connector @(IsStepCompleted(_stepConfig[i - 1].Key) ? "ww-step-connector-completed" : "")"></div>
+                        }
+                        <div class="ww-step @(isActive ? "ww-step-active" : "") @(isCompleted ? "ww-step-completed" : "")">
+                            <span class="ww-step-number">
+                                @if (isCompleted)
+                                {
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                }
+                                else
+                                {
+                                    @stepDef.Number
+                                }
+                            </span>
+                            <span class="ww-step-label">@stepDef.Label</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @* Step 1: Registration *@
+    @if (_currentStep == SignupStep.Register)
+    {
+        <div class="ww-signup-step">
+            <TokenRegistrationComponent
+                AppId="@AppId"
+                Token="@RegistrationToken"
+                RequireToken="@RequireToken"
+                AllowOpenRegistration="@AllowOpenRegistration"
+                AutoLogin="true"
+                OnAutoLoginSuccess="HandleAutoLoginSuccess"
+                OnCancel="HandleCancel" />
+        </div>
+    }
+
+    @* Step 2: Tier Selection *@
+    @if (_currentStep == SignupStep.SelectTier)
+    {
+        <div class="ww-signup-step">
+            <AppTierComponent
+                AppId="@AppId"
+                Title="Choose Your Plan"
+                Subtitle="Select a plan that fits your needs. You can always change later."
+                ShowCurrentPlan="false"
+                OnSubscriptionChanged="HandleSubscriptionChanged"
+                OnError="HandleTierError" />
+            <div class="ww-signup-step-nav">
+                <button type="button" class="ww-btn ww-btn-link" @onclick="HandleBack">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                    Back
+                </button>
+                @if (OnCancel.HasDelegate)
+                {
+                    <button type="button" class="ww-btn ww-btn-link" @onclick="OnCancel">
+                        Cancel
+                    </button>
+                }
+            </div>
+        </div>
+    }
+
+    @* Step 3: Success *@
+    @if (_currentStep == SignupStep.Success)
+    {
+        <div class="ww-signup-step ww-signup-success">
+            <div class="ww-reg-success-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+            </div>
+            <h3>You're All Set!</h3>
+            <p class="ww-text-muted">
+                @if (SkipTierSelection)
+                {
+                    <text>Your account has been created successfully.</text>
+                }
+                else
+                {
+                    <text>Your account has been created and your plan is active.</text>
+                }
+            </p>
+            <button type="button" class="ww-btn ww-btn-primary ww-btn-lg" @onclick="HandleComplete">
+                Get Started
+            </button>
+        </div>
+    }
+
+    @* Error Display *@
+    @if (!string.IsNullOrEmpty(ErrorMessage) && EnableErrorHandling)
+    {
+        <div class="ww-alert ww-alert-danger">
+            @ErrorMessage
+            <button type="button" class="ww-btn-close" @onclick="ClearError"></button>
+        </div>
+    }
+</div>

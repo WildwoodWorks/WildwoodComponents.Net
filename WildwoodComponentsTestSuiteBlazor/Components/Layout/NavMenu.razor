@@ -108,6 +108,29 @@
             </li>
         </ul>
     </li>
+
+    <!-- Tiers & Usage -->
+    <li class="@GetParentActiveClass(new[] { "/test/pricing-display", "/test/app-tier", "/test/usage-dashboard", "/test/signup-subscription" })">
+        <a href="#tiersSubmenu" data-bs-toggle="collapse"
+           aria-expanded="@IsParentExpanded(new[] { "/test/pricing-display", "/test/app-tier", "/test/usage-dashboard", "/test/signup-subscription" })"
+           class="dropdown-toggle">
+            <i class="fas fa-layer-group me-2"></i><span>Tiers &amp; Usage</span>
+        </a>
+        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/pricing-display", "/test/app-tier", "/test/usage-dashboard", "/test/signup-subscription" })" id="tiersSubmenu">
+            <li class="@GetActiveClass("/test/pricing-display")">
+                <a href="/test/pricing-display"><span>PricingDisplay</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/app-tier")">
+                <a href="/test/app-tier"><span>AppTier</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/usage-dashboard")">
+                <a href="/test/usage-dashboard"><span>UsageDashboard</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/signup-subscription")">
+                <a href="/test/signup-subscription"><span>SignupWithSubscription</span></a>
+            </li>
+        </ul>
+    </li>
 </ul>
 
 @code {

@@ -95,6 +95,56 @@ namespace WildwoodComponents.Blazor.Services
             return new List<AppTierAddOnModel>();
         }
 
+        public async Task<List<AppTierModel>> GetPublicTiersAsync(string appId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/public");
+                var response = await _httpClient.GetAsync(url);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<List<AppTierModel>>(JsonOptions);
+                    return result ?? new List<AppTierModel>();
+                }
+
+                _logger.LogWarning("Failed to get public tiers for app {AppId}: {StatusCode}", appId, response.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting public tiers for app {AppId}", appId);
+            }
+
+            return new List<AppTierModel>();
+        }
+
+        #endregion
+
+        #region Usage Tracking
+
+        public async Task<List<AppTierLimitStatusModel>> GetAllLimitStatusesAsync(string appId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/limit-statuses");
+                var response = await _httpClient.GetAsync(url);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<List<AppTierLimitStatusModel>>(JsonOptions);
+                    return result ?? new List<AppTierLimitStatusModel>();
+                }
+
+                _logger.LogWarning("Failed to get limit statuses for app {AppId}: {StatusCode}", appId, response.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting limit statuses for app {AppId}", appId);
+            }
+
+            return new List<AppTierLimitStatusModel>();
+        }
+
         #endregion
 
         #region User Subscription

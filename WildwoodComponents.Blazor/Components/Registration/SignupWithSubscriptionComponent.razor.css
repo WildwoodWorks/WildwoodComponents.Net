@@ -1,0 +1,119 @@
+/* SignupWithSubscriptionComponent - Scoped CSS
+   Step indicator styles from JS SDK components.css
+   Success/navigation styles are component-specific */
+
+/* Step Indicator */
+::deep .ww-step-indicator {
+    margin-bottom: 1.5rem;
+}
+
+::deep .ww-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+::deep .ww-step-group {
+    display: flex;
+    align-items: center;
+}
+
+::deep .ww-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+::deep .ww-step-number {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: var(--ww-bg-tertiary, #e9ecef);
+    color: var(--ww-text-secondary, #495057);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+::deep .ww-step-active .ww-step-number {
+    background-color: var(--ww-primary, #D4882C);
+    color: var(--ww-text-inverse, white);
+}
+
+::deep .ww-step-completed .ww-step-number {
+    background-color: var(--ww-success, #28a745);
+    color: var(--ww-text-inverse, white);
+}
+
+::deep .ww-step-label {
+    font-size: 0.75rem;
+    color: var(--ww-text-muted, #6c757d);
+    transition: color 0.2s;
+}
+
+::deep .ww-step-active .ww-step-label {
+    color: var(--ww-primary, #D4882C);
+    font-weight: 600;
+}
+
+::deep .ww-step-connector {
+    width: 40px;
+    height: 2px;
+    background-color: var(--ww-bg-tertiary, #e9ecef);
+    margin: 0 0.5rem;
+    margin-bottom: 1.25rem;
+    transition: background-color 0.2s;
+}
+
+::deep .ww-step-connector-completed {
+    background-color: var(--ww-success, #28a745);
+}
+
+/* Signup Steps */
+::deep .ww-signup-step {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+::deep .ww-signup-step-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--ww-border-color, #dee2e6);
+}
+
+/* Success Step */
+::deep .ww-signup-success {
+    text-align: center;
+    padding: 2rem 1.5rem;
+}
+
+::deep .ww-signup-success .ww-reg-success-icon {
+    margin-bottom: 1rem;
+    color: var(--ww-success, #28a745);
+}
+
+::deep .ww-signup-success h3 {
+    color: var(--ww-text-primary, #212529);
+    margin: 0 0 0.5rem;
+    font-size: 1.5rem;
+}
+
+/* Responsive */
+@media (max-width: 576px) {
+    ::deep .ww-step-connector {
+        width: 24px;
+    }
+
+    ::deep .ww-step-number {
+        width: 28px;
+        height: 28px;
+        font-size: 0.8rem;
+    }
+}

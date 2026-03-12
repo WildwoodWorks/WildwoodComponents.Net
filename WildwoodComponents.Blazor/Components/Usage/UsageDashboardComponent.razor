@@ -1,0 +1,166 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@inherits BaseWildwoodComponent
+
+<div class="@GetRootCssClasses() ww-usage-dashboard @CssClass">
+    @if (IsLoading && ShowLoadingStates && _limitStatuses.Count == 0)
+    {
+        <div class="ww-usage-loading">
+            <div class="ww-spinner"></div>
+            <span>Loading usage data...</span>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(ErrorMessage) && EnableErrorHandling)
+    {
+        <div class="ww-alert ww-alert-danger">
+            <p>@ErrorMessage</p>
+            <button type="button" class="ww-btn ww-btn-sm ww-btn-outline" @onclick="RefreshData">
+                Retry
+            </button>
+        </div>
+    }
+    else
+    {
+        @* Header *@
+        @if (!string.IsNullOrEmpty(Title) || !string.IsNullOrEmpty(Subtitle) || _subscription != null)
+        {
+            <div class="ww-usage-header">
+                <div class="ww-usage-header-text">
+                    @if (!string.IsNullOrEmpty(Title))
+                    {
+                        <h2 class="ww-usage-title">@Title</h2>
+                    }
+                    @if (!string.IsNullOrEmpty(Subtitle))
+                    {
+                        <p class="ww-usage-subtitle">@Subtitle</p>
+                    }
+                </div>
+                @if (_subscription != null)
+                {
+                    <div class="ww-usage-tier-badge">
+                        <span class="ww-badge @(_subscription.IsFreeTier ? "ww-badge-secondary" : "ww-badge-primary")">
+                            @_subscription.TierName
+                        </span>
+                    </div>
+                }
+            </div>
+        }
+
+        @* Limit Progress Bars *@
+        @if (_limitStatuses.Count == 0)
+        {
+            <div class="ww-usage-empty">
+                <p class="ww-text-muted">No usage limits configured for your current plan.</p>
+            </div>
+        }
+        else
+        {
+            <div class="ww-usage-limits">
+                @foreach (var status in _limitStatuses)
+                {
+                    var percent = status.IsUnlimited ? 0 : Math.Min(status.UsagePercent, 100);
+                    var displayPercent = status.IsUnlimited ? (double?)null : status.UsagePercent;
+                    var barClass = GetBarClass(status.UsagePercent, status.IsExceeded);
+
+                    <div class="ww-usage-limit-item">
+                        <div class="ww-usage-limit-header">
+                            <span class="ww-usage-limit-label">
+                                @status.DisplayName
+                                @if (!string.IsNullOrEmpty(status.Unit))
+                                {
+                                    <text> (@status.Unit)</text>
+                                }
+                            </span>
+                            <span class="ww-usage-limit-value">
+                                @status.CurrentUsage.ToString("N0")
+                                /
+                                @(status.IsUnlimited ? "Unlimited" : status.MaxValue.ToString("N0"))
+                                @if (displayPercent.HasValue)
+                                {
+                                    <span class="ww-usage-limit-percent">
+                                        (@(Math.Round(displayPercent.Value))%)
+                                    </span>
+                                }
+                            </span>
+                        </div>
+
+                        @if (!status.IsUnlimited)
+                        {
+                            <div class="ww-usage-bar-track">
+                                <div class="ww-usage-bar-fill @barClass"
+                                     style="width: @(Math.Min(percent, 100).ToString(System.Globalization.CultureInfo.InvariantCulture))%"
+                                     role="progressbar"
+                                     aria-valuenow="@status.CurrentUsage"
+                                     aria-valuemin="0"
+                                     aria-valuemax="@status.MaxValue"
+                                     aria-label="@status.DisplayName: @(Math.Round(status.UsagePercent))%">
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="ww-usage-bar-track">
+                                <div class="ww-usage-bar-fill ww-usage-bar-unlimited" style="width: 100%"></div>
+                            </div>
+                        }
+
+                        @* Overage indicator for soft caps *@
+                        @if (ShowOverageInfo && status.IsExceeded && !status.IsHardBlocked)
+                        {
+                            <div class="ww-usage-overage-indicator">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                    <line x1="12" y1="9" x2="12" y2="13" />
+                                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                                </svg>
+                                <span>Overage: @((status.CurrentUsage - status.MaxValue).ToString("N0")) over limit</span>
+                            </div>
+                        }
+
+                        @* Hard block indicator *@
+                        @if (status.IsExceeded && status.IsHardBlocked)
+                        {
+                            <div class="ww-usage-blocked-indicator">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                                </svg>
+                                <span>Limit reached</span>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(status.StatusMessage))
+                        {
+                            <p class="ww-usage-limit-message ww-text-muted ww-text-sm">@status.StatusMessage</p>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        @* Upgrade CTA *@
+        @if (_anyAtWarning && OnUpgradeClick.HasDelegate)
+        {
+            <div class="ww-usage-upgrade-cta">
+                <div class="ww-usage-upgrade-message">
+                    @if (_anyOverage)
+                    {
+                        <text>You have exceeded one or more usage limits.</text>
+                    }
+                    else
+                    {
+                        <text>You are approaching your usage limits.</text>
+                    }
+                </div>
+                <button type="button" class="ww-btn ww-btn-primary" @onclick="OnUpgradeClick">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="19" x2="12" y2="5" />
+                        <polyline points="5 12 12 5 19 12" />
+                    </svg>
+                    Upgrade Plan
+                </button>
+            </div>
+        }
+    }
+</div>

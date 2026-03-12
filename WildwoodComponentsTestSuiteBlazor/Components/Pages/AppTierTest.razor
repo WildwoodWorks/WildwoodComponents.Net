@@ -1,0 +1,134 @@
+@page "/test/app-tier"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.AppTier
+@using WildwoodComponents.Blazor.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="AppTierComponent Test" ComponentName="AppTierComponent" IconClass="fas fa-layer-group"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">AppId</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Title</label>
+            <input class="form-control form-control-sm" @bind="title" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Subtitle</label>
+            <input class="form-control form-control-sm" @bind="subtitle" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Currency</label>
+            <select class="form-select form-select-sm" @bind="currency">
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+            </select>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Annual Discount (%)</label>
+            <input class="form-control form-control-sm" type="number" @bind="annualDiscount" />
+        </div>
+        <hr class="my-2" />
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="showBillingToggle" id="chkTierBilling" />
+            <label class="form-check-label small" for="chkTierBilling">Show Billing Toggle</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="showCurrentPlan" id="chkTierCurrentPlan" />
+            <label class="form-check-label small" for="chkTierCurrentPlan">Show Current Plan</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="showAddOns" id="chkTierAddOns" />
+            <label class="form-check-label small" for="chkTierAddOns">Show Add-Ons</label>
+        </div>
+    </Settings>
+    <Component>
+        <AppTierComponent AppId="@appId"
+                           Title="@title"
+                           Subtitle="@subtitle"
+                           Currency="@currency"
+                           AnnualDiscount="@annualDiscount"
+                           ShowBillingToggle="@showBillingToggle"
+                           ShowCurrentPlan="@showCurrentPlan"
+                           ShowAddOns="@showAddOns"
+                           OnTierSelected="HandleTierSelected"
+                           OnSubscriptionChanged="HandleSubscriptionChanged"
+                           OnError="HandleError" />
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string appId = "";
+    private string title = "Choose Your Plan";
+    private string subtitle = "Select the plan that best fits your needs";
+    private string currency = "USD";
+    private int annualDiscount = 20;
+    private bool showBillingToggle = true;
+    private bool showCurrentPlan = true;
+    private bool showAddOns = true;
+    private List<EventEntry> events = new();
+
+    protected override void OnInitialized()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        LifecycleTracker.TrackInitialized("AppTierComponent");
+    }
+
+    private void HandleTierSelected(AppTierSelectedEventArgs args)
+    {
+        var msg = $"Tier selected: {args.TierName} (ID: {args.TierId}), Price: {args.Price:C}, Free: {args.IsFreeTier}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("AppTierComponent", "OnTierSelected", msg);
+        StateHasChanged();
+    }
+
+    private void HandleSubscriptionChanged(AppTierSubscriptionChangedEventArgs args)
+    {
+        var msg = $"Subscription {args.Action}: {args.TierName} (ID: {args.SubscriptionId})";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackCallback("AppTierComponent", "OnSubscriptionChanged", msg);
+        StateHasChanged();
+    }
+
+    private void HandleError(ComponentErrorEventArgs args)
+    {
+        var msg = $"Error: {args.Exception.Message}";
+        events.Insert(0, new EventEntry(DateTime.Now, msg));
+        LifecycleTracker.TrackError("AppTierComponent", args.Exception.Message);
+        StateHasChanged();
+    }
+
+    private void ApplySettings() { StateHasChanged(); }
+
+    private void ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        title = "Choose Your Plan";
+        subtitle = "Select the plan that best fits your needs";
+        currency = "USD";
+        annualDiscount = 20;
+        showBillingToggle = true;
+        showCurrentPlan = true;
+        showAddOns = true;
+        events.Clear();
+        StateHasChanged();
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
