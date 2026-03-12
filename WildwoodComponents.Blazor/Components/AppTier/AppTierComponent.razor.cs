@@ -19,6 +19,7 @@ namespace WildwoodComponents.Blazor.Components.AppTier
 
         [Parameter] public string? Title { get; set; }
         [Parameter] public string? Subtitle { get; set; }
+        [Parameter] public string? PreSelectedTierId { get; set; }
         [Parameter] public bool ShowAddOns { get; set; } = true;
         [Parameter] public bool ShowBillingToggle { get; set; } = true;
         [Parameter] public bool ShowCurrentPlan { get; set; } = true;
@@ -449,6 +450,11 @@ namespace WildwoodComponents.Blazor.Components.AppTier
         {
             if (_currentSubscription == null) return false;
             return _currentSubscription.AppTierId == tier.Id && _currentSubscription.IsActive;
+        }
+
+        private bool IsTierPreSelected(AppTierModel tier)
+        {
+            return !string.IsNullOrEmpty(PreSelectedTierId) && PreSelectedTierId == tier.Id;
         }
 
         private bool HasMonthlyAndAnnualPricing()

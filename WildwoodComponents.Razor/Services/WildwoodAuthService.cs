@@ -86,6 +86,7 @@ public class WildwoodAuthService : IWildwoodAuthService
             var apiRequest = new WildwoodRegisterRequest
             {
                 Email = request.Email,
+                Username = request.Username,
                 Password = request.Password,
                 ConfirmPassword = request.ConfirmPassword,
                 FirstName = request.FirstName ?? string.Empty,

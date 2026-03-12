@@ -16,6 +16,10 @@
             <input class="form-control form-control-sm" @bind="appId" />
         </div>
         <div class="mb-2">
+            <label class="form-label">Pre-Selected Tier ID</label>
+            <input class="form-control form-control-sm" @bind="preSelectedTierId" />
+        </div>
+        <div class="mb-2">
             <label class="form-label">Title</label>
             <input class="form-control form-control-sm" @bind="title" />
         </div>
@@ -51,6 +55,7 @@
     </Settings>
     <Component>
         <AppTierComponent AppId="@appId"
+                           PreSelectedTierId="@preSelectedTierId"
                            Title="@title"
                            Subtitle="@subtitle"
                            Currency="@currency"
@@ -75,6 +80,7 @@
 
 @code {
     private string appId = "";
+    private string preSelectedTierId = "";
     private string title = "Choose Your Plan";
     private string subtitle = "Select the plan that best fits your needs";
     private string currency = "USD";
@@ -119,6 +125,7 @@
     private void ResetSettings()
     {
         appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        preSelectedTierId = "";
         title = "Choose Your Plan";
         subtitle = "Select the plan that best fits your needs";
         currency = "USD";

@@ -64,7 +64,8 @@
             <AppTierComponent
                 AppId="@AppId"
                 Title="Choose Your Plan"
-                Subtitle="Select a plan that fits your needs. You can always change later."
+                Subtitle="@(_selectedTierId != null ? "Confirm your selected plan or choose a different one." : "Select a plan that fits your needs. You can always change later.")"
+                PreSelectedTierId="@_selectedTierId"
                 ShowCurrentPlan="false"
                 OnSubscriptionChanged="HandleSubscriptionChanged"
                 OnError="HandleTierError" />

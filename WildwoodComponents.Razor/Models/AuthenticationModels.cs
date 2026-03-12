@@ -29,6 +29,11 @@ public class RegisterRequest
     [Required, EmailAddress]
     public string Email { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Unique username for the account. Falls back to Email if not provided.
+    /// </summary>
+    public string? Username { get; set; }
+
     [Required, MinLength(8)]
     public string Password { get; set; } = string.Empty;
 

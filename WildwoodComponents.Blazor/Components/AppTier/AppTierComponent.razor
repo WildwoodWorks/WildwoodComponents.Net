@@ -57,11 +57,18 @@
                 @foreach (var tier in _tiers)
                 {
                     var isCurrentPlan = IsTierCurrentPlan(tier);
+                    var isPreSelected = IsTierPreSelected(tier);
                     var price = GetDisplayPrice(tier, _selectedBillingCycle, AnnualDiscount);
 
                     <div class="col-md-4 mb-4">
-                        <div class="tier-card card h-100 @(tier.IsDefault ? "border-primary recommended" : "") @(isCurrentPlan ? "current-plan" : "")">
-                            @if (tier.IsDefault && !isCurrentPlan)
+                        <div class="tier-card card h-100 @(tier.IsDefault ? "border-primary recommended" : "") @(isCurrentPlan ? "current-plan" : "") @(isPreSelected ? "pre-selected" : "")">
+                            @if (isPreSelected && !isCurrentPlan)
+                            {
+                                <div class="tier-badge bg-info text-white text-center py-1">
+                                    <small>Your Selection</small>
+                                </div>
+                            }
+                            else if (tier.IsDefault && !isCurrentPlan)
                             {
                                 <div class="tier-badge @GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
                                     <small>Recommended</small>
@@ -151,9 +158,13 @@
                                 }
                                 else
                                 {
-                                    <button class="btn @(tier.IsDefault ? "btn-primary" : "btn-outline-primary") w-100"
+                                    <button class="btn @(isPreSelected || tier.IsDefault ? "btn-primary" : "btn-outline-primary") w-100"
                                             @onclick="() => SelectTier(tier)">
-                                        @if (tier.IsFreeTier)
+                                        @if (isPreSelected)
+                                        {
+                                            <text>Continue with This Plan</text>
+                                        }
+                                        else if (tier.IsFreeTier)
                                         {
                                             <text>Get Started Free</text>
                                         }
