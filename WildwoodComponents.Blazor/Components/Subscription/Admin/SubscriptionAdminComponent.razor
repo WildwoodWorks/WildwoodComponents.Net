@@ -1,0 +1,174 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Shared.Models
+@inherits BaseWildwoodComponent
+
+@if (string.IsNullOrEmpty(AppId))
+{
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle me-2"></i>AppId is required.
+    </div>
+}
+else if (ShouldShowSinglePanel())
+{
+    @* Single panel mode - render only the requested panel *@
+    @switch (DisplayMode)
+    {
+        case SubscriptionDisplayMode.Subscription:
+            <SubscriptionStatusPanel @ref="_statusPanel"
+                                     AppId="@AppId"
+                                     CompanyId="@CompanyId"
+                                     Subscription="@_subscription"
+                                     OnCancelRequested="HandleCancelRequested" />
+            break;
+
+        case SubscriptionDisplayMode.Plans:
+            <TierPlansPanel @ref="_plansPanel"
+                            AppId="@AppId"
+                            CompanyId="@CompanyId"
+                            IsAdmin="@IsAdmin"
+                            Currency="@Currency"
+                            ShowBillingToggle="@ShowBillingToggle"
+                            OnTierSelected="HandleTierSelected" />
+            break;
+
+        case SubscriptionDisplayMode.Features:
+            <FeaturesPanel @ref="_featuresPanel"
+                           AppId="@AppId"
+                           CompanyId="@CompanyId" />
+            break;
+
+        case SubscriptionDisplayMode.AddOns:
+            <AddOnsPanel @ref="_addOnsPanel"
+                         AppId="@AppId"
+                         CompanyId="@CompanyId"
+                         IsAdmin="@IsAdmin"
+                         CurrentTierId="@_subscription?.AppTierId"
+                         OnSubscriptionChanged="HandleAddOnChanged" />
+            break;
+
+        case SubscriptionDisplayMode.Usage:
+            <UsageLimitsPanel @ref="_usagePanel"
+                              AppId="@AppId"
+                              CompanyId="@CompanyId" />
+            break;
+    }
+}
+else
+{
+    @* Tabbed layout - show all panels *@
+    <div class="ww-subscription-admin">
+        <ul class="nav nav-tabs mb-4" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(IsTabActive("subscription") ? "active" : "")"
+                        type="button"
+                        @onclick="@(() => SetActiveTab("subscription"))">
+                    <i class="fas fa-id-card me-1"></i>Subscription
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(IsTabActive("plans") ? "active" : "")"
+                        type="button"
+                        @onclick="@(() => SetActiveTab("plans"))">
+                    <i class="fas fa-layer-group me-1"></i>Plans
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(IsTabActive("features") ? "active" : "")"
+                        type="button"
+                        @onclick="@(() => SetActiveTab("features"))">
+                    <i class="fas fa-list-check me-1"></i>Features & Add-Ons
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @(IsTabActive("usage") ? "active" : "")"
+                        type="button"
+                        @onclick="@(() => SetActiveTab("usage"))">
+                    <i class="fas fa-chart-bar me-1"></i>Usage
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            @* Subscription Tab *@
+            @if (IsTabActive("subscription"))
+            {
+                <div class="tab-pane active">
+                    <SubscriptionStatusPanel @ref="_statusPanel"
+                                             AppId="@AppId"
+                                             CompanyId="@CompanyId"
+                                             Subscription="@_subscription"
+                                             OnCancelRequested="HandleCancelRequested" />
+                </div>
+            }
+
+            @* Plans Tab *@
+            @if (IsTabActive("plans"))
+            {
+                <div class="tab-pane active">
+                    <TierPlansPanel @ref="_plansPanel"
+                                    AppId="@AppId"
+                                    CompanyId="@CompanyId"
+                                    IsAdmin="@IsAdmin"
+                                    Currency="@Currency"
+                                    ShowBillingToggle="@ShowBillingToggle"
+                                    OnTierSelected="HandleTierSelected" />
+                </div>
+            }
+
+            @* Features & Add-Ons Tab *@
+            @if (IsTabActive("features"))
+            {
+                <div class="tab-pane active">
+                    <div class="row">
+                        <div class="col-lg-6 mb-4">
+                            <div class="card shadow-sm">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="fas fa-list-check me-2"></i>Features</h6>
+                                </div>
+                                <div class="card-body">
+                                    <FeaturesPanel @ref="_featuresPanel"
+                                                   AppId="@AppId"
+                                                   CompanyId="@CompanyId" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6 mb-4">
+                            <div class="card shadow-sm">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="fas fa-puzzle-piece me-2"></i>Add-Ons</h6>
+                                </div>
+                                <div class="card-body">
+                                    <AddOnsPanel @ref="_addOnsPanel"
+                                                 AppId="@AppId"
+                                                 CompanyId="@CompanyId"
+                                                 IsAdmin="@IsAdmin"
+                                                 CurrentTierId="@_subscription?.AppTierId"
+                                                 OnSubscriptionChanged="HandleAddOnChanged" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @* Usage Tab *@
+            @if (IsTabActive("usage"))
+            {
+                <div class="tab-pane active">
+                    <UsageLimitsPanel @ref="_usagePanel"
+                                      AppId="@AppId"
+                                      CompanyId="@CompanyId" />
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(ErrorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+        <i class="fas fa-exclamation-circle me-2"></i>@ErrorMessage
+        <button type="button" class="btn-close" @onclick="ClearError"></button>
+    </div>
+}

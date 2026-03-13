@@ -7,7 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using WildwoodComponents.Blazor.Models;
+using WildwoodComponents.Shared.Models;
 
 namespace WildwoodComponents.Blazor.Services
 {
@@ -322,6 +322,273 @@ namespace WildwoodComponents.Blazor.Services
                 _logger.LogError(ex, "Error cancelling add-on subscription {SubscriptionId}", subscriptionId);
                 return false;
             }
+        }
+
+        #endregion
+
+        #region Company-Scoped Subscription (Admin)
+
+        public async Task<UserTierSubscriptionModel?> GetCompanySubscriptionAsync(string appId, string companyId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/subscription/company/{companyId}");
+                var response = await _httpClient.GetAsync(url);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadFromJsonAsync<UserTierSubscriptionModel>(JsonOptions);
+                }
+
+                if ((int)response.StatusCode == 404)
+                    return null;
+
+                _logger.LogWarning("Failed to get company subscription for {CompanyId}: {StatusCode}", companyId, response.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting company subscription for {CompanyId}", companyId);
+            }
+
+            return null;
+        }
+
+        public async Task<List<UserAddOnSubscriptionModel>> GetCompanyAddOnSubscriptionsAsync(string appId, string companyId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tier-addons/{appId}/company/{companyId}/addon-subscriptions");
+                var response = await _httpClient.GetAsync(url);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<List<UserAddOnSubscriptionModel>>(JsonOptions);
+                    return result ?? new List<UserAddOnSubscriptionModel>();
+                }
+
+                _logger.LogWarning("Failed to get company add-on subscriptions for {CompanyId}: {StatusCode}", companyId, response.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting company add-on subscriptions for {CompanyId}", companyId);
+            }
+
+            return new List<UserAddOnSubscriptionModel>();
+        }
+
+        public async Task<List<AppTierLimitStatusModel>> GetCompanyLimitStatusesAsync(string appId, string companyId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/limits/company/{companyId}");
+                var response = await _httpClient.GetAsync(url);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<List<AppTierLimitStatusModel>>(JsonOptions);
+                    return result ?? new List<AppTierLimitStatusModel>();
+                }
+
+                _logger.LogWarning("Failed to get company limit statuses for {CompanyId}: {StatusCode}", companyId, response.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting company limit statuses for {CompanyId}", companyId);
+            }
+
+            return new List<AppTierLimitStatusModel>();
+        }
+
+        #endregion
+
+        #region Company-Scoped Features
+
+        public async Task<List<AppFeatureDefinitionModel>> GetFeatureDefinitionsAsync(string appId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-feature-definitions/{appId}?activeOnly=true");
+                var response = await _httpClient.GetAsync(url);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<List<AppFeatureDefinitionModel>>(JsonOptions);
+                    return result ?? new List<AppFeatureDefinitionModel>();
+                }
+
+                _logger.LogWarning("Failed to get feature definitions for app {AppId}: {StatusCode}", appId, response.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting feature definitions for app {AppId}", appId);
+            }
+
+            return new List<AppFeatureDefinitionModel>();
+        }
+
+        public async Task<Dictionary<string, bool>> GetCompanyFeaturesAsync(string appId, string companyId)
+        {
+            try
+            {
+                var url = BuildUrl($"companies/{companyId}/features");
+                var response = await _httpClient.GetAsync(url);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<Dictionary<string, bool>>(JsonOptions);
+                    return result ?? new Dictionary<string, bool>();
+                }
+
+                _logger.LogWarning("Failed to get company features for {CompanyId}: {StatusCode}", companyId, response.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting company features for {CompanyId}", companyId);
+            }
+
+            return new Dictionary<string, bool>();
+        }
+
+        #endregion
+
+        #region Company-Scoped Admin Actions
+
+        public async Task<AppTierChangeResultModel> SubscribeCompanyToTierAsync(string appId, string companyId, string tierId, string? pricingId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/subscribe/company");
+                var body = new
+                {
+                    CompanyId = companyId,
+                    AppTierId = tierId,
+                    AppTierPricingId = pricingId
+                };
+
+                var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(url, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<AppTierChangeResultModel>(JsonOptions);
+                    return result ?? new AppTierChangeResultModel { Success = false, ErrorMessage = "Empty response" };
+                }
+
+                var errorBody = await response.Content.ReadAsStringAsync();
+                return new AppTierChangeResultModel { Success = false, ErrorMessage = errorBody };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error subscribing company {CompanyId} to tier {TierId}", companyId, tierId);
+                return new AppTierChangeResultModel { Success = false, ErrorMessage = ex.Message };
+            }
+        }
+
+        public async Task<AppTierChangeResultModel> ChangeCompanyTierAsync(string appId, string companyId, string newTierId, string? pricingId, bool immediate)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/change-tier/company");
+                var body = new
+                {
+                    CompanyId = companyId,
+                    NewAppTierId = newTierId,
+                    NewAppTierPricingId = pricingId,
+                    Immediate = immediate
+                };
+
+                var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(url, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<AppTierChangeResultModel>(JsonOptions);
+                    return result ?? new AppTierChangeResultModel { Success = false, ErrorMessage = "Empty response" };
+                }
+
+                var errorBody = await response.Content.ReadAsStringAsync();
+                return new AppTierChangeResultModel { Success = false, ErrorMessage = errorBody };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error changing company {CompanyId} tier", companyId);
+                return new AppTierChangeResultModel { Success = false, ErrorMessage = ex.Message };
+            }
+        }
+
+        public async Task<bool> CancelCompanySubscriptionAsync(string appId, string companyId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/cancel/company/{companyId}");
+                var response = await _httpClient.PostAsync(url, null);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error cancelling company {CompanyId} subscription", companyId);
+                return false;
+            }
+        }
+
+        public async Task<bool> SubscribeCompanyToAddOnAsync(string appId, string companyId, string addOnId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tier-addons/{appId}/subscribe/company");
+                var body = new
+                {
+                    CompanyId = companyId,
+                    AppTierAddOnId = addOnId
+                };
+
+                var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(url, content);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error subscribing company {CompanyId} to add-on {AddOnId}", companyId, addOnId);
+                return false;
+            }
+        }
+
+        public async Task<bool> CancelCompanyAddOnAsync(string subscriptionId, bool immediate)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tier-addons/subscriptions/{subscriptionId}/cancel?immediate={immediate}");
+                var response = await _httpClient.PostAsync(url, null);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error cancelling add-on subscription {SubscriptionId}", subscriptionId);
+                return false;
+            }
+        }
+
+        public async Task<List<AppTierAddOnModel>> GetAllAddOnsAsync(string appId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tier-addons/{appId}");
+                var response = await _httpClient.GetAsync(url);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<List<AppTierAddOnModel>>(JsonOptions);
+                    return result ?? new List<AppTierAddOnModel>();
+                }
+
+                _logger.LogWarning("Failed to get all add-ons for app {AppId}: {StatusCode}", appId, response.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting all add-ons for app {AppId}", appId);
+            }
+
+            return new List<AppTierAddOnModel>();
         }
 
         #endregion

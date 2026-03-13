@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using WildwoodComponents.Blazor.Models;
+using WildwoodComponents.Shared.Models;
 
 namespace WildwoodComponents.Blazor.Services
 {
@@ -34,6 +34,25 @@ namespace WildwoodComponents.Blazor.Services
         Task<AppFeatureCheckResultModel?> CheckFeatureAsync(string appId, string featureCode);
         Task<AppTierLimitStatusModel?> CheckLimitAsync(string appId, string limitCode);
         Task<AppTierLimitStatusModel?> IncrementUsageAsync(string appId, string limitCode);
+
+        // Company-scoped subscription (admin)
+        Task<UserTierSubscriptionModel?> GetCompanySubscriptionAsync(string appId, string companyId);
+        Task<List<UserAddOnSubscriptionModel>> GetCompanyAddOnSubscriptionsAsync(string appId, string companyId);
+        Task<List<AppTierLimitStatusModel>> GetCompanyLimitStatusesAsync(string appId, string companyId);
+
+        // Company-scoped features
+        Task<List<AppFeatureDefinitionModel>> GetFeatureDefinitionsAsync(string appId);
+        Task<Dictionary<string, bool>> GetCompanyFeaturesAsync(string appId, string companyId);
+
+        // Company-scoped admin actions
+        Task<AppTierChangeResultModel> SubscribeCompanyToTierAsync(string appId, string companyId, string tierId, string? pricingId);
+        Task<AppTierChangeResultModel> ChangeCompanyTierAsync(string appId, string companyId, string newTierId, string? pricingId, bool immediate);
+        Task<bool> CancelCompanySubscriptionAsync(string appId, string companyId);
+        Task<bool> SubscribeCompanyToAddOnAsync(string appId, string companyId, string addOnId);
+        Task<bool> CancelCompanyAddOnAsync(string subscriptionId, bool immediate);
+
+        // Admin add-on browsing (all add-ons, not just available)
+        Task<List<AppTierAddOnModel>> GetAllAddOnsAsync(string appId);
 
         void SetAuthToken(string token);
     }

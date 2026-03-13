@@ -1,0 +1,170 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Shared.Models
+@inherits BaseWildwoodComponent
+
+@if (IsLoading)
+{
+    <div class="ww-tier-plans-loading text-center p-4">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else if (_tiers.Count == 0)
+{
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>No tier plans are configured for this application.
+    </div>
+}
+else
+{
+    @if (ShowBillingToggle && HasMonthlyAndAnnualPricing())
+    {
+        <div class="ww-billing-toggle d-flex justify-content-center mb-4">
+            <div class="btn-group" role="group">
+                <button type="button"
+                        class="btn @(_selectedBillingCycle == "monthly" ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="@(() => SetBillingCycle("monthly"))">
+                    Monthly
+                </button>
+                <button type="button"
+                        class="btn @(_selectedBillingCycle == "annually" ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="@(() => SetBillingCycle("annually"))">
+                    Annual
+                </button>
+            </div>
+        </div>
+    }
+
+    <div class="row g-4">
+        @foreach (var tier in _tiers)
+        {
+            var isCurrent = IsTierCurrentPlan(tier);
+            var pricing = FindPricingForCycle(tier, _selectedBillingCycle);
+
+            <div class="col-lg-4 col-md-6">
+                <div class="card h-100 shadow-sm ww-tier-card @(isCurrent ? "border-primary border-2" : "")">
+                    @if (isCurrent)
+                    {
+                        <div class="card-header bg-primary text-white text-center py-1">
+                            <small><i class="fas fa-check-circle me-1"></i>Current Plan</small>
+                        </div>
+                    }
+                    <div class="card-body d-flex flex-column">
+                        <div class="text-center mb-3">
+                            @if (!string.IsNullOrEmpty(tier.IconClass))
+                            {
+                                <div class="mb-2">
+                                    <i class="@tier.IconClass fa-2x" style="color: var(--ww-primary, #0d6efd);"></i>
+                                </div>
+                            }
+                            <h5 class="card-title mb-1">@tier.Name</h5>
+                            @if (!string.IsNullOrEmpty(tier.BadgeColor))
+                            {
+                                <span class="badge @GetBadgeColorClass(tier.BadgeColor) mb-2">@tier.Name</span>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(tier.Description))
+                        {
+                            <p class="text-muted small text-center">@tier.Description</p>
+                        }
+
+                        <div class="text-center mb-3">
+                            @if (tier.IsFreeTier)
+                            {
+                                <h3 class="mb-0">Free</h3>
+                            }
+                            else if (pricing != null)
+                            {
+                                <h3 class="mb-0">
+                                    @GetCurrencySymbol(Currency)@pricing.Price.ToString("N2")
+                                    <small class="text-muted fs-6">/@pricing.BillingFrequencyLabel.ToLower()</small>
+                                </h3>
+                            }
+                        </div>
+
+                        @if (tier.Features.Count > 0)
+                        {
+                            <div class="mb-3">
+                                <h6 class="text-muted small mb-2">Features</h6>
+                                <ul class="list-unstyled mb-0">
+                                    @foreach (var feature in tier.Features)
+                                    {
+                                        <li class="mb-1">
+                                            @if (feature.IsEnabled)
+                                            {
+                                                <i class="fas fa-check text-success me-2"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-times text-muted me-2"></i>
+                                            }
+                                            <small>@feature.DisplayName</small>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+
+                        @if (tier.Limits.Count > 0)
+                        {
+                            <div class="mb-3">
+                                <h6 class="text-muted small mb-2">Limits</h6>
+                                <ul class="list-unstyled mb-0">
+                                    @foreach (var limit in tier.Limits)
+                                    {
+                                        <li class="mb-1">
+                                            <small>
+                                                <strong>@limit.MaxValueDisplay</strong> @limit.DisplayName
+                                                @if (!string.IsNullOrEmpty(limit.Unit))
+                                                {
+                                                    <span class="text-muted">(@limit.Unit)</span>
+                                                }
+                                            </small>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        }
+
+                        <div class="mt-auto text-center">
+                            @if (isCurrent)
+                            {
+                                <button class="btn btn-outline-secondary w-100" disabled>
+                                    <i class="fas fa-check me-1"></i>Current Plan
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-primary w-100"
+                                        disabled="@_isProcessing"
+                                        @onclick="@(() => SelectTier(tier, pricing?.Id))">
+                                    @if (_isProcessing)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                    }
+                                    @if (_currentSubscription != null && _currentSubscription.IsActive)
+                                    {
+                                        if (tier.DisplayOrder > GetCurrentTierDisplayOrder())
+                                        {
+                                            <span><i class="fas fa-arrow-up me-1"></i>Upgrade</span>
+                                        }
+                                        else
+                                        {
+                                            <span><i class="fas fa-arrow-down me-1"></i>Downgrade</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span>Select Plan</span>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

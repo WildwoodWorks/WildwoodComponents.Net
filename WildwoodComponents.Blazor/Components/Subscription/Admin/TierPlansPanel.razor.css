@@ -1,0 +1,27 @@
+.ww-tier-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ww-tier-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--ww-shadow-lg, 0 1rem 3rem rgba(0, 0, 0, 0.175)) !important;
+}
+
+.ww-tier-card .card-title {
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-billing-toggle .btn-primary {
+    background-color: var(--ww-primary, #0d6efd);
+    border-color: var(--ww-primary, #0d6efd);
+}
+
+.ww-billing-toggle .btn-outline-primary {
+    color: var(--ww-primary, #0d6efd);
+    border-color: var(--ww-primary, #0d6efd);
+}
+
+.ww-billing-toggle .btn-outline-primary:hover {
+    background-color: var(--ww-primary, #0d6efd);
+    color: var(--ww-btn-primary-text, white);
+}

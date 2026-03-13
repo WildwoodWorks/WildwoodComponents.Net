@@ -1,0 +1,13 @@
+.ww-features-panel .ww-feature-category h6 {
+    color: var(--ww-text-secondary, #6c757d);
+    border-bottom-color: var(--ww-border-color, #dee2e6);
+}
+
+.ww-feature-icon {
+    width: 24px;
+    text-align: center;
+}
+
+.ww-features-panel .list-group-item {
+    background: transparent;
+}

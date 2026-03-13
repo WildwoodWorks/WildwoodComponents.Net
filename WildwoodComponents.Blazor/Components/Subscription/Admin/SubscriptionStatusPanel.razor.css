@@ -1,0 +1,11 @@
+.ww-sub-status-card {
+    border-left: 4px solid var(--ww-primary, #0d6efd);
+}
+
+.ww-sub-status-card .card-title {
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-sub-status-card .badge {
+    font-size: 0.75rem;
+}

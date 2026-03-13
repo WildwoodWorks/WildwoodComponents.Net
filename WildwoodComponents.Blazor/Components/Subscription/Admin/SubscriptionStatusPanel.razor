@@ -1,0 +1,110 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Shared.Models
+@inherits BaseWildwoodComponent
+
+@if (IsLoading)
+{
+    <div class="ww-sub-status-loading text-center p-4">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else if (_subscription == null)
+{
+    <div class="ww-sub-status-empty">
+        <div class="alert alert-info mb-0">
+            <i class="fas fa-info-circle me-2"></i>No active subscription found.
+        </div>
+    </div>
+}
+else
+{
+    <div class="ww-sub-status-card card shadow-sm">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                    <h5 class="card-title mb-1">
+                        <i class="fas fa-layer-group me-2"></i>@_subscription.TierName
+                    </h5>
+                    <span class="badge @GetStatusBadgeClass(_subscription.Status)">@_subscription.Status</span>
+                    @if (_subscription.IsFreeTier)
+                    {
+                        <span class="badge bg-secondary ms-1">Free</span>
+                    }
+                </div>
+                @if (_subscription.IsActive && !_subscription.IsFreeTier)
+                {
+                    <button class="btn btn-outline-danger btn-sm" @onclick="ShowCancelConfirmation">
+                        <i class="fas fa-times me-1"></i>Cancel
+                    </button>
+                }
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <small class="text-muted d-block">Start Date</small>
+                    <span>@_subscription.StartDate.ToString("MMM d, yyyy")</span>
+                </div>
+                @if (_subscription.CurrentPeriodEnd.HasValue)
+                {
+                    <div class="col-md-4">
+                        <small class="text-muted d-block">Current Period Ends</small>
+                        <span>@_subscription.CurrentPeriodEnd.Value.ToString("MMM d, yyyy")</span>
+                    </div>
+                }
+                @if (_subscription.TrialEndDate.HasValue)
+                {
+                    <div class="col-md-4">
+                        <small class="text-muted d-block">Trial Ends</small>
+                        <span>@_subscription.TrialEndDate.Value.ToString("MMM d, yyyy")</span>
+                    </div>
+                }
+                @if (_subscription.GracePeriodEndDate.HasValue)
+                {
+                    <div class="col-md-4">
+                        <small class="text-muted d-block">Grace Period Ends</small>
+                        <span class="text-warning">@_subscription.GracePeriodEndDate.Value.ToString("MMM d, yyyy")</span>
+                    </div>
+                }
+            </div>
+
+            @if (!string.IsNullOrEmpty(_subscription.PendingTierName))
+            {
+                <div class="alert alert-warning mt-3 mb-0 py-2">
+                    <i class="fas fa-clock me-2"></i>
+                    <strong>Pending change:</strong> Switching to <strong>@_subscription.PendingTierName</strong>
+                    @if (_subscription.PendingChangeDate.HasValue)
+                    {
+                        <span> on @_subscription.PendingChangeDate.Value.ToString("MMM d, yyyy")</span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (_showCancelConfirm)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Cancel Subscription</h5>
+                        <button type="button" class="btn-close" @onclick="HideCancelConfirmation"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to cancel the <strong>@_subscription.TierName</strong> subscription?</p>
+                        @if (!_subscription.IsFreeTier)
+                        {
+                            <p class="text-muted mb-0">The subscription will remain active until the end of the current billing period.</p>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="HideCancelConfirmation">Keep Subscription</button>
+                        <button type="button" class="btn btn-danger" @onclick="ConfirmCancel">Confirm Cancellation</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}

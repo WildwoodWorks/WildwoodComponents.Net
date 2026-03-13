@@ -116,17 +116,25 @@ public class UserTierSubscriptionModel
     public string UserId { get; set; } = string.Empty;
     public string AppId { get; set; } = string.Empty;
     public string AppTierId { get; set; } = string.Empty;
+    public string? AppTierPricingId { get; set; }
     public string Status { get; set; } = string.Empty;
+    public string? PaymentTransactionId { get; set; }
     public DateTime StartDate { get; set; }
     public DateTime? EndDate { get; set; }
     public DateTime? CurrentPeriodStart { get; set; }
     public DateTime? CurrentPeriodEnd { get; set; }
     public DateTime? TrialEndDate { get; set; }
+    public DateTime? GracePeriodEndDate { get; set; }
+    public string? PendingTierId { get; set; }
     public string TierName { get; set; } = string.Empty;
     public string TierDescription { get; set; } = string.Empty;
     public bool IsFreeTier { get; set; }
     public string PendingTierName { get; set; } = string.Empty;
     public DateTime? PendingChangeDate { get; set; }
+
+    // Company context (for admin/company-scoped subscriptions)
+    public string? CompanyId { get; set; }
+    public string? CompanyName { get; set; }
 
     public bool IsActive
     {
@@ -142,6 +150,7 @@ public class UserTierSubscriptionModel
 public class UserAddOnSubscriptionModel
 {
     public string Id { get; set; } = string.Empty;
+    public string? CompanyId { get; set; }
     public string AppTierAddOnId { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string AddOnName { get; set; } = string.Empty;
@@ -149,6 +158,10 @@ public class UserAddOnSubscriptionModel
     public bool IsBundled { get; set; }
     public DateTime StartDate { get; set; }
     public DateTime? EndDate { get; set; }
+    public DateTime? CurrentPeriodStart { get; set; }
+    public DateTime? CurrentPeriodEnd { get; set; }
+    public DateTime? TrialEndDate { get; set; }
+    public DateTime? GracePeriodEndDate { get; set; }
 }
 
 #endregion
@@ -182,6 +195,35 @@ public class AppTierLimitStatusModel
     public bool IsHardBlocked { get; set; }
     public string Unit { get; set; } = string.Empty;
     public string StatusMessage { get; set; } = string.Empty;
+}
+
+#endregion
+
+#region Feature Definition Models
+
+public class AppFeatureDefinitionModel
+{
+    public string FeatureCode { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public string IconClass { get; set; } = string.Empty;
+    public int DisplayOrder { get; set; }
+    public bool IsEnabled { get; set; }
+}
+
+#endregion
+
+#region Display Mode
+
+public enum SubscriptionDisplayMode
+{
+    All,
+    Subscription,
+    Plans,
+    Features,
+    AddOns,
+    Usage
 }
 
 #endregion

@@ -1,0 +1,16 @@
+.ww-addons-panel h6 {
+    color: var(--ww-text-secondary, #6c757d);
+}
+
+.ww-addons-panel .card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ww-addons-panel .card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--ww-shadow, 0 0.5rem 1rem rgba(0, 0, 0, 0.15)) !important;
+}
+
+.ww-addons-panel .card.border-success {
+    border-color: var(--ww-success, #198754) !important;
+}

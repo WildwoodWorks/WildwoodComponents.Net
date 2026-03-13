@@ -1,0 +1,75 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Shared.Models
+@inherits BaseWildwoodComponent
+
+@if (IsLoading)
+{
+    <div class="ww-features-loading text-center p-4">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else if (_features.Count == 0)
+{
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>No feature definitions are configured for this application.
+    </div>
+}
+else
+{
+    <div class="ww-features-panel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <small class="text-muted">
+                <i class="fas fa-check-circle text-success me-1"></i>@GetEnabledCount() of @_features.Count features enabled
+            </small>
+        </div>
+
+        @foreach (var category in _categories)
+        {
+            var categoryFeatures = GetFeaturesForCategory(category);
+
+            <div class="ww-feature-category mb-4">
+                <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">
+                    <i class="fas fa-folder me-2"></i>@category
+                </h6>
+
+                <div class="list-group list-group-flush">
+                    @foreach (var feature in categoryFeatures)
+                    {
+                        <div class="list-group-item d-flex align-items-center px-0 border-0">
+                            @if (feature.IsEnabled)
+                            {
+                                <span class="ww-feature-icon text-success me-3">
+                                    <i class="fas fa-check-circle fa-lg"></i>
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="ww-feature-icon text-muted me-3">
+                                    <i class="fas fa-lock fa-lg"></i>
+                                </span>
+                            }
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center">
+                                    @if (!string.IsNullOrEmpty(feature.IconClass))
+                                    {
+                                        <i class="@feature.IconClass me-2 text-muted"></i>
+                                    }
+                                    <strong class="@(feature.IsEnabled ? "" : "text-muted")">@feature.DisplayName</strong>
+                                </div>
+                                @if (!string.IsNullOrEmpty(feature.Description))
+                                {
+                                    <small class="text-muted">@feature.Description</small>
+                                }
+                            </div>
+                            <span class="badge @(feature.IsEnabled ? "bg-success" : "bg-secondary")">
+                                @(feature.IsEnabled ? "Enabled" : "Locked")
+                            </span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}

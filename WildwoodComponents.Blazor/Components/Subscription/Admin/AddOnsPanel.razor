@@ -1,0 +1,170 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Shared.Models
+@inherits BaseWildwoodComponent
+
+@if (IsLoading)
+{
+    <div class="ww-addons-loading text-center p-4">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="ww-addons-panel">
+        @* Active Add-On Subscriptions *@
+        @if (_activeSubscriptions.Count > 0)
+        {
+            <h6 class="text-uppercase text-muted fw-bold mb-3">
+                <i class="fas fa-puzzle-piece me-2"></i>Active Add-Ons
+            </h6>
+
+            <div class="row g-3 mb-4">
+                @foreach (var sub in _activeSubscriptions)
+                {
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h6 class="card-title mb-0">@sub.AddOnName</h6>
+                                    @if (sub.IsBundled)
+                                    {
+                                        <span class="badge bg-info">Bundled</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">@sub.Status</span>
+                                    }
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(sub.AddOnDescription))
+                                {
+                                    <p class="text-muted small mb-2">@sub.AddOnDescription</p>
+                                }
+
+                                <div class="small text-muted mb-2">
+                                    <i class="fas fa-calendar me-1"></i>
+                                    Since @sub.StartDate.ToString("MMM d, yyyy")
+                                    @if (sub.CurrentPeriodEnd.HasValue)
+                                    {
+                                        <span> &middot; Renews @sub.CurrentPeriodEnd.Value.ToString("MMM d, yyyy")</span>
+                                    }
+                                </div>
+
+                                @if (!sub.IsBundled)
+                                {
+                                    <button class="btn btn-outline-danger btn-sm"
+                                            disabled="@_isProcessing"
+                                            @onclick="@(() => CancelAddOn(sub.Id, false))">
+                                        <i class="fas fa-times me-1"></i>Cancel
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @* Available Add-Ons *@
+        @if (_availableAddOns.Count > 0)
+        {
+            <h6 class="text-uppercase text-muted fw-bold mb-3">
+                <i class="fas fa-plus-circle me-2"></i>Available Add-Ons
+            </h6>
+
+            <div class="row g-3">
+                @foreach (var addOn in _availableAddOns)
+                {
+                    var isSubscribed = IsAddOnSubscribed(addOn);
+                    var isBundled = IsAddOnBundled(addOn);
+                    var pricing = GetDefaultPricing(addOn);
+
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card shadow-sm h-100 @(isSubscribed || isBundled ? "border-success" : "")">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        @if (!string.IsNullOrEmpty(addOn.IconClass))
+                                        {
+                                            <i class="@addOn.IconClass me-2" style="color: var(--ww-primary, #0d6efd);"></i>
+                                        }
+                                        <strong>@addOn.Name</strong>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(addOn.BadgeColor))
+                                    {
+                                        <span class="badge @GetBadgeColorClass(addOn.BadgeColor)">@addOn.Category</span>
+                                    }
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(addOn.Description))
+                                {
+                                    <p class="text-muted small mb-2">@addOn.Description</p>
+                                }
+
+                                @if (addOn.Features.Count > 0)
+                                {
+                                    <ul class="list-unstyled small mb-2">
+                                        @foreach (var feature in addOn.Features)
+                                        {
+                                            <li><i class="fas fa-check text-success me-1"></i>@feature.DisplayName</li>
+                                        }
+                                    </ul>
+                                }
+
+                                @if (pricing != null)
+                                {
+                                    <div class="mb-2">
+                                        <strong>$@pricing.Price.ToString("N2")</strong>
+                                        <small class="text-muted">/@pricing.BillingFrequency.ToLower()</small>
+                                    </div>
+                                }
+
+                                @if (addOn.TrialDays.HasValue && addOn.TrialDays.Value > 0)
+                                {
+                                    <small class="text-info mb-2">
+                                        <i class="fas fa-clock me-1"></i>@addOn.TrialDays-day free trial
+                                    </small>
+                                }
+
+                                <div class="mt-auto">
+                                    @if (isBundled)
+                                    {
+                                        <button class="btn btn-outline-success btn-sm w-100" disabled>
+                                            <i class="fas fa-gift me-1"></i>Included in Plan
+                                        </button>
+                                    }
+                                    else if (isSubscribed)
+                                    {
+                                        <button class="btn btn-outline-secondary btn-sm w-100" disabled>
+                                            <i class="fas fa-check me-1"></i>Subscribed
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-primary btn-sm w-100"
+                                                disabled="@(_isProcessing && _processingAddOnId == addOn.Id)"
+                                                @onclick="@(() => SubscribeToAddOn(addOn.Id))">
+                                            @if (_isProcessing && _processingAddOnId == addOn.Id)
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            }
+                                            <i class="fas fa-plus me-1"></i>Subscribe
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else if (_activeSubscriptions.Count == 0)
+        {
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>No add-ons are available for this application.
+            </div>
+        }
+    </div>
+}

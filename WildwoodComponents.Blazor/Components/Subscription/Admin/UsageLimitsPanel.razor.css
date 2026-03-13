@@ -1,0 +1,20 @@
+.ww-usage-limit-item {
+    background: var(--ww-bg-secondary, #f8f9fa);
+    border-color: var(--ww-border-color, #dee2e6) !important;
+}
+
+.ww-usage-limits-panel .progress {
+    background-color: var(--ww-bg-tertiary, #e9ecef);
+}
+
+.ww-usage-limits-panel .progress-bar.bg-success {
+    background-color: var(--ww-success, #198754) !important;
+}
+
+.ww-usage-limits-panel .progress-bar.bg-warning {
+    background-color: var(--ww-warning, #ffc107) !important;
+}
+
+.ww-usage-limits-panel .progress-bar.bg-danger {
+    background-color: var(--ww-danger, #dc3545) !important;
+}
