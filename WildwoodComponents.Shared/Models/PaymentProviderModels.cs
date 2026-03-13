@@ -259,6 +259,12 @@ public class InitiatePaymentResponse
     /// </summary>
     public string? SubscriptionId { get; set; }
 
+    /// <summary>
+    /// Whether the client needs to confirm payment (e.g., Stripe confirmCardPayment).
+    /// False when subscription has a trial, $0 amount, or payment succeeded immediately.
+    /// </summary>
+    public bool RequiresClientConfirmation { get; set; } = true;
+
     public string? ErrorMessage { get; set; }
     public string? ErrorCode { get; set; }
 

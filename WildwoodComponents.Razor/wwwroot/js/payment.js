@@ -428,6 +428,14 @@
                     return;
                 }
 
+                // If no client-side confirmation needed (trial, \/usr/bin/bash, or payment succeeded immediately)
+                if (\!response.requiresClientConfirmation || \!response.clientSecret) {
+                    return self._apiPost('/confirm', {
+                        paymentIntentId: response.paymentIntentId || response.subscriptionId,
+                        providerType: PT.Stripe
+                    });
+                }
+
                 // Step 2: Confirm with Stripe.js
                 return self.stripe.confirmCardPayment(response.clientSecret, {
                     payment_method: { card: self.stripeCard }

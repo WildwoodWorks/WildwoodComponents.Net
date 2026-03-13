@@ -997,13 +997,20 @@
                 return;
             }
 
+            // If no client-side confirmation needed (trial, $0 amount, or payment succeeded immediately)
+            if (!response.RequiresClientConfirmation || string.IsNullOrEmpty(response.ClientSecret))
+            {
+                await CompletePayment(response.PaymentIntentId ?? response.SubscriptionId ?? "");
+                return;
+            }
+
             var providerType = (PaymentProviderType)_selectedProvider.ProviderType;
             switch (providerType)
             {
                 case PaymentProviderType.Stripe:
-                    await ConfirmStripePayment(response.ClientSecret!);
+                    await ConfirmStripePayment(response.ClientSecret);
                     break;
-                    
+
                 default:
                     await CompletePayment(response.PaymentIntentId!);
                     break;
