@@ -1,13 +1,104 @@
-.ww-features-panel .ww-feature-category h6 {
-    color: var(--ww-text-secondary, #6c757d);
-    border-bottom-color: var(--ww-border-color, #dee2e6);
+/* Features Panel - Card Layout */
+.ww-features-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--ww-text-muted, #6c757d);
+    margin-bottom: 1rem;
 }
 
-.ww-feature-icon {
-    width: 24px;
-    text-align: center;
+.ww-features-summary-icon {
+    color: var(--ww-success, #28a745);
 }
 
-.ww-features-panel .list-group-item {
-    background: transparent;
+.ww-features-category-card {
+    background: var(--ww-bg-primary, #fff);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.ww-features-category-header {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ww-text-muted, #6c757d);
+    padding: 0.625rem 1rem;
+    background: var(--ww-bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--ww-border-color, #dee2e6);
+}
+
+.ww-features-category-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.ww-feature-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 1rem;
+    border-bottom: 1px solid var(--ww-border-color, #dee2e6);
+    transition: background-color 0.15s ease;
+}
+
+.ww-feature-card:last-child {
+    border-bottom: none;
+}
+
+.ww-feature-card:hover {
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+.ww-feature-card-enabled {
+    border-left: 3px solid var(--ww-success, #28a745);
+}
+
+.ww-feature-card-locked {
+    border-left: 3px solid transparent;
+}
+
+.ww-feature-card-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.8rem;
+}
+
+.ww-feature-card-enabled .ww-feature-card-icon {
+    background: rgba(40, 167, 69, 0.12);
+    color: var(--ww-success, #28a745);
+}
+
+.ww-feature-card-locked .ww-feature-card-icon {
+    background: rgba(108, 117, 125, 0.12);
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-feature-card-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.ww-feature-card-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-feature-card-locked .ww-feature-card-name {
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-feature-card-desc {
+    font-size: 0.75rem;
+    color: var(--ww-text-muted, #6c757d);
+    margin-top: 0.125rem;
 }

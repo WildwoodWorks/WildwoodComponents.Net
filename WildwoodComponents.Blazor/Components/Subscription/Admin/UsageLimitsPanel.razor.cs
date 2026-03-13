@@ -48,12 +48,22 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             }
         }
 
-        private static string GetBarClass(AppTierLimitStatusModel limit)
+        private static string GetBadgeClass(AppTierLimitStatusModel limit)
         {
             if (limit.IsUnlimited) return "bg-success";
-            if (limit.IsHardBlocked || limit.IsExceeded) return "bg-danger";
-            if (limit.IsAtWarningThreshold) return "bg-warning";
+            if (limit.IsHardBlocked) return "bg-danger";
+            if (limit.IsExceeded) return "bg-danger";
+            if (limit.IsAtWarningThreshold) return "bg-warning text-dark";
             return "bg-success";
+        }
+
+        private static string GetBadgeText(AppTierLimitStatusModel limit)
+        {
+            if (limit.IsUnlimited) return "Unlimited";
+            if (limit.IsHardBlocked) return "Blocked";
+            if (limit.IsExceeded) return "Exceeded";
+            if (limit.IsAtWarningThreshold) return "Warning";
+            return "OK";
         }
 
         private static int GetBarWidth(AppTierLimitStatusModel limit)

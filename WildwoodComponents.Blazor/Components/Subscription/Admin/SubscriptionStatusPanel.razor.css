@@ -1,11 +1,93 @@
+/* Subscription Status Panel - Card Layout */
 .ww-sub-status-card {
     border-left: 4px solid var(--ww-primary, #0d6efd);
 }
 
-.ww-sub-status-card .card-title {
+.ww-sub-status-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.ww-sub-status-title-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.ww-sub-status-tier-name {
+    margin: 0;
+    font-size: 1.15rem;
     color: var(--ww-text-primary, #212529);
 }
 
-.ww-sub-status-card .badge {
-    font-size: 0.75rem;
+/* Date fields grid */
+.ww-sub-status-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.75rem;
+}
+
+.ww-sub-status-field {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.625rem 0.75rem;
+    background: var(--ww-bg-secondary, #f8f9fa);
+    border-radius: var(--ww-border-radius, 0.375rem);
+}
+
+.ww-sub-status-field-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.8rem;
+    background: rgba(13, 110, 253, 0.12);
+    color: var(--ww-primary, #0d6efd);
+}
+
+.ww-sub-status-field-icon-trial {
+    background: rgba(255, 193, 7, 0.15);
+    color: var(--ww-warning, #ffc107);
+}
+
+.ww-sub-status-field-icon-grace {
+    background: rgba(255, 193, 7, 0.15);
+    color: var(--ww-warning, #ffc107);
+}
+
+.ww-sub-status-field-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.ww-sub-status-field-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-sub-status-field-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+/* Pending change notice */
+.ww-sub-status-pending {
+    margin-top: 1rem;
+    padding: 0.625rem 0.875rem;
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: var(--ww-border-radius, 0.375rem);
+    font-size: 0.85rem;
+    color: var(--ww-warning-text, #664d03);
 }

@@ -20,6 +20,8 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         [Parameter] public bool IsAdmin { get; set; }
         [Parameter] public string Currency { get; set; } = "USD";
         [Parameter] public bool ShowBillingToggle { get; set; } = true;
+        /// <summary>When true, render the subscription status card above the tab bar instead of as a tab.</summary>
+        [Parameter] public bool ShowStatusAboveTabs { get; set; }
         [Parameter] public EventCallback<AppTierSubscriptionChangedEventArgs> OnSubscriptionChanged { get; set; }
 
         #endregion
@@ -47,6 +49,10 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             if (DisplayMode != SubscriptionDisplayMode.All)
             {
                 _activeTab = DisplayMode.ToString().ToLower();
+            }
+            else if (ShowStatusAboveTabs)
+            {
+                _activeTab = "plans";
             }
 
             await LoadSubscriptionAsync();

@@ -58,14 +58,28 @@ else
 {
     @* Tabbed layout - show all panels *@
     <div class="ww-subscription-admin">
+        @if (ShowStatusAboveTabs)
+        {
+            <div class="ww-sub-status-card">
+                <SubscriptionStatusPanel @ref="_statusPanel"
+                                         AppId="@AppId"
+                                         CompanyId="@CompanyId"
+                                         Subscription="@_subscription"
+                                         OnCancelRequested="HandleCancelRequested" />
+            </div>
+        }
+
         <ul class="nav nav-tabs mb-4" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link @(IsTabActive("subscription") ? "active" : "")"
-                        type="button"
-                        @onclick="@(() => SetActiveTab("subscription"))">
-                    <i class="fas fa-id-card me-1"></i>Subscription
-                </button>
-            </li>
+            @if (!ShowStatusAboveTabs)
+            {
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link @(IsTabActive("subscription") ? "active" : "")"
+                            type="button"
+                            @onclick="@(() => SetActiveTab("subscription"))">
+                        <i class="fas fa-id-card me-1"></i>Subscription
+                    </button>
+                </li>
+            }
             <li class="nav-item" role="presentation">
                 <button class="nav-link @(IsTabActive("plans") ? "active" : "")"
                         type="button"
@@ -90,8 +104,8 @@ else
         </ul>
 
         <div class="tab-content">
-            @* Subscription Tab *@
-            @if (IsTabActive("subscription"))
+            @* Subscription Tab (only when not shown above tabs) *@
+            @if (!ShowStatusAboveTabs && IsTabActive("subscription"))
             {
                 <div class="tab-pane active">
                     <SubscriptionStatusPanel @ref="_statusPanel"

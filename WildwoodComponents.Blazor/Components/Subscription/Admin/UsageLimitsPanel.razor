@@ -19,79 +19,70 @@ else if (_limits.Count == 0)
 else
 {
     <div class="ww-usage-limits-panel">
-        @foreach (var limit in _limits)
-        {
-            <div class="ww-usage-limit-item mb-3 p-3 border rounded">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div>
-                        <strong>@limit.DisplayName</strong>
-                        @if (!string.IsNullOrEmpty(limit.Unit))
-                        {
-                            <small class="text-muted ms-1">(@limit.Unit)</small>
-                        }
+        <div class="ww-usage-limits-grid">
+            @foreach (var limit in _limits)
+            {
+                var statusKey = (limit.IsHardBlocked || limit.IsExceeded) ? "danger"
+                    : limit.IsAtWarningThreshold ? "warning"
+                    : "success";
+
+                <div class="ww-usage-card ww-usage-card-@statusKey">
+                    <div class="ww-usage-card-header">
+                        <div class="ww-usage-card-title">
+                            <span class="ww-usage-card-icon ww-usage-card-icon-@statusKey">
+                                @if (statusKey == "danger")
+                                {
+                                    <i class="fas fa-exclamation-circle"></i>
+                                }
+                                else if (statusKey == "warning")
+                                {
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                }
+                                else
+                                {
+                                    <i class="fas fa-check-circle"></i>
+                                }
+                            </span>
+                            <span class="ww-usage-card-name">@limit.DisplayName</span>
+                        </div>
+                        <span class="badge @GetBadgeClass(limit)">
+                            @GetBadgeText(limit)
+                        </span>
                     </div>
-                    <div>
+
+                    @if (!string.IsNullOrEmpty(limit.Unit))
+                    {
+                        <span class="ww-usage-card-unit">@limit.Unit</span>
+                    }
+
+                    <div class="ww-usage-card-bar-wrapper">
+                        <div class="ww-usage-card-bar">
+                            <div class="ww-usage-card-bar-fill ww-bar-@statusKey"
+                                 style="width: @(GetBarWidth(limit))%">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ww-usage-card-stats">
                         @if (limit.IsUnlimited)
                         {
-                            <span class="badge bg-success">
-                                <i class="fas fa-infinity me-1"></i>Unlimited
-                            </span>
-                        }
-                        else if (limit.IsHardBlocked)
-                        {
-                            <span class="badge bg-danger">
-                                <i class="fas fa-ban me-1"></i>Blocked
-                            </span>
-                        }
-                        else if (limit.IsExceeded)
-                        {
-                            <span class="badge bg-danger">
-                                <i class="fas fa-exclamation-triangle me-1"></i>Exceeded
-                            </span>
-                        }
-                        else if (limit.IsAtWarningThreshold)
-                        {
-                            <span class="badge bg-warning text-dark">
-                                <i class="fas fa-exclamation-circle me-1"></i>Warning
-                            </span>
-                        }
-                    </div>
-                </div>
-
-                <div class="progress mb-1" style="height: 8px;">
-                    <div class="progress-bar @GetBarClass(limit)"
-                         role="progressbar"
-                         style="width: @(GetBarWidth(limit))%"
-                         aria-valuenow="@limit.CurrentUsage"
-                         aria-valuemin="0"
-                         aria-valuemax="@limit.MaxValue">
-                    </div>
-                </div>
-
-                <div class="d-flex justify-content-between">
-                    <small class="text-muted">
-                        @if (limit.IsUnlimited)
-                        {
-                            <span>@limit.CurrentUsage.ToString("N0") used</span>
+                            <span class="ww-usage-card-count">@limit.CurrentUsage.ToString("N0") used</span>
                         }
                         else
                         {
-                            <span>@limit.CurrentUsage.ToString("N0") / @limit.MaxValue.ToString("N0")</span>
+                            <span class="ww-usage-card-count">
+                                @limit.CurrentUsage.ToString("N0") / @limit.MaxValue.ToString("N0")
+                            </span>
+                            <span class="ww-usage-card-percent">@((int)Math.Round(limit.UsagePercent))%</span>
                         }
-                    </small>
-                    @if (!limit.IsUnlimited)
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(limit.StatusMessage))
                     {
-                        <small class="text-muted">@((int)Math.Round(limit.UsagePercent))%</small>
+                        <div class="ww-usage-card-message">@limit.StatusMessage</div>
                     }
                 </div>
-
-                @if (!string.IsNullOrEmpty(limit.StatusMessage))
-                {
-                    <small class="text-muted d-block mt-1">
-                        <i class="fas fa-info-circle me-1"></i>@limit.StatusMessage
-                    </small>
-                }
-            </div>
-        }
+            }
+        </div>
     </div>
 }

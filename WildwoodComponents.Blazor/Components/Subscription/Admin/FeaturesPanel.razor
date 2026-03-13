@@ -19,48 +19,47 @@ else if (_features.Count == 0)
 else
 {
     <div class="ww-features-panel">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <small class="text-muted">
-                <i class="fas fa-check-circle text-success me-1"></i>@GetEnabledCount() of @_features.Count features enabled
-            </small>
+        <div class="ww-features-summary">
+            <span class="ww-features-summary-icon">
+                <i class="fas fa-check-circle"></i>
+            </span>
+            <span>@GetEnabledCount() of @_features.Count features enabled</span>
         </div>
 
         @foreach (var category in _categories)
         {
             var categoryFeatures = GetFeaturesForCategory(category);
 
-            <div class="ww-feature-category mb-4">
-                <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">
+            <div class="ww-features-category-card">
+                <div class="ww-features-category-header">
                     <i class="fas fa-folder me-2"></i>@category
-                </h6>
+                </div>
 
-                <div class="list-group list-group-flush">
+                <div class="ww-features-category-body">
                     @foreach (var feature in categoryFeatures)
                     {
-                        <div class="list-group-item d-flex align-items-center px-0 border-0">
-                            @if (feature.IsEnabled)
-                            {
-                                <span class="ww-feature-icon text-success me-3">
-                                    <i class="fas fa-check-circle fa-lg"></i>
-                                </span>
-                            }
-                            else
-                            {
-                                <span class="ww-feature-icon text-muted me-3">
-                                    <i class="fas fa-lock fa-lg"></i>
-                                </span>
-                            }
-                            <div class="flex-grow-1">
-                                <div class="d-flex align-items-center">
+                        <div class="ww-feature-card @(feature.IsEnabled ? "ww-feature-card-enabled" : "ww-feature-card-locked")">
+                            <span class="ww-feature-card-icon">
+                                @if (feature.IsEnabled)
+                                {
+                                    <i class="fas fa-check-circle"></i>
+                                }
+                                else
+                                {
+                                    <i class="fas fa-lock"></i>
+                                }
+                            </span>
+                            <div class="ww-feature-card-body">
+                                <div class="ww-feature-card-name">
                                     @if (!string.IsNullOrEmpty(feature.IconClass))
                                     {
-                                        <i class="@feature.IconClass me-2 text-muted"></i>
+                                        <i class="@feature.IconClass me-1"></i>
                                     }
-                                    <strong class="@(feature.IsEnabled ? "" : "text-muted")">@feature.DisplayName</strong>
+                                    @feature.DisplayName
                                 </div>
                                 @if (!string.IsNullOrEmpty(feature.Description))
                                 {
-                                    <small class="text-muted">@feature.Description</small>
+                                    <div class="ww-feature-card-desc">@feature.Description</div>
                                 }
                             </div>
                             <span class="badge @(feature.IsEnabled ? "bg-success" : "bg-secondary")">

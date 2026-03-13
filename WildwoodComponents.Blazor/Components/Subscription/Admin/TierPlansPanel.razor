@@ -109,22 +109,21 @@ else
 
                         @if (tier.Limits.Count > 0)
                         {
-                            <div class="mb-3">
-                                <h6 class="text-muted small mb-2">Limits</h6>
-                                <ul class="list-unstyled mb-0">
-                                    @foreach (var limit in tier.Limits)
-                                    {
-                                        <li class="mb-1">
-                                            <small>
-                                                <strong>@limit.MaxValueDisplay</strong> @limit.DisplayName
-                                                @if (!string.IsNullOrEmpty(limit.Unit))
-                                                {
-                                                    <span class="text-muted">(@limit.Unit)</span>
-                                                }
-                                            </small>
-                                        </li>
-                                    }
-                                </ul>
+                            <div class="ww-tier-limits">
+                                <span class="ww-tier-limits-heading">Limits</span>
+                                @foreach (var limit in tier.Limits)
+                                {
+                                    <div class="ww-tier-limit-item">
+                                        <span class="ww-tier-limit-value">@limit.MaxValueDisplay</span>
+                                        <span class="ww-tier-limit-name">
+                                            @limit.DisplayName
+                                            @if (!string.IsNullOrEmpty(limit.Unit))
+                                            {
+                                                <text> (@limit.Unit)</text>
+                                            }
+                                        </span>
+                                    </div>
+                                }
                             </div>
                         }
 

@@ -22,15 +22,15 @@ else
 {
     <div class="ww-sub-status-card card shadow-sm">
         <div class="card-body">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <div>
-                    <h5 class="card-title mb-1">
+            <div class="ww-sub-status-title-row">
+                <div class="ww-sub-status-title-left">
+                    <h5 class="ww-sub-status-tier-name">
                         <i class="fas fa-layer-group me-2"></i>@_subscription.TierName
                     </h5>
                     <span class="badge @GetStatusBadgeClass(_subscription.Status)">@_subscription.Status</span>
                     @if (_subscription.IsFreeTier)
                     {
-                        <span class="badge bg-secondary ms-1">Free</span>
+                        <span class="badge bg-secondary">Free</span>
                     }
                 </div>
                 @if (_subscription.IsActive && !_subscription.IsFreeTier)
@@ -41,37 +41,60 @@ else
                 }
             </div>
 
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <small class="text-muted d-block">Start Date</small>
-                    <span>@_subscription.StartDate.ToString("MMM d, yyyy")</span>
+            <div class="ww-sub-status-fields">
+                <div class="ww-sub-status-field">
+                    <div class="ww-sub-status-field-icon">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                    <div class="ww-sub-status-field-content">
+                        <span class="ww-sub-status-field-label">Start Date</span>
+                        <span class="ww-sub-status-field-value">@_subscription.StartDate.ToString("MMM d, yyyy")</span>
+                    </div>
                 </div>
+
                 @if (_subscription.CurrentPeriodEnd.HasValue)
                 {
-                    <div class="col-md-4">
-                        <small class="text-muted d-block">Current Period Ends</small>
-                        <span>@_subscription.CurrentPeriodEnd.Value.ToString("MMM d, yyyy")</span>
+                    <div class="ww-sub-status-field">
+                        <div class="ww-sub-status-field-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="ww-sub-status-field-content">
+                            <span class="ww-sub-status-field-label">Current Period Ends</span>
+                            <span class="ww-sub-status-field-value">@_subscription.CurrentPeriodEnd.Value.ToString("MMM d, yyyy")</span>
+                        </div>
                     </div>
                 }
+
                 @if (_subscription.TrialEndDate.HasValue)
                 {
-                    <div class="col-md-4">
-                        <small class="text-muted d-block">Trial Ends</small>
-                        <span>@_subscription.TrialEndDate.Value.ToString("MMM d, yyyy")</span>
+                    <div class="ww-sub-status-field">
+                        <div class="ww-sub-status-field-icon ww-sub-status-field-icon-trial">
+                            <i class="fas fa-star"></i>
+                        </div>
+                        <div class="ww-sub-status-field-content">
+                            <span class="ww-sub-status-field-label">Trial Ends</span>
+                            <span class="ww-sub-status-field-value">@_subscription.TrialEndDate.Value.ToString("MMM d, yyyy")</span>
+                        </div>
                     </div>
                 }
+
                 @if (_subscription.GracePeriodEndDate.HasValue)
                 {
-                    <div class="col-md-4">
-                        <small class="text-muted d-block">Grace Period Ends</small>
-                        <span class="text-warning">@_subscription.GracePeriodEndDate.Value.ToString("MMM d, yyyy")</span>
+                    <div class="ww-sub-status-field">
+                        <div class="ww-sub-status-field-icon ww-sub-status-field-icon-grace">
+                            <i class="fas fa-hourglass-half"></i>
+                        </div>
+                        <div class="ww-sub-status-field-content">
+                            <span class="ww-sub-status-field-label">Grace Period Ends</span>
+                            <span class="ww-sub-status-field-value text-warning">@_subscription.GracePeriodEndDate.Value.ToString("MMM d, yyyy")</span>
+                        </div>
                     </div>
                 }
             </div>
 
             @if (!string.IsNullOrEmpty(_subscription.PendingTierName))
             {
-                <div class="alert alert-warning mt-3 mb-0 py-2">
+                <div class="ww-sub-status-pending">
                     <i class="fas fa-clock me-2"></i>
                     <strong>Pending change:</strong> Switching to <strong>@_subscription.PendingTierName</strong>
                     @if (_subscription.PendingChangeDate.HasValue)

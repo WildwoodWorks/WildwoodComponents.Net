@@ -1,20 +1,99 @@
-.ww-usage-limit-item {
-    background: var(--ww-bg-secondary, #f8f9fa);
-    border-color: var(--ww-border-color, #dee2e6) !important;
+/* Usage Limits Panel - Card Grid Layout */
+.ww-usage-limits-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
 }
 
-.ww-usage-limits-panel .progress {
-    background-color: var(--ww-bg-tertiary, #e9ecef);
+.ww-usage-card {
+    background: var(--ww-bg-primary, #fff);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    transition: box-shadow 0.15s ease;
 }
 
-.ww-usage-limits-panel .progress-bar.bg-success {
-    background-color: var(--ww-success, #198754) !important;
+.ww-usage-card:hover {
+    box-shadow: var(--ww-shadow-sm, 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075));
 }
 
-.ww-usage-limits-panel .progress-bar.bg-warning {
-    background-color: var(--ww-warning, #ffc107) !important;
+.ww-usage-card-success { border-top: 3px solid var(--ww-success, #28a745); }
+.ww-usage-card-warning { border-top: 3px solid var(--ww-warning, #ffc107); }
+.ww-usage-card-danger  { border-top: 3px solid var(--ww-danger, #dc3545); }
+
+.ww-usage-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-.ww-usage-limits-panel .progress-bar.bg-danger {
-    background-color: var(--ww-danger, #dc3545) !important;
+.ww-usage-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ww-usage-card-icon {
+    font-size: 0.9rem;
+}
+
+.ww-usage-card-icon-success { color: var(--ww-success, #28a745); }
+.ww-usage-card-icon-warning { color: var(--ww-warning, #ffc107); }
+.ww-usage-card-icon-danger  { color: var(--ww-danger, #dc3545); }
+
+.ww-usage-card-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-usage-card-unit {
+    font-size: 0.75rem;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-usage-card-bar-wrapper {
+    padding: 0.25rem 0;
+}
+
+.ww-usage-card-bar {
+    height: 6px;
+    background: var(--ww-bg-tertiary, #e9ecef);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.ww-usage-card-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.ww-bar-success { background: var(--ww-success, #28a745); }
+.ww-bar-warning { background: var(--ww-warning, #ffc107); }
+.ww-bar-danger  { background: var(--ww-danger, #dc3545); }
+
+.ww-usage-card-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--ww-text-secondary, #495057);
+}
+
+.ww-usage-card-count {
+    font-weight: 500;
+}
+
+.ww-usage-card-percent {
+    font-weight: 600;
+}
+
+.ww-usage-card-message {
+    font-size: 0.75rem;
+    color: var(--ww-text-muted, #6c757d);
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--ww-border-color, #dee2e6);
 }
