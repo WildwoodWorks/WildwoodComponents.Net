@@ -312,6 +312,54 @@ foreach (var item in collection)
 
 See the main AICoach copilot-instructions.md for detailed iOS compatibility patterns.
 
+## Subscription & Tier Components (CRITICAL Patterns)
+
+### UserCompanies Must Be Populated During Subscription
+
+When the `SignupWithSubscriptionComponent` or `AppTierComponent` creates a subscription, the WildwoodAPI backend stores the subscription with `CompanyId = tier.CompanyId`. **The user MUST also have a `UserCompanies` row with that same CompanyId**, otherwise:
+
+1. The JWT will not contain a `company_id` claim (set by `TokenService` from `UserCompanies`)
+2. EF global query filters on `CompanyUserTierSubscription` will silently exclude the subscription
+3. All tier/subscription/feature/limit API calls will return empty data — **no errors, just empty**
+
+**This is handled in the WildwoodAPI backend** (`AssignTierAsync` and `SelfSubscribe`), but be aware of this when:
+- Creating new subscription endpoints
+- Testing subscription flows — if data appears missing, check `UserCompanies` first
+- Debugging empty responses from tier endpoints — the most likely cause is a missing `UserCompanies` row
+
+### Subscription Flow Architecture
+
+```
+SignupWithSubscriptionComponent:
+  Step 1: Collect registration data (TokenRegistrationComponent in deferred mode)
+  Step 2: Select tier (PricingDisplayComponent, no auth needed)
+  Step 3: Register → Login → Subscribe (atomic)
+    → AppTierService.SubscribeToTierAsync() → POST /app-tiers/{appId}/subscribe
+    → Backend creates subscription AND UserCompanies record
+  Step 4: Success
+```
+
+### API Endpoints Used by Tier Components
+
+| Endpoint | Auth | Used By | Purpose |
+|----------|------|---------|---------|
+| `GET /app-tiers/{appId}/public` | No | PricingDisplayComponent | List available tiers |
+| `GET /app-tiers/{appId}/my-subscription` | JWT | AppTierComponent, UsageDashboard | User's subscription |
+| `GET /app-tiers/{appId}/limit-statuses` | JWT | UsageDashboardComponent | Usage limits |
+| `GET /app-tiers/{appId}/user-features` | JWT | Feature gating | User's features |
+| `GET /app-feature-definitions/{appId}/active` | JWT | Features panel | Feature definitions |
+| `POST /app-tiers/{appId}/subscribe` | Admin | AssignTier (admin) | Create subscription |
+| `POST /app-tiers/{appId}/my-subscription` | JWT | SelfSubscribe | Self-service subscribe |
+
+### Debugging Empty Subscription Data
+
+If subscription/tier data appears empty despite records existing in the database:
+
+1. **Check `UserCompanies`** — Does the user have a row matching the tier's CompanyId?
+2. **Check JWT claims** — Does the token contain a `company_id` claim?
+3. **Check EF query filters** — `CompanyUserTierSubscription` has a tenant filter on CompanyId
+4. **Remember**: Try/catch blocks in services return empty defaults ([], null, {}) on failure — 401s and filter mismatches look the same as "no data"
+
 ## Component Development
 
 ### Base Component Architecture
