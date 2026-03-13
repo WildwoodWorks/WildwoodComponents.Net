@@ -26,6 +26,11 @@ namespace WildwoodComponents.Blazor.Components.Pricing
         [Parameter] public string? EnterpriseContactUrl { get; set; }
 
         /// <summary>
+        /// Optional tier ID to visually highlight as the user's selection.
+        /// </summary>
+        [Parameter] public string? PreSelectedTierId { get; set; }
+
+        /// <summary>
         /// Optional pre-loaded tiers. If provided, skips the API call.
         /// </summary>
         [Parameter] public List<AppTierModel>? PreloadedTiers { get; set; }

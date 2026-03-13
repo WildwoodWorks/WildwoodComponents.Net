@@ -105,6 +105,48 @@
     font-size: 1.5rem;
 }
 
+/* Processing Step */
+::deep .ww-signup-processing {
+    text-align: center;
+    padding: 2rem 1.5rem;
+}
+
+::deep .ww-signup-spinner {
+    margin-bottom: 1.5rem;
+}
+
+::deep .ww-signup-spinner .ww-spinner {
+    width: 3rem;
+    height: 3rem;
+    border: 3px solid var(--ww-bg-tertiary, #e9ecef);
+    border-top-color: var(--ww-primary, #D4882C);
+    border-radius: 50%;
+    animation: ww-spin 0.8s linear infinite;
+    margin: 0 auto;
+}
+
+@keyframes ww-spin {
+    to { transform: rotate(360deg); }
+}
+
+::deep .ww-reg-error-icon {
+    margin-bottom: 1rem;
+    color: var(--ww-danger, #dc3545);
+}
+
+::deep .ww-signup-processing h3 {
+    color: var(--ww-text-primary, #212529);
+    margin: 0 0 0.5rem;
+    font-size: 1.5rem;
+}
+
+::deep .ww-signup-processing-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 1.5rem;
+}
+
 /* Responsive */
 @media (max-width: 576px) {
     ::deep .ww-step-connector {

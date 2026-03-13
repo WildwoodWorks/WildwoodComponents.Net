@@ -68,6 +68,11 @@
     border-color: var(--ww-primary, #D4882C);
 }
 
+::deep .ww-tier-selected {
+    border-color: var(--ww-primary, #D4882C);
+    box-shadow: 0 0 0 2px var(--ww-primary, #D4882C);
+}
+
 /* Badge variant for pricing */
 ::deep .ww-badge-success {
     background: var(--ww-success, #28a745);

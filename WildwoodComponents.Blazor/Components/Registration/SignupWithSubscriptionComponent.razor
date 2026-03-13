@@ -1,25 +1,28 @@
 @using WildwoodComponents.Blazor.Components.Base
-@using WildwoodComponents.Blazor.Components.AppTier
+@using WildwoodComponents.Blazor.Components.Pricing
 @using WildwoodComponents.Blazor.Models
 @using WildwoodComponents.Blazor.Services
+@using WildwoodComponents.Shared.Models
+@using static WildwoodComponents.Blazor.Components.Registration.TokenRegistrationComponent
 @inherits BaseWildwoodComponent
 
 <div class="@GetRootCssClasses() ww-signup-subscription @CssClass">
     @* Step Indicator *@
-    @if (_currentStep != SignupStep.Success)
+    @if (_currentStep != SignupStep.Success && _currentStep != SignupStep.Processing)
     {
         <div class="ww-step-indicator">
             <div class="ww-steps">
                 @for (int i = 0; i < _stepConfig.Count; i++)
                 {
                     var stepDef = _stepConfig[i];
-                    var isActive = GetStepIndex(_currentStep) >= i;
-                    var isCompleted = GetStepIndex(_currentStep) > i;
+                    var displayIndex = GetDisplayStepIndex();
+                    var isActive = displayIndex >= i;
+                    var isCompleted = displayIndex > i;
 
                     <div class="ww-step-group">
                         @if (i > 0)
                         {
-                            <div class="ww-step-connector @(IsStepCompleted(_stepConfig[i - 1].Key) ? "ww-step-connector-completed" : "")"></div>
+                            <div class="ww-step-connector @(isCompleted ? "ww-step-connector-completed" : "")"></div>
                         }
                         <div class="ww-step @(isActive ? "ww-step-active" : "") @(isCompleted ? "ww-step-completed" : "")">
                             <span class="ww-step-number">
@@ -42,7 +45,7 @@
         </div>
     }
 
-    @* Step 1: Registration *@
+    @* Step 1: Registration (deferred - collects data only) *@
     @if (_currentStep == SignupStep.Register)
     {
         <div class="ww-signup-step">
@@ -51,24 +54,28 @@
                 Token="@RegistrationToken"
                 RequireToken="@RequireToken"
                 AllowOpenRegistration="@AllowOpenRegistration"
-                AutoLogin="true"
-                OnAutoLoginSuccess="HandleAutoLoginSuccess"
+                DeferSubmission="true"
+                OnFormDataCollected="HandleFormDataCollected"
+                SubmitButtonText="Continue"
+                HideStepIndicator="true"
+                InitialFormData="@_collectedFormData"
                 OnCancel="HandleCancel" />
         </div>
     }
 
-    @* Step 2: Tier Selection *@
+    @* Step 2: Tier Selection (using PricingDisplayComponent - no auth needed) *@
     @if (_currentStep == SignupStep.SelectTier)
     {
         <div class="ww-signup-step">
-            <AppTierComponent
+            <PricingDisplayComponent
                 AppId="@AppId"
                 Title="Choose Your Plan"
                 Subtitle="@(_selectedTierId != null ? "Confirm your selected plan or choose a different one." : "Select a plan that fits your needs. You can always change later.")"
                 PreSelectedTierId="@_selectedTierId"
-                ShowCurrentPlan="false"
-                OnSubscriptionChanged="HandleSubscriptionChanged"
-                OnError="HandleTierError" />
+                ShowBillingToggle="true"
+                ShowFeatureComparison="true"
+                ShowLimits="true"
+                OnSelectTier="HandleTierSelected" />
             <div class="ww-signup-step-nav">
                 <button type="button" class="ww-btn ww-btn-link" @onclick="HandleBack">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -78,7 +85,7 @@
                 </button>
                 @if (OnCancel.HasDelegate)
                 {
-                    <button type="button" class="ww-btn ww-btn-link" @onclick="OnCancel">
+                    <button type="button" class="ww-btn ww-btn-link" @onclick="HandleCancel">
                         Cancel
                     </button>
                 }
@@ -86,7 +93,42 @@
         </div>
     }
 
-    @* Step 3: Success *@
+    @* Step 3: Processing (atomic register + login + subscribe) *@
+    @if (_currentStep == SignupStep.Processing)
+    {
+        <div class="ww-signup-step ww-signup-processing">
+            @if (_processingError != null)
+            {
+                <div class="ww-reg-error-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                </div>
+                <h3>Something went wrong</h3>
+                <p class="ww-text-muted">@_processingError</p>
+                <div class="ww-signup-processing-actions">
+                    <button type="button" class="ww-btn ww-btn-primary" @onclick="HandleRetry">
+                        Try Again
+                    </button>
+                    <button type="button" class="ww-btn ww-btn-link" @onclick="HandleStartOver">
+                        Start Over
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="ww-signup-spinner">
+                    <div class="ww-spinner"></div>
+                </div>
+                <h3>Setting up your account</h3>
+                <p class="ww-text-muted">@(_processingStatus ?? "Please wait...")</p>
+            }
+        </div>
+    }
+
+    @* Step 4: Success *@
     @if (_currentStep == SignupStep.Success)
     {
         <div class="ww-signup-step ww-signup-success">
@@ -101,6 +143,10 @@
                 @if (SkipTierSelection)
                 {
                     <text>Your account has been created successfully.</text>
+                }
+                else if (_subscriptionFailed)
+                {
+                    <text>Your account is ready! Plan activation is pending — you can select a plan from your dashboard.</text>
                 }
                 else
                 {

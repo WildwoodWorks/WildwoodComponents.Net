@@ -18,7 +18,7 @@
 
 <div class="registration-token-component">
     <!-- Step Indicator - Dynamic based on token requirement and payment requirement -->
-    @if (_currentStep > 0)
+    @if (_currentStep > 0 && !HideStepIndicator)
     {
         <div class="step-indicator mb-3">
             <div class="d-flex justify-content-center">
@@ -308,7 +308,11 @@
                         {
                             <span class="spinner-border spinner-border-sm me-2" role="status"></span>
                         }
-                        @if (_requiresPayment)
+                        @if (!string.IsNullOrEmpty(SubmitButtonText))
+                        {
+                            @SubmitButtonText
+                        }
+                        else if (_requiresPayment)
                         {
                             <text>Continue to Payment</text>
                         }
@@ -581,15 +585,43 @@
     /// </summary>
     [Parameter] public string? RedirectUrl { get; set; }
     
+    /// <summary>
+    /// If true, the component validates the form client-side but does NOT call the registration API.
+    /// Instead, it fires OnFormDataCollected with the collected data.
+    /// Used by SignupWithSubscriptionComponent to defer user creation until after tier selection.
+    /// </summary>
+    [Parameter] public bool DeferSubmission { get; set; }
+
+    /// <summary>
+    /// Called when DeferSubmission is true and the form passes validation.
+    /// Provides the collected form data without creating the user.
+    /// </summary>
+    [Parameter] public EventCallback<RegistrationFormData> OnFormDataCollected { get; set; }
+
+    /// <summary>
+    /// Pre-populate form fields (e.g., when returning from tier selection step).
+    /// </summary>
+    [Parameter] public RegistrationFormData? InitialFormData { get; set; }
+
+    /// <summary>
+    /// Custom text for the submit button. Defaults to "Create Account" or "Continue to Payment".
+    /// </summary>
+    [Parameter] public string? SubmitButtonText { get; set; }
+
+    /// <summary>
+    /// If true, hides the step indicator. Useful when a parent component shows its own steps.
+    /// </summary>
+    [Parameter] public bool HideStepIndicator { get; set; }
+
     [Parameter] public EventCallback<RegistrationSuccessEventArgs> OnRegistrationSuccess { get; set; }
-    
+
     /// <summary>
     /// Called when auto-login completes successfully. Provides the AuthenticationResponse.
     /// </summary>
     [Parameter] public EventCallback<AuthenticationResponse> OnAutoLoginSuccess { get; set; }
-    
+
     [Parameter] public EventCallback<string> OnError { get; set; }
-    
+
     /// <summary>
     /// Called when user wants to cancel/close the registration.
     /// </summary>
@@ -666,10 +698,30 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Pre-populate form from InitialFormData if provided (e.g., returning from tier selection)
+        if (InitialFormData != null)
+        {
+            _registrationModel.FirstName = InitialFormData.FirstName ?? string.Empty;
+            _registrationModel.LastName = InitialFormData.LastName ?? string.Empty;
+            _registrationModel.Username = InitialFormData.Username ?? string.Empty;
+            _registrationModel.Email = InitialFormData.Email ?? string.Empty;
+            _registrationModel.Password = InitialFormData.Password ?? string.Empty;
+            _registrationModel.ConfirmPassword = InitialFormData.Password ?? string.Empty;
+            if (!string.IsNullOrEmpty(InitialFormData.Token))
+            {
+                _tokenValue = InitialFormData.Token;
+            }
+        }
+
         // If token is provided as parameter, auto-populate and validate
         if (!string.IsNullOrEmpty(Token))
         {
             _tokenValue = Token;
+            await ValidateTokenAsync();
+        }
+        // If token was restored from InitialFormData (returning from a previous step), re-validate it
+        else if (!string.IsNullOrEmpty(_tokenValue) && InitialFormData != null)
+        {
             await ValidateTokenAsync();
         }
         // If token is strictly required (no open registration), stay on step 1
@@ -683,13 +735,13 @@
         {
             _tokenValidated = true;
             _currentStep = 2;
-            
+
             // Set up pricing from default pricing model if provided
             if (!string.IsNullOrEmpty(DefaultPricingModelId))
             {
                 await LoadDefaultPricingDetailsAsync();
             }
-            
+
             if (!string.IsNullOrEmpty(AppId))
             {
                 await LoadPasswordRequirementsAsync();
@@ -893,7 +945,25 @@
         {
             _isLoading = true;
             _registrationError = string.Empty;
-            
+
+            // DeferSubmission mode: validate client-side only and return form data
+            if (DeferSubmission)
+            {
+                var formData = new RegistrationFormData
+                {
+                    FirstName = _registrationModel.FirstName,
+                    LastName = _registrationModel.LastName,
+                    Username = _registrationModel.Username,
+                    Email = _registrationModel.Email,
+                    Password = _registrationModel.Password,
+                    Token = _useToken ? _tokenValue : null,
+                    AppId = AppId,
+                    PricingModelId = DefaultPricingModelId
+                };
+                await OnFormDataCollected.InvokeAsync(formData);
+                return;
+            }
+
             // Step 1: Validate registration data first (without creating the user)
             var validationRequest = new ValidateRegistrationRequest
             {
@@ -1666,7 +1736,7 @@
         public List<string>? PasswordErrors { get; set; }
         public string? ErrorMessage { get; set; }
         public string? ErrorCode { get; set; }
-        
+
         // Pricing information
         public bool RequiresPayment { get; set; }
         public bool IsSubscription { get; set; }
@@ -1676,5 +1746,22 @@
         public string? Currency { get; set; }
         public string[]? GrantedApps { get; set; }
         public string? PaymentAppId { get; set; }
+    }
+
+    /// <summary>
+    /// Collected registration form data (not yet submitted to API).
+    /// Used by DeferSubmission mode to pass form data to a parent component
+    /// that orchestrates multi-step signup flows.
+    /// </summary>
+    public class RegistrationFormData
+    {
+        public string? FirstName { get; set; }
+        public string? LastName { get; set; }
+        public string? Username { get; set; }
+        public string? Email { get; set; }
+        public string? Password { get; set; }
+        public string? Token { get; set; }
+        public string? AppId { get; set; }
+        public string? PricingModelId { get; set; }
     }
 }

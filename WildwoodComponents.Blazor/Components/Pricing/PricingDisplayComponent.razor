@@ -62,8 +62,12 @@
                 var discount = _billingAnnual ? GetAnnualDiscount(tier) : (int?)null;
                 var enterprise = IsEnterpriseTier(tier);
 
-                <div class="ww-tier-card @(tier.IsDefault ? "ww-tier-default" : "")">
-                    @if (tier.IsDefault)
+                <div class="ww-tier-card @(tier.IsDefault ? "ww-tier-default" : "") @(tier.Id == PreSelectedTierId ? "ww-tier-selected" : "")">
+                    @if (tier.Id == PreSelectedTierId)
+                    {
+                        <div class="ww-tier-default-badge">Your Selection</div>
+                    }
+                    else if (tier.IsDefault)
                     {
                         <div class="ww-tier-default-badge">Popular</div>
                     }
