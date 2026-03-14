@@ -1,10 +1,24 @@
 @using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Payment
 @using WildwoodComponents.Blazor.Components.Pricing
 @using WildwoodComponents.Blazor.Models
 @using WildwoodComponents.Blazor.Services
 @using WildwoodComponents.Shared.Models
 @using static WildwoodComponents.Blazor.Components.Registration.TokenRegistrationComponent
 @inherits BaseWildwoodComponent
+
+@if (_tierLoading)
+{
+    <div class="@GetRootCssClasses() ww-signup-subscription @CssClass">
+        <div class="ww-signup-step ww-signup-processing">
+            <div class="ww-signup-spinner">
+                <div class="ww-spinner"></div>
+            </div>
+            <p class="ww-text-muted">Loading plan details...</p>
+        </div>
+    </div>
+    return;
+}
 
 <div class="@GetRootCssClasses() ww-signup-subscription @CssClass">
     @* Step Indicator *@
@@ -45,6 +59,36 @@
         </div>
     }
 
+    @* Plan Summary Card — shown above registration when a tier is pre-selected *@
+    @if (HasPreSelectedTier && _currentStep == SignupStep.Register && _preSelectedTier != null)
+    {
+        <div class="ww-plan-summary-card">
+            <div class="ww-plan-summary-content">
+                <div class="ww-plan-info">
+                    <h5 class="ww-plan-name">@_preSelectedTier.Name</h5>
+                    @if (!string.IsNullOrEmpty(_preSelectedTier.Description))
+                    {
+                        <p class="ww-plan-desc">@_preSelectedTier.Description</p>
+                    }
+                </div>
+                <div class="ww-plan-price">
+                    @if (_preSelectedTier.IsFreeTier && _preSelectedTierPricing == null)
+                    {
+                        <span class="ww-price-amount">Free</span>
+                    }
+                    else if (_preSelectedTierPricing != null)
+                    {
+                        <span class="ww-price-amount">@GetCurrencySymbol()@_preSelectedTierPricing.Price.ToString("N0")</span>
+                        <span class="ww-price-period">/@(_preSelectedTierPricing.BillingFrequency?.ToLower() ?? "month")</span>
+                    }
+                </div>
+            </div>
+            <button type="button" class="ww-plan-change-link" @onclick="HandleChangePlan">
+                Change plan
+            </button>
+        </div>
+    }
+
     @* Step 1: Registration (deferred - collects data only) *@
     @if (_currentStep == SignupStep.Register)
     {
@@ -56,7 +100,7 @@
                 AllowOpenRegistration="@AllowOpenRegistration"
                 DeferSubmission="true"
                 OnFormDataCollected="HandleFormDataCollected"
-                SubmitButtonText="Continue"
+                SubmitButtonText="@(EffectiveSkipTierSelection ? "Create Account" : "Continue")"
                 HideStepIndicator="true"
                 InitialFormData="@_collectedFormData"
                 OnCancel="HandleCancel" />
@@ -93,7 +137,49 @@
         </div>
     }
 
-    @* Step 3: Processing (atomic register + login + subscribe) *@
+    @* Step 3: Payment (shown for paid tiers before account creation) *@
+    @if (_currentStep == SignupStep.Payment && _selectedTier != null && _selectedPricing != null)
+    {
+        <div class="ww-signup-step">
+            @* Order Summary *@
+            <div class="ww-payment-summary">
+                <div class="ww-payment-summary-header">
+                    <h4>Order Summary</h4>
+                </div>
+                <div class="ww-payment-summary-row">
+                    <span>@_selectedTier.Name</span>
+                    <span class="ww-payment-summary-price">
+                        @GetCurrencySymbol()@_selectedPricing.Price.ToString("N0")
+                        <span class="ww-payment-summary-period">/@(_selectedPricing.BillingFrequency?.ToLower() ?? "month")</span>
+                    </span>
+                </div>
+            </div>
+
+            <PaymentComponent
+                AppId="@AppId"
+                Amount="@_selectedPricing.Price"
+                Currency="USD"
+                Description="@($"{_selectedTier.Name} Subscription")"
+                PricingModelId="@_selectedPricing.PricingModelId"
+                IsSubscription="true"
+                ShowAmount="false"
+                RequireBillingAddress="@RequireBillingAddress"
+                OnPaymentSuccess="HandlePaymentSuccess"
+                OnPaymentFailure="HandlePaymentFailure"
+                OnCancel="HandleBack" />
+
+            <div class="ww-signup-step-nav">
+                <button type="button" class="ww-btn ww-btn-link" @onclick="HandleBack">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                    Back
+                </button>
+            </div>
+        </div>
+    }
+
+    @* Processing (atomic register + login + link + subscribe) *@
     @if (_currentStep == SignupStep.Processing)
     {
         <div class="ww-signup-step ww-signup-processing">
@@ -128,7 +214,7 @@
         </div>
     }
 
-    @* Step 4: Success *@
+    @* Success *@
     @if (_currentStep == SignupStep.Success)
     {
         <div class="ww-signup-step ww-signup-success">
@@ -140,7 +226,7 @@
             </div>
             <h3>You're All Set!</h3>
             <p class="ww-text-muted">
-                @if (SkipTierSelection)
+                @if (SkipTierSelection && !HasPreSelectedTier)
                 {
                     <text>Your account has been created successfully.</text>
                 }

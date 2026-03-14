@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -21,6 +22,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
 
         [Inject] private IAuthenticationService AuthService { get; set; } = default!;
         [Inject] private IAppTierComponentService AppTierService { get; set; } = default!;
+        [Inject] private IPaymentProviderService PaymentProviderService { get; set; } = default!;
         [Inject] private IWildwoodSessionManager SessionManager { get; set; } = default!;
         [Inject] private IHttpClientFactory HttpClientFactory { get; set; } = default!;
         [Inject] private IOptions<WildwoodComponentsOptions> OptionsAccessor { get; set; } = default!;
@@ -43,6 +45,11 @@ namespace WildwoodComponents.Blazor.Components.Registration
         /// </summary>
         [Parameter] public bool SkipTierSelection { get; set; }
 
+        /// <summary>
+        /// If true, requires billing address during payment.
+        /// </summary>
+        [Parameter] public bool RequireBillingAddress { get; set; }
+
         [Parameter] public EventCallback OnComplete { get; set; }
         [Parameter] public EventCallback OnCancel { get; set; }
 
@@ -64,10 +71,23 @@ namespace WildwoodComponents.Blazor.Components.Registration
         private AuthenticationResponse? _authResponse;
         private RegistrationSuccessResponse? _registrationResponse;
 
+        // Payment tracking (deferred flow: payment before user creation)
+        private string? _paymentTransactionId;
+        private string? _paymentExternalId;
+
+        // Pre-selected tier details
+        private AppTierModel? _preSelectedTier;
+        private AppTierPricingModel? _preSelectedTierPricing;
+        private AppTierModel? _selectedTier;
+        private AppTierPricingModel? _selectedPricing;
+        private bool _tierLoading;
+        private bool _showFullTierSelection;
+
         private enum SignupStep
         {
             Register,
             SelectTier,
+            Payment,
             Processing,
             Success
         }
@@ -85,26 +105,78 @@ namespace WildwoodComponents.Blazor.Components.Registration
 
         #region Lifecycle
 
-        protected override Task OnComponentInitializedAsync()
+        protected override async Task OnComponentInitializedAsync()
         {
             _selectedTierId = PreSelectedTierId;
+
+            // Fetch pre-selected tier details if provided
+            if (!string.IsNullOrEmpty(PreSelectedTierId))
+            {
+                _tierLoading = true;
+                StateHasChanged();
+
+                try
+                {
+                    var tiers = await AppTierService.GetPublicTiersAsync(AppId);
+                    var tier = tiers?.FirstOrDefault(t => t.Id == PreSelectedTierId);
+                    if (tier != null)
+                    {
+                        _preSelectedTier = tier;
+                        _preSelectedTierPricing = tier.PricingOptions?.FirstOrDefault(p => p.IsDefault)
+                            ?? tier.PricingOptions?.FirstOrDefault();
+                        _selectedTier = tier;
+                        _selectedPricing = _preSelectedTierPricing;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Failed to load pre-selected tier details");
+                }
+                finally
+                {
+                    _tierLoading = false;
+                }
+            }
+
             BuildStepConfig();
-            return Task.CompletedTask;
         }
+
+        /// <summary>
+        /// Whether the pre-selected tier is active (not overridden by full tier selection).
+        /// </summary>
+        private bool HasPreSelectedTier => _preSelectedTier != null && !_showFullTierSelection;
+
+        /// <summary>
+        /// Whether tier selection should be skipped (either explicitly or via pre-selected tier).
+        /// </summary>
+        private bool EffectiveSkipTierSelection => SkipTierSelection || HasPreSelectedTier;
+
+        /// <summary>
+        /// Whether the selected tier requires payment.
+        /// </summary>
+        private bool RequiresPayment =>
+            _selectedTier != null && !_selectedTier.IsFreeTier
+            && _selectedPricing != null && _selectedPricing.Price > 0;
 
         private void BuildStepConfig()
         {
+            var stepNumber = 1;
             _stepConfig = new List<StepDef>
             {
-                new StepDef { Key = SignupStep.Register, Label = "Create Account", Number = 1 },
+                new StepDef { Key = SignupStep.Register, Label = "Create Account", Number = stepNumber++ },
             };
 
-            if (!SkipTierSelection)
+            if (!EffectiveSkipTierSelection)
             {
-                _stepConfig.Add(new StepDef { Key = SignupStep.SelectTier, Label = "Choose Plan", Number = 2 });
+                _stepConfig.Add(new StepDef { Key = SignupStep.SelectTier, Label = "Choose Plan", Number = stepNumber++ });
             }
 
-            _stepConfig.Add(new StepDef { Key = SignupStep.Success, Label = "Complete", Number = SkipTierSelection ? 2 : 3 });
+            if (RequiresPayment)
+            {
+                _stepConfig.Add(new StepDef { Key = SignupStep.Payment, Label = "Payment", Number = stepNumber++ });
+            }
+
+            _stepConfig.Add(new StepDef { Key = SignupStep.Success, Label = "Complete", Number = stepNumber });
         }
 
         #endregion
@@ -115,22 +187,70 @@ namespace WildwoodComponents.Blazor.Components.Registration
         {
             _collectedFormData = formData;
 
-            if (SkipTierSelection)
+            if (EffectiveSkipTierSelection)
             {
-                _ = ProcessSignupAsync();
+                if (RequiresPayment)
+                {
+                    _currentStep = SignupStep.Payment;
+                    BuildStepConfig();
+                }
+                else
+                {
+                    _ = ProcessSignupAsync();
+                    return;
+                }
             }
             else
             {
                 _currentStep = SignupStep.SelectTier;
-                StateHasChanged();
             }
+            StateHasChanged();
         }
 
         private void HandleTierSelected(PricingTierSelectedEventArgs args)
         {
             _selectedTierId = args.Tier.Id;
             _selectedPricingId = args.SelectedPricing?.Id;
-            _ = ProcessSignupAsync();
+            _selectedTier = args.Tier;
+            _selectedPricing = args.SelectedPricing;
+
+            // Check if this tier requires payment
+            var isPaid = !args.Tier.IsFreeTier && args.SelectedPricing != null && args.SelectedPricing.Price > 0;
+            if (isPaid)
+            {
+                BuildStepConfig();
+                _currentStep = SignupStep.Payment;
+                StateHasChanged();
+            }
+            else
+            {
+                _ = ProcessSignupAsync();
+            }
+        }
+
+        private void HandlePaymentSuccess(PaymentSuccessEventArgs args)
+        {
+            _paymentTransactionId = args.TransactionId ?? args.PaymentIntentId;
+            _paymentExternalId = args.PaymentIntentId;
+
+            if (_collectedFormData != null)
+            {
+                _ = ProcessSignupAsync();
+            }
+        }
+
+        private void HandlePaymentFailure(PaymentFailureEventArgs args)
+        {
+            // Stay on payment step — PaymentComponent shows its own error
+            Logger.LogWarning("Payment failed: {Message}", args.ErrorMessage);
+        }
+
+        private void HandleChangePlan()
+        {
+            _showFullTierSelection = true;
+            _currentStep = SignupStep.SelectTier;
+            BuildStepConfig();
+            StateHasChanged();
         }
 
         private void HandleBack()
@@ -138,8 +258,17 @@ namespace WildwoodComponents.Blazor.Components.Registration
             if (_currentStep == SignupStep.SelectTier)
             {
                 _currentStep = SignupStep.Register;
-                StateHasChanged();
+                if (_preSelectedTier != null)
+                {
+                    _showFullTierSelection = false;
+                    BuildStepConfig();
+                }
             }
+            else if (_currentStep == SignupStep.Payment)
+            {
+                _currentStep = EffectiveSkipTierSelection ? SignupStep.Register : SignupStep.SelectTier;
+            }
+            StateHasChanged();
         }
 
         private async Task HandleCancel()
@@ -174,6 +303,9 @@ namespace WildwoodComponents.Blazor.Components.Registration
             _registrationResponse = null;
             _processingError = null;
             _processingStatus = null;
+            _paymentTransactionId = null;
+            _paymentExternalId = null;
+            BuildStepConfig();
             StateHasChanged();
         }
 
@@ -309,13 +441,28 @@ namespace WildwoodComponents.Blazor.Components.Registration
                     }
                 }
 
-                // Step 3: Subscribe to selected tier (if a tier was selected)
+                // Step 3: Link payment transaction to newly created user (if payment was made before registration)
+                var linkId = _paymentExternalId ?? _paymentTransactionId;
+                if (!string.IsNullOrEmpty(linkId) && _authResponse != null && !string.IsNullOrEmpty(_authResponse.Id))
+                {
+                    try
+                    {
+                        await PaymentProviderService.LinkTransactionToUserAsync(linkId, _authResponse.Id);
+                    }
+                    catch (Exception linkEx)
+                    {
+                        // Non-fatal — payment was successful, linking can be retried
+                        Logger.LogWarning(linkEx, "Failed to link payment transaction to user");
+                    }
+                }
+
+                // Step 4: Subscribe to selected tier (if a tier was selected)
                 if (!string.IsNullOrEmpty(_selectedTierId))
                 {
                     _processingStatus = "Activating your plan...";
                     StateHasChanged();
 
-                    var result = await AppTierService.SubscribeToTierAsync(AppId, _selectedTierId, _selectedPricingId, null);
+                    var result = await AppTierService.SubscribeToTierAsync(AppId, _selectedTierId, _selectedPricingId, _paymentTransactionId);
                     if (!result.Success)
                     {
                         Logger.LogWarning("Tier subscription failed: {Message}", result.ErrorMessage);
@@ -372,16 +519,27 @@ namespace WildwoodComponents.Blazor.Components.Registration
         }
 
         /// <summary>
-        /// Gets the step index for the step indicator, mapping Processing to SelectTier's position.
+        /// Gets the step index for the step indicator, mapping Processing to the Success position.
         /// </summary>
         private int GetDisplayStepIndex()
         {
-            // Processing step shares the position of the last action step
+            // Processing maps to the same position as Success in the indicator
             if (_currentStep == SignupStep.Processing)
             {
-                return SkipTierSelection ? 0 : 1;
+                return _stepConfig.Count - 1;
             }
             return GetStepIndex(_currentStep);
+        }
+
+        private string GetCurrencySymbol(string currency = "USD")
+        {
+            return currency switch
+            {
+                "EUR" => "\u20AC",
+                "GBP" => "\u00A3",
+                "JPY" => "\u00A5",
+                _ => "$"
+            };
         }
 
         #endregion
