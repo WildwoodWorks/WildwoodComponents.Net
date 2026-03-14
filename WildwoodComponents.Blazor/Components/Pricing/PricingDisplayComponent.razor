@@ -63,13 +63,13 @@
                 var enterprise = IsEnterpriseTier(tier);
 
                 <div class="ww-tier-card @(tier.IsDefault ? "ww-tier-default" : "") @(tier.Id == PreSelectedTierId ? "ww-tier-selected" : "")">
-                    @if (tier.Id == PreSelectedTierId)
+                    @if (!string.IsNullOrEmpty(tier.CustomBadgeText))
+                    {
+                        <div class="ww-tier-default-badge">@tier.CustomBadgeText</div>
+                    }
+                    else if (tier.Id == PreSelectedTierId)
                     {
                         <div class="ww-tier-default-badge">Your Selection</div>
-                    }
-                    else if (tier.IsDefault)
-                    {
-                        <div class="ww-tier-default-badge">Popular</div>
                     }
                     <div class="ww-tier-header">
                         @if (!string.IsNullOrEmpty(tier.IconClass))
@@ -81,21 +81,24 @@
                         {
                             <span class="ww-badge ww-badge-@tier.BadgeColor">@tier.Status</span>
                         }
-                        <div class="ww-tier-price">
-                            @if (enterprise)
-                            {
-                                <span class="ww-tier-price-amount">Custom</span>
-                            }
-                            else if (tier.IsFreeTier && pricing == null)
-                            {
-                                <span class="ww-tier-price-amount">Free</span>
-                            }
-                            else if (pricing != null)
-                            {
-                                <span class="ww-tier-price-amount">@FormatPrice(pricing.Price)</span>
-                                <span class="ww-tier-price-interval">/@(pricing.BillingFrequency?.ToLower() ?? "month")</span>
-                            }
-                        </div>
+                        @if (tier.ShowPrice)
+                        {
+                            <div class="ww-tier-price">
+                                @if (enterprise)
+                                {
+                                    <span class="ww-tier-price-amount">Custom</span>
+                                }
+                                else if (tier.IsFreeTier && pricing == null)
+                                {
+                                    <span class="ww-tier-price-amount">Free</span>
+                                }
+                                else if (pricing != null)
+                                {
+                                    <span class="ww-tier-price-amount">@FormatPrice(pricing.Price)</span>
+                                    <span class="ww-tier-price-interval">/@(pricing.BillingFrequency?.ToLower() ?? "month")</span>
+                                }
+                            </div>
+                        }
                         @if (discount.HasValue && discount.Value > 0)
                         {
                             <div class="ww-tier-discount">Save @discount%</div>
@@ -154,7 +157,15 @@
                     }
 
                     <div class="ww-tier-footer">
-                        @if (enterprise && !string.IsNullOrEmpty(EnterpriseContactUrl))
+                        @if (tier.ShowContactButton && !string.IsNullOrEmpty(tier.ContactButtonUrl))
+                        {
+                            <a href="@tier.ContactButtonUrl"
+                               class="ww-btn ww-btn-outline ww-btn-block"
+                               @(tier.ContactButtonUrl.StartsWith("http") ? "target=\"_blank\" rel=\"noopener noreferrer\"" : "")>
+                                Contact Us
+                            </a>
+                        }
+                        else if (enterprise && !string.IsNullOrEmpty(EnterpriseContactUrl))
                         {
                             <a href="@EnterpriseContactUrl"
                                class="ww-btn ww-btn-outline ww-btn-block"
@@ -168,16 +179,10 @@
                                 Contact Sales
                             </button>
                         }
-                        else if (tier.IsFreeTier)
+                        else if (tier.ShowSubscribeButton)
                         {
                             <button type="button" class="ww-btn @(tier.IsDefault ? "ww-btn-primary" : "ww-btn-outline") ww-btn-block" @onclick="() => HandleSelectTier(tier)">
-                                Get Started
-                            </button>
-                        }
-                        else
-                        {
-                            <button type="button" class="ww-btn @(tier.IsDefault ? "ww-btn-primary" : "ww-btn-outline") ww-btn-block" @onclick="() => HandleSelectTier(tier)">
-                                Subscribe
+                                @(tier.IsFreeTier ? "Get Started" : "Subscribe")
                             </button>
                         }
                     </div>

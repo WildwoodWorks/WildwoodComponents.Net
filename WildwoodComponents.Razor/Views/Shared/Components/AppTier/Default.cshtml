@@ -56,10 +56,10 @@
                          data-tier-name="@tier.Name"
                          data-is-free="@tier.IsFreeTier.ToString().ToLower()">
 
-                        @if (tier.IsDefault && !isCurrentPlan)
+                        @if (!string.IsNullOrEmpty(tier.CustomBadgeText) && !isCurrentPlan)
                         {
                             <div class="ww-tier-badge @GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
-                                <small>Recommended</small>
+                                <small>@tier.CustomBadgeText</small>
                             </div>
                         }
                         @if (isCurrentPlan)
@@ -78,29 +78,32 @@
                             }
                             <h5 class="ww-tier-name">@tier.Name</h5>
 
-                            <div class="ww-tier-price my-3">
-                                @if (tier.IsFreeTier)
-                                {
-                                    <span class="ww-price-amount">Free</span>
-                                }
-                                else
-                                {
-                                    @* Pricing data attributes for JS to toggle *@
-                                    @foreach (var pricing in tier.PricingOptions)
+                            @if (tier.ShowPrice)
+                            {
+                                <div class="ww-tier-price my-3">
+                                    @if (tier.IsFreeTier)
                                     {
-                                        <span class="ww-price-option"
-                                              data-pricing-id="@pricing.Id"
-                                              data-billing="@pricing.BillingFrequency.ToLower()"
-                                              data-price="@pricing.Price"
-                                              data-is-default="@pricing.IsDefault.ToString().ToLower()"
-                                              style="display:none;">
-                                            <span class="ww-price-currency">@GetCurrencySymbol(Model.Currency)</span>
-                                            <span class="ww-price-amount">@pricing.Price.ToString("N0")</span>
-                                            <span class="ww-price-period">/@pricing.BillingFrequencyLabel.ToLower()</span>
-                                        </span>
+                                        <span class="ww-price-amount">Free</span>
                                     }
-                                }
-                            </div>
+                                    else
+                                    {
+                                        @* Pricing data attributes for JS to toggle *@
+                                        @foreach (var pricing in tier.PricingOptions)
+                                        {
+                                            <span class="ww-price-option"
+                                                  data-pricing-id="@pricing.Id"
+                                                  data-billing="@pricing.BillingFrequency.ToLower()"
+                                                  data-price="@pricing.Price"
+                                                  data-is-default="@pricing.IsDefault.ToString().ToLower()"
+                                                  style="display:none;">
+                                                <span class="ww-price-currency">@GetCurrencySymbol(Model.Currency)</span>
+                                                <span class="ww-price-amount">@pricing.Price.ToString("N0")</span>
+                                                <span class="ww-price-period">/@pricing.BillingFrequencyLabel.ToLower()</span>
+                                            </span>
+                                        }
+                                    }
+                                </div>
+                            }
 
                             @if (!string.IsNullOrEmpty(tier.Description))
                             {
@@ -157,7 +160,15 @@
                                     Current Plan
                                 </button>
                             }
-                            else
+                            else if (tier.ShowContactButton && !string.IsNullOrEmpty(tier.ContactButtonUrl))
+                            {
+                                <a href="@tier.ContactButtonUrl"
+                                   class="btn @(tier.IsDefault ? "btn-primary" : "btn-outline-primary") w-100"
+                                   @(tier.ContactButtonUrl.StartsWith("http") ? "target=\"_blank\" rel=\"noopener noreferrer\"" : "")>
+                                    Contact Us
+                                </a>
+                            }
+                            else if (tier.ShowSubscribeButton)
                             {
                                 <button class="btn @(tier.IsDefault ? "btn-primary" : "btn-outline-primary") w-100 ww-select-tier-btn"
                                         data-tier-id="@tier.Id"

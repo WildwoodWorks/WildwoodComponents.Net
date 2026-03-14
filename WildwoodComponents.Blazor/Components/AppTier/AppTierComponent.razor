@@ -62,16 +62,16 @@
 
                     <div class="col-md-4 mb-4">
                         <div class="tier-card card h-100 @(tier.IsDefault ? "border-primary recommended" : "") @(isCurrentPlan ? "current-plan" : "") @(isPreSelected ? "pre-selected" : "")">
-                            @if (isPreSelected && !isCurrentPlan)
+                            @if (!string.IsNullOrEmpty(tier.CustomBadgeText) && !isCurrentPlan)
+                            {
+                                <div class="tier-badge @GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
+                                    <small>@tier.CustomBadgeText</small>
+                                </div>
+                            }
+                            else if (isPreSelected && !isCurrentPlan)
                             {
                                 <div class="tier-badge bg-info text-white text-center py-1">
                                     <small>Your Selection</small>
-                                </div>
-                            }
-                            else if (tier.IsDefault && !isCurrentPlan)
-                            {
-                                <div class="tier-badge @GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
-                                    <small>Recommended</small>
                                 </div>
                             }
                             @if (isCurrentPlan)
@@ -89,18 +89,21 @@
                                 }
                                 <h5 class="tier-name">@tier.Name</h5>
 
-                                <div class="tier-price my-3">
-                                    @if (tier.IsFreeTier)
-                                    {
-                                        <span class="price-amount">Free</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="price-currency">@GetCurrencySymbol(Currency)</span>
-                                        <span class="price-amount">@price.ToString("N0")</span>
-                                        <span class="price-period">@GetPricePeriod(_selectedBillingCycle)</span>
-                                    }
-                                </div>
+                                @if (tier.ShowPrice)
+                                {
+                                    <div class="tier-price my-3">
+                                        @if (tier.IsFreeTier)
+                                        {
+                                            <span class="price-amount">Free</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="price-currency">@GetCurrencySymbol(Currency)</span>
+                                            <span class="price-amount">@price.ToString("N0")</span>
+                                            <span class="price-period">@GetPricePeriod(_selectedBillingCycle)</span>
+                                        }
+                                    </div>
+                                }
 
                                 @if (!string.IsNullOrEmpty(tier.Description))
                                 {
@@ -156,7 +159,15 @@
                                         Current Plan
                                     </button>
                                 }
-                                else
+                                else if (tier.ShowContactButton && !string.IsNullOrEmpty(tier.ContactButtonUrl))
+                                {
+                                    <a href="@tier.ContactButtonUrl"
+                                       class="btn @(tier.IsDefault ? "btn-primary" : "btn-outline-primary") w-100"
+                                       @(tier.ContactButtonUrl.StartsWith("http") ? "target=\"_blank\" rel=\"noopener noreferrer\"" : "")>
+                                        Contact Us
+                                    </a>
+                                }
+                                else if (tier.ShowSubscribeButton)
                                 {
                                     <button class="btn @(isPreSelected || tier.IsDefault ? "btn-primary" : "btn-outline-primary") w-100"
                                             @onclick="() => SelectTier(tier)">

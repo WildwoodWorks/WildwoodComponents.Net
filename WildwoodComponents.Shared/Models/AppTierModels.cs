@@ -16,6 +16,11 @@ public class AppTierModel
     public string Status { get; set; } = string.Empty;
     public string BadgeColor { get; set; } = string.Empty;
     public string IconClass { get; set; } = string.Empty;
+    public bool ShowSubscribeButton { get; set; } = true;
+    public bool ShowContactButton { get; set; }
+    public string? ContactButtonUrl { get; set; }
+    public bool ShowPrice { get; set; } = true;
+    public string? CustomBadgeText { get; set; }
     public List<AppTierPricingModel> PricingOptions { get; set; } = new();
     public List<AppTierFeatureModel> Features { get; set; } = new();
     public List<AppTierLimitModel> Limits { get; set; } = new();
