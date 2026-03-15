@@ -1,15 +1,4 @@
-.ww-tier-card {
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.ww-tier-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--ww-shadow-lg, 0 1rem 3rem rgba(0, 0, 0, 0.175)) !important;
-}
-
-.ww-tier-card .card-title {
-    color: var(--ww-text-primary, #212529);
-}
+/* TierPlansPanel scoped styles - tier card styling is in wildwood-themes.css */
 
 .ww-billing-toggle .btn-primary {
     background-color: var(--ww-primary, #0d6efd);

@@ -32,164 +32,179 @@
             <!-- Billing Cycle Toggle -->
             @if (ShowBillingToggle && HasMonthlyAndAnnualPricing())
             {
-                <div class="billing-toggle text-center mb-4">
-                    <div class="btn-group" role="group">
-                        <button type="button"
-                                class="btn @(_selectedBillingCycle == "monthly" ? "btn-primary" : "btn-outline-primary")"
-                                @onclick="@(() => SetBillingCycle("monthly"))">
-                            Monthly
-                        </button>
-                        <button type="button"
-                                class="btn @(_selectedBillingCycle == "annually" ? "btn-primary" : "btn-outline-primary")"
-                                @onclick="@(() => SetBillingCycle("annually"))">
-                            Annually
-                            @if (AnnualDiscount > 0)
-                            {
-                                <span class="badge bg-success ms-1">Save @AnnualDiscount%</span>
-                            }
-                        </button>
-                    </div>
+                <div class="ww-apptier-billing-toggle">
+                    <span class="@(_selectedBillingCycle == "monthly" ? "ww-billing-active" : "")">Monthly</span>
+                    <button type="button"
+                            class="ww-toggle @(_selectedBillingCycle == "annually" ? "ww-toggle-on" : "")"
+                            @onclick="@(() => SetBillingCycle(_selectedBillingCycle == "annually" ? "monthly" : "annually"))"
+                            aria-label="Toggle annual billing">
+                        <span class="ww-toggle-slider"></span>
+                    </button>
+                    <span class="@(_selectedBillingCycle == "annually" ? "ww-billing-active" : "")">
+                        Annual
+                        @{ var _maxDiscount = GetMaxAnnualDiscount(); }
+                        @if (_maxDiscount > 0)
+                        {
+                            <span class="ww-badge ww-badge-success ww-badge-sm">Save @_maxDiscount%</span>
+                        }
+                    </span>
                 </div>
             }
 
             <!-- Tier Cards Grid -->
-            <div class="tier-grid row justify-content-center">
+            <div class="ww-tier-grid">
                 @foreach (var tier in _tiers)
                 {
                     var isCurrentPlan = IsTierCurrentPlan(tier);
                     var isPreSelected = IsTierPreSelected(tier);
-                    var price = GetDisplayPrice(tier, _selectedBillingCycle, AnnualDiscount);
+                    var pricing = FindPricingForCycle(tier, _selectedBillingCycle);
+                    var enterprise = IsEnterpriseTier(tier);
 
-                    <div class="col-md-4 mb-4">
-                        <div class="tier-card card h-100 @(tier.IsDefault ? "border-primary recommended" : "") @(isCurrentPlan ? "current-plan" : "") @(isPreSelected ? "pre-selected" : "")">
-                            @if (!string.IsNullOrEmpty(tier.CustomBadgeText) && !isCurrentPlan)
+                    <div class="ww-tier-card @(isCurrentPlan ? "ww-tier-current" : "") @(isPreSelected && !isCurrentPlan ? "ww-tier-preselected" : "") @(tier.IsDefault && !isPreSelected && !isCurrentPlan ? "ww-tier-default" : "")">
+                        @if (!isCurrentPlan && !string.IsNullOrEmpty(tier.CustomBadgeText))
+                        {
+                            <div class="ww-tier-default-badge">@tier.CustomBadgeText</div>
+                        }
+                        else if (isPreSelected && !isCurrentPlan)
+                        {
+                            <div class="ww-tier-preselected-badge">Your Selection</div>
+                        }
+
+                        <div class="ww-tier-header">
+                            @if (!string.IsNullOrEmpty(tier.IconClass))
                             {
-                                <div class="tier-badge @GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
-                                    <small>@tier.CustomBadgeText</small>
+                                <span class="ww-tier-icon @tier.IconClass"></span>
+                            }
+                            <h3>@tier.Name</h3>
+                            @if (!string.IsNullOrEmpty(tier.BadgeColor))
+                            {
+                                <span class="ww-badge ww-badge-@tier.BadgeColor">@tier.Status</span>
+                            }
+                            @if (tier.ShowPrice)
+                            {
+                                <div class="ww-tier-price">
+                                    @if (enterprise)
+                                    {
+                                        <span class="ww-tier-price-amount">Custom</span>
+                                    }
+                                    else if (tier.IsFreeTier && pricing == null)
+                                    {
+                                        <span class="ww-tier-price-amount">Free</span>
+                                    }
+                                    else if (pricing != null)
+                                    {
+                                        <span class="ww-tier-price-amount">@FormatPrice(pricing.Price)</span>
+                                        <span class="ww-tier-price-interval">/@(pricing.BillingFrequency?.ToLower() ?? "month")</span>
+                                    }
                                 </div>
                             }
-                            else if (isPreSelected && !isCurrentPlan)
-                            {
-                                <div class="tier-badge bg-info text-white text-center py-1">
-                                    <small>Your Selection</small>
-                                </div>
-                            }
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(tier.Description))
+                        {
+                            <p class="ww-tier-description">@tier.Description</p>
+                        }
+
+                        @* Features *@
+                        @if (ShowFeatureComparison && tier.Features.Count > 0)
+                        {
+                            <ul class="ww-tier-features">
+                                @foreach (var f in tier.Features)
+                                {
+                                    <li class="ww-tier-feature-item @(!f.IsEnabled ? "ww-tier-feature-disabled" : "")">
+                                        @if (f.IsEnabled)
+                                        {
+                                            <svg class="ww-tier-feature-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                <polyline points="20 6 9 17 4 12" />
+                                            </svg>
+                                        }
+                                        else
+                                        {
+                                            <svg class="ww-tier-feature-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                <line x1="18" y1="6" x2="6" y2="18" />
+                                                <line x1="6" y1="6" x2="18" y2="18" />
+                                            </svg>
+                                        }
+                                        <span>@(string.IsNullOrEmpty(f.DisplayName) ? f.FeatureCode : f.DisplayName)</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+
+                        @* Limits *@
+                        @if (ShowLimits && tier.Limits.Count > 0)
+                        {
+                            <div class="ww-tier-limits">
+                                @foreach (var l in tier.Limits)
+                                {
+                                    <div class="ww-tier-limit-item">
+                                        <span class="ww-tier-limit-value">@l.MaxValueDisplay</span>
+                                        <span class="ww-tier-limit-name">
+                                            @(string.IsNullOrEmpty(l.DisplayName) ? l.LimitCode : l.DisplayName)
+                                            @if (!string.IsNullOrEmpty(l.Unit))
+                                            {
+                                                <text> (@l.Unit)</text>
+                                            }
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <div class="ww-tier-footer">
                             @if (isCurrentPlan)
                             {
-                                <div class="tier-badge bg-success text-white text-center py-1">
-                                    <small>Current Plan</small>
-                                </div>
+                                <span class="ww-badge ww-badge-success">Current Plan</span>
                             }
-                            <div class="card-body text-center">
-                                @if (!string.IsNullOrEmpty(tier.IconClass))
-                                {
-                                    <div class="tier-icon mb-2">
-                                        <i class="@tier.IconClass" style="font-size: 2rem;"></i>
-                                    </div>
-                                }
-                                <h5 class="tier-name">@tier.Name</h5>
-
-                                @if (tier.ShowPrice)
-                                {
-                                    <div class="tier-price my-3">
-                                        @if (tier.IsFreeTier)
-                                        {
-                                            <span class="price-amount">Free</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="price-currency">@GetCurrencySymbol(Currency)</span>
-                                            <span class="price-amount">@price.ToString("N0")</span>
-                                            <span class="price-period">@GetPricePeriod(_selectedBillingCycle)</span>
-                                        }
-                                    </div>
-                                }
-
-                                @if (!string.IsNullOrEmpty(tier.Description))
-                                {
-                                    <p class="tier-description text-muted small">@tier.Description</p>
-                                }
-
-                                <!-- Features List -->
-                                @if (tier.Features.Count > 0)
-                                {
-                                    <ul class="tier-features list-unstyled text-start mt-3">
-                                        @foreach (var feature in tier.Features)
-                                        {
-                                            <li class="mb-2">
-                                                @if (feature.IsEnabled)
-                                                {
-                                                    <i class="bi bi-check-circle-fill text-success me-2"></i>
-                                                }
-                                                else
-                                                {
-                                                    <i class="bi bi-x-circle text-muted me-2"></i>
-                                                }
-                                                <span class="@(!feature.IsEnabled ? "text-muted" : "")">
-                                                    @(string.IsNullOrEmpty(feature.DisplayName) ? feature.FeatureCode : feature.DisplayName)
-                                                </span>
-                                            </li>
-                                        }
-                                    </ul>
-                                }
-
-                                <!-- Limits List -->
-                                @if (tier.Limits.Count > 0)
-                                {
-                                    <ul class="tier-limits list-unstyled text-start">
-                                        @foreach (var limit in tier.Limits)
-                                        {
-                                            <li class="mb-1 small text-muted">
-                                                <i class="bi bi-speedometer2 me-1"></i>
-                                                @(string.IsNullOrEmpty(limit.DisplayName) ? limit.LimitCode : limit.DisplayName):
-                                                <strong>@limit.MaxValueDisplay</strong>
-                                                @if (!string.IsNullOrEmpty(limit.Unit))
-                                                {
-                                                    <text> @limit.Unit</text>
-                                                }
-                                            </li>
-                                        }
-                                    </ul>
-                                }
-                            </div>
-                            <div class="card-footer bg-transparent border-0 text-center pb-3">
-                                @if (isCurrentPlan)
-                                {
-                                    <button class="btn btn-outline-secondary w-100" disabled>
-                                        Current Plan
-                                    </button>
-                                }
-                                else if (tier.ShowContactButton && !string.IsNullOrEmpty(tier.ContactButtonUrl))
-                                {
-                                    <a href="@tier.ContactButtonUrl"
-                                       class="btn @(tier.IsDefault ? "btn-primary" : "btn-outline-primary") w-100"
-                                       @(tier.ContactButtonUrl.StartsWith("http") ? "target=\"_blank\" rel=\"noopener noreferrer\"" : "")>
-                                        Contact Us
-                                    </a>
-                                }
-                                else if (tier.ShowSubscribeButton)
-                                {
-                                    <button class="btn @(isPreSelected || tier.IsDefault ? "btn-primary" : "btn-outline-primary") w-100"
-                                            @onclick="() => SelectTier(tier)">
-                                        @if (isPreSelected)
-                                        {
-                                            <text>Continue with This Plan</text>
-                                        }
-                                        else if (tier.IsFreeTier)
-                                        {
-                                            <text>Get Started Free</text>
-                                        }
-                                        else if (_currentSubscription != null && _currentSubscription.IsActive)
-                                        {
-                                            <text>Switch to @tier.Name</text>
-                                        }
-                                        else
-                                        {
-                                            <text>Choose @tier.Name</text>
-                                        }
-                                    </button>
-                                }
-                            </div>
+                            else if (tier.ShowContactButton && !string.IsNullOrEmpty(tier.ContactButtonUrl))
+                            {
+                                <a href="@tier.ContactButtonUrl"
+                                   class="ww-btn @(tier.IsDefault ? "ww-btn-primary" : "ww-btn-outline") ww-btn-block"
+                                   @(tier.ContactButtonUrl.StartsWith("http") ? "target=\"_blank\" rel=\"noopener noreferrer\"" : "")>
+                                    Contact Us
+                                </a>
+                            }
+                            else if (enterprise && !string.IsNullOrEmpty(EnterpriseContactUrl))
+                            {
+                                <a href="@EnterpriseContactUrl"
+                                   class="ww-btn ww-btn-outline ww-btn-block"
+                                   @(EnterpriseContactUrl.StartsWith("http") ? "target=\"_blank\" rel=\"noopener noreferrer\"" : "")>
+                                    Contact Sales
+                                </a>
+                            }
+                            else if (enterprise)
+                            {
+                                <button type="button" class="ww-btn ww-btn-outline ww-btn-block" @onclick="() => SelectTier(tier)">
+                                    Contact Sales
+                                </button>
+                            }
+                            else if (tier.ShowSubscribeButton)
+                            {
+                                <button type="button"
+                                        class="ww-btn @(isPreSelected || tier.IsDefault ? "ww-btn-primary" : "ww-btn-outline") ww-btn-block"
+                                        @onclick="() => SelectTier(tier)">
+                                    @if (isPreSelected)
+                                    {
+                                        <text>Continue with This Plan</text>
+                                    }
+                                    else if (tier.IsFreeTier && _currentSubscription != null && _currentSubscription.IsActive)
+                                    {
+                                        <text>Get Started Free</text>
+                                    }
+                                    else if (tier.IsFreeTier)
+                                    {
+                                        <text>Get Started</text>
+                                    }
+                                    else if (_currentSubscription != null && _currentSubscription.IsActive)
+                                    {
+                                        <text>Switch to @tier.Name</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Subscribe</text>
+                                    }
+                                </button>
+                            }
                         </div>
                     </div>
                 }
@@ -241,79 +256,88 @@
             <!-- Add-Ons Section -->
             @if (ShowAddOns && _addOns.Count > 0)
             {
-                <div class="add-ons-section mt-5">
-                    <h4 class="text-center mb-4">Add-Ons</h4>
-                    <div class="row justify-content-center">
+                <div class="ww-addon-section">
+                    <h4 class="ww-addon-title">Add-Ons</h4>
+                    <div class="ww-addon-grid">
                         @foreach (var addOn in _addOns)
                         {
                             var isSubscribed = IsAddOnSubscribed(addOn);
                             var isBundled = IsAddOnBundled(addOn);
                             var pricing = GetDefaultAddOnPricing(addOn);
 
-                            <div class="col-md-4 mb-3">
-                                <div class="card h-100 addon-card @(isSubscribed || isBundled ? "border-success" : "")">
-                                    <div class="card-body">
+                            <div class="ww-addon-card @(isSubscribed || isBundled ? "ww-addon-active" : "")">
+                                <div class="ww-addon-body">
+                                    <div class="ww-addon-header">
                                         @if (!string.IsNullOrEmpty(addOn.IconClass))
                                         {
-                                            <i class="@addOn.IconClass me-2"></i>
+                                            <span class="ww-addon-icon @addOn.IconClass"></span>
                                         }
-                                        <h6 class="d-inline">@addOn.Name</h6>
+                                        <span class="ww-addon-name">@addOn.Name</span>
 
                                         @if (isBundled)
                                         {
-                                            <span class="badge bg-success ms-2">Included</span>
+                                            <span class="ww-badge ww-badge-success ww-badge-sm">Included</span>
                                         }
                                         else if (isSubscribed)
                                         {
-                                            <span class="badge bg-success ms-2">Active</span>
-                                        }
-
-                                        @if (!string.IsNullOrEmpty(addOn.Description))
-                                        {
-                                            <p class="text-muted small mt-2 mb-2">@addOn.Description</p>
-                                        }
-
-                                        @if (pricing != null && !isBundled)
-                                        {
-                                            <p class="mb-2">
-                                                <strong>@GetCurrencySymbol(Currency)@pricing.Price.ToString("N2")</strong>
-                                                <span class="text-muted small">/ @pricing.BillingFrequency.ToLower()</span>
-                                            </p>
-                                        }
-
-                                        <!-- Add-on features -->
-                                        @if (addOn.Features.Count > 0)
-                                        {
-                                            <ul class="list-unstyled small mb-0">
-                                                @foreach (var feature in addOn.Features)
-                                                {
-                                                    <li>
-                                                        <i class="bi bi-check text-success me-1"></i>
-                                                        @(string.IsNullOrEmpty(feature.DisplayName) ? feature.FeatureCode : feature.DisplayName)
-                                                    </li>
-                                                }
-                                            </ul>
+                                            <span class="ww-badge ww-badge-success ww-badge-sm">Active</span>
                                         }
                                     </div>
-                                    @if (!isBundled)
+
+                                    @if (!string.IsNullOrEmpty(addOn.Description))
                                     {
-                                        <div class="card-footer bg-transparent border-0 text-center pb-3">
-                                            @if (isSubscribed)
-                                            {
-                                                <button class="btn btn-outline-secondary btn-sm w-100" disabled>
-                                                    Subscribed
-                                                </button>
-                                            }
-                                            else
-                                            {
-                                                <button class="btn btn-outline-primary btn-sm w-100"
-                                                        disabled="@(_currentSubscription == null || !_currentSubscription.IsActive)">
-                                                    Add to Plan
-                                                </button>
-                                            }
+                                        <p class="ww-addon-description">@addOn.Description</p>
+                                    }
+
+                                    @if (pricing != null && !isBundled)
+                                    {
+                                        <div class="ww-addon-price">
+                                            <strong>@GetCurrencySymbol(Currency)@pricing.Price.ToString("N2")</strong>
+                                            <span class="ww-addon-price-interval">/ @pricing.BillingFrequency.ToLower()</span>
                                         </div>
                                     }
+
+                                    @if (addOn.Features.Count > 0)
+                                    {
+                                        <ul class="ww-addon-features">
+                                            @foreach (var feature in addOn.Features)
+                                            {
+                                                <li class="ww-addon-feature-item">
+                                                    <svg class="ww-tier-feature-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                        <polyline points="20 6 9 17 4 12" />
+                                                    </svg>
+                                                    @(string.IsNullOrEmpty(feature.DisplayName) ? feature.FeatureCode : feature.DisplayName)
+                                                </li>
+                                            }
+                                        </ul>
+                                    }
                                 </div>
+                                @if (!isBundled)
+                                {
+                                    <div class="ww-addon-footer">
+                                        @if (isSubscribed)
+                                        {
+                                            <button class="ww-btn ww-btn-outline ww-btn-block ww-btn-sm" disabled>
+                                                Subscribed
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button class="ww-btn ww-btn-outline ww-btn-block ww-btn-sm"
+                                                    disabled="@(_currentSubscription == null || !_currentSubscription.IsActive || _isProcessing)"
+                                                    @onclick="@(() => SubscribeToAddOn(addOn))">
+                                                @if (_isProcessing)
+                                                {
+                                                    <text>Adding...</text>
+                                                }
+                                                else
+                                                {
+                                                    <text>Add to Plan</text>
+                                                }
+                                            </button>
+                                        }
+                                    </div>
+                                }
                             </div>
                         }
                     </div>

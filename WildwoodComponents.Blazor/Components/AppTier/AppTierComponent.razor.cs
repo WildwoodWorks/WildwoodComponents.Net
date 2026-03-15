@@ -24,9 +24,12 @@ namespace WildwoodComponents.Blazor.Components.AppTier
         [Parameter] public bool ShowBillingToggle { get; set; } = true;
         [Parameter] public bool ShowCurrentPlan { get; set; } = true;
         [Parameter] public bool ShowFeatureComparison { get; set; } = true;
+        [Parameter] public bool ShowLimits { get; set; } = true;
         [Parameter] public string Currency { get; set; } = "USD";
-        [Parameter] public int AnnualDiscount { get; set; } = 20;
+        [Parameter] public int? AnnualDiscount { get; set; }
         [Parameter] public bool RequireBillingAddress { get; set; } = false;
+
+        [Parameter] public string? EnterpriseContactUrl { get; set; }
 
         // Payment-related parameters
         [Parameter] public string? CustomerId { get; set; }
@@ -337,12 +340,6 @@ namespace WildwoodComponents.Blazor.Components.AppTier
             StateHasChanged();
         }
 
-        private void GoToAddOns()
-        {
-            _currentStep = AppTierComponentStep.AddOns;
-            StateHasChanged();
-        }
-
         private async Task HandleSuccessContinue()
         {
             if (_selectedTier != null && OnTierSelected.HasDelegate)
@@ -392,18 +389,25 @@ namespace WildwoodComponents.Blazor.Components.AppTier
             tiers.Sort((a, b) => a.DisplayOrder.CompareTo(b.DisplayOrder));
         }
 
+        private static bool IsAnnualFrequency(string? frequency)
+        {
+            if (string.IsNullOrEmpty(frequency)) return false;
+            return string.Equals(frequency, "Annually", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(frequency, "Annual", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(frequency, "Yearly", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static AppTierPricingModel? FindPricingForCycle(AppTierModel tier, string cycle)
         {
             // Find monthly or annual pricing (no LINQ - iOS compatible)
+            bool wantAnnual = string.Equals(cycle, "annually", StringComparison.OrdinalIgnoreCase);
             AppTierPricingModel? defaultPricing = null;
             foreach (var p in tier.PricingOptions)
             {
-                if (string.Equals(cycle, "annually", StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(p.BillingFrequency, "Annually", StringComparison.OrdinalIgnoreCase))
+                if (wantAnnual && IsAnnualFrequency(p.BillingFrequency))
                     return p;
 
-                if (string.Equals(cycle, "monthly", StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(p.BillingFrequency, "Monthly", StringComparison.OrdinalIgnoreCase))
+                if (!wantAnnual && string.Equals(p.BillingFrequency, "Monthly", StringComparison.OrdinalIgnoreCase))
                     return p;
 
                 if (p.IsDefault)
@@ -414,21 +418,6 @@ namespace WildwoodComponents.Blazor.Components.AppTier
             if (defaultPricing != null) return defaultPricing;
             if (tier.PricingOptions.Count > 0) return tier.PricingOptions[0];
             return null;
-        }
-
-        private static decimal GetDisplayPrice(AppTierModel tier, string billingCycle, int annualDiscount)
-        {
-            var pricing = FindPricingForCycle(tier, billingCycle);
-            if (pricing == null) return 0;
-
-            if (string.Equals(billingCycle, "annually", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(pricing.BillingFrequency, "Monthly", StringComparison.OrdinalIgnoreCase))
-            {
-                var annual = pricing.Price * 12;
-                return annual - (annual * annualDiscount / 100m);
-            }
-
-            return pricing.Price;
         }
 
         private static string GetPricePeriod(string billingCycle)
@@ -444,6 +433,49 @@ namespace WildwoodComponents.Blazor.Components.AppTier
             if (string.Equals(currency, "EUR", StringComparison.OrdinalIgnoreCase)) return "\u20AC";
             if (string.Equals(currency, "GBP", StringComparison.OrdinalIgnoreCase)) return "\u00A3";
             return currency;
+        }
+
+        private int GetMaxAnnualDiscount()
+        {
+            if (AnnualDiscount.HasValue) return AnnualDiscount.Value;
+            int max = 0;
+            foreach (var tier in _tiers)
+            {
+                var d = ComputeAnnualDiscount(tier);
+                if (d > max) max = d;
+            }
+            return max;
+        }
+
+        private static int ComputeAnnualDiscount(AppTierModel tier)
+        {
+            if (tier.PricingOptions.Count < 2) return 0;
+            AppTierPricingModel? monthly = null;
+            AppTierPricingModel? annual = null;
+            foreach (var p in tier.PricingOptions)
+            {
+                if (string.Equals(p.BillingFrequency, "Monthly", StringComparison.OrdinalIgnoreCase))
+                    monthly = p;
+                if (IsAnnualFrequency(p.BillingFrequency))
+                    annual = p;
+            }
+            if (monthly == null || annual == null || monthly.Price <= 0) return 0;
+            var fullAnnual = monthly.Price * 12;
+            var discount = (int)Math.Round(((fullAnnual - annual.Price) / fullAnnual) * 100);
+            return discount > 0 ? discount : 0;
+        }
+
+        private static bool IsEnterpriseTier(AppTierModel tier)
+        {
+            return !tier.IsFreeTier && tier.PricingOptions.Count == 0;
+        }
+
+        private string FormatPrice(decimal amount)
+        {
+            var symbol = GetCurrencySymbol(Currency);
+            if (string.Equals(Currency, "JPY", StringComparison.OrdinalIgnoreCase))
+                return $"{symbol}{Math.Round(amount)}";
+            return $"{symbol}{amount:N2}";
         }
 
         private bool IsTierCurrentPlan(AppTierModel tier)
@@ -468,23 +500,12 @@ namespace WildwoodComponents.Blazor.Components.AppTier
                 {
                     if (string.Equals(p.BillingFrequency, "Monthly", StringComparison.OrdinalIgnoreCase))
                         hasMonthly = true;
-                    if (string.Equals(p.BillingFrequency, "Annually", StringComparison.OrdinalIgnoreCase))
+                    if (IsAnnualFrequency(p.BillingFrequency))
                         hasAnnual = true;
                 }
                 if (hasMonthly && hasAnnual) return true;
             }
             return false;
-        }
-
-        private static string GetBadgeColorClass(string badgeColor)
-        {
-            if (string.IsNullOrEmpty(badgeColor)) return "bg-primary";
-            if (string.Equals(badgeColor, "primary", StringComparison.OrdinalIgnoreCase)) return "bg-primary";
-            if (string.Equals(badgeColor, "success", StringComparison.OrdinalIgnoreCase)) return "bg-success";
-            if (string.Equals(badgeColor, "warning", StringComparison.OrdinalIgnoreCase)) return "bg-warning";
-            if (string.Equals(badgeColor, "danger", StringComparison.OrdinalIgnoreCase)) return "bg-danger";
-            if (string.Equals(badgeColor, "info", StringComparison.OrdinalIgnoreCase)) return "bg-info";
-            return "bg-primary";
         }
 
         private bool IsAddOnSubscribed(AppTierAddOnModel addOn)
@@ -518,6 +539,37 @@ namespace WildwoodComponents.Blazor.Components.AppTier
                 if (p.IsDefault) return p;
             }
             return first;
+        }
+
+        private async Task SubscribeToAddOn(AppTierAddOnModel addOn)
+        {
+            if (_isProcessing) return;
+            _isProcessing = true;
+            StateHasChanged();
+
+            try
+            {
+                var pricing = GetDefaultAddOnPricing(addOn);
+                var success = await AppTierService.SubscribeToAddOnAsync(AppId, addOn.Id, pricing?.Id, null);
+
+                if (success)
+                {
+                    _myAddOns = await AppTierService.GetMyAddOnsAsync(AppId);
+                }
+                else
+                {
+                    await HandleErrorAsync(new Exception("Failed to subscribe to add-on"), "Subscribing to add-on");
+                }
+            }
+            catch (Exception ex)
+            {
+                await HandleErrorAsync(ex, "Subscribing to add-on");
+            }
+            finally
+            {
+                _isProcessing = false;
+                StateHasChanged();
+            }
         }
 
         #endregion

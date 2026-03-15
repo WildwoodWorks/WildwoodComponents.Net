@@ -17,6 +17,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         [Parameter] public bool IsAdmin { get; set; }
         [Parameter] public string Currency { get; set; } = "USD";
         [Parameter] public bool ShowBillingToggle { get; set; } = true;
+        [Parameter] public string? EnterpriseContactUrl { get; set; }
         [Parameter] public EventCallback<TierSelectedEventArgs> OnTierSelected { get; set; }
 
         private List<AppTierModel> _tiers = new();
@@ -103,6 +104,14 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             return _currentSubscription.AppTierId == tier.Id && _currentSubscription.IsActive;
         }
 
+        private static bool IsAnnualFrequency(string? frequency)
+        {
+            if (string.IsNullOrEmpty(frequency)) return false;
+            return string.Equals(frequency, "Annually", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(frequency, "Annual", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(frequency, "Yearly", StringComparison.OrdinalIgnoreCase);
+        }
+
         private bool HasMonthlyAndAnnualPricing()
         {
             foreach (var tier in _tiers)
@@ -113,7 +122,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 {
                     if (string.Equals(p.BillingFrequency, "Monthly", StringComparison.OrdinalIgnoreCase))
                         hasMonthly = true;
-                    if (string.Equals(p.BillingFrequency, "Annually", StringComparison.OrdinalIgnoreCase))
+                    if (IsAnnualFrequency(p.BillingFrequency))
                         hasAnnual = true;
                 }
                 if (hasMonthly && hasAnnual) return true;
@@ -128,15 +137,14 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
         private static AppTierPricingModel? FindPricingForCycle(AppTierModel tier, string cycle)
         {
+            bool wantAnnual = string.Equals(cycle, "annually", StringComparison.OrdinalIgnoreCase);
             AppTierPricingModel? defaultPricing = null;
             foreach (var p in tier.PricingOptions)
             {
-                if (string.Equals(cycle, "annually", StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(p.BillingFrequency, "Annually", StringComparison.OrdinalIgnoreCase))
+                if (wantAnnual && IsAnnualFrequency(p.BillingFrequency))
                     return p;
 
-                if (string.Equals(cycle, "monthly", StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(p.BillingFrequency, "Monthly", StringComparison.OrdinalIgnoreCase))
+                if (!wantAnnual && string.Equals(p.BillingFrequency, "Monthly", StringComparison.OrdinalIgnoreCase))
                     return p;
 
                 if (p.IsDefault)
@@ -156,27 +164,19 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             return currency;
         }
 
-        private int GetCurrentTierDisplayOrder()
+        private static bool IsEnterpriseTier(AppTierModel tier)
         {
-            if (_currentSubscription == null) return 0;
-            foreach (var tier in _tiers)
-            {
-                if (tier.Id == _currentSubscription.AppTierId)
-                    return tier.DisplayOrder;
-            }
-            return 0;
+            return !tier.IsFreeTier && tier.PricingOptions.Count == 0;
         }
 
-        private static string GetBadgeColorClass(string badgeColor)
+        private string FormatPrice(decimal amount)
         {
-            if (string.IsNullOrEmpty(badgeColor)) return "bg-primary";
-            if (string.Equals(badgeColor, "primary", StringComparison.OrdinalIgnoreCase)) return "bg-primary";
-            if (string.Equals(badgeColor, "success", StringComparison.OrdinalIgnoreCase)) return "bg-success";
-            if (string.Equals(badgeColor, "warning", StringComparison.OrdinalIgnoreCase)) return "bg-warning";
-            if (string.Equals(badgeColor, "danger", StringComparison.OrdinalIgnoreCase)) return "bg-danger";
-            if (string.Equals(badgeColor, "info", StringComparison.OrdinalIgnoreCase)) return "bg-info";
-            return "bg-primary";
+            var symbol = GetCurrencySymbol(Currency);
+            if (string.Equals(Currency, "JPY", StringComparison.OrdinalIgnoreCase))
+                return $"{symbol}{Math.Round(amount)}";
+            return $"{symbol}{amount:N2}";
         }
+
     }
 
     public class TierSelectedEventArgs
