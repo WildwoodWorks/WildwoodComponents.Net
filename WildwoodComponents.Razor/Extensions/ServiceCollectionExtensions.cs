@@ -156,6 +156,60 @@ public static class ServiceCollectionExtensions
             var logger = sp.GetRequiredService<ILogger<WildwoodRegistrationService>>();
             return new WildwoodRegistrationService(httpClient, sessionManager, logger, options.AppId ?? string.Empty);
         });
+
+        // Messaging service
+        services.AddScoped<IWildwoodMessagingService>(sp =>
+        {
+            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
+            var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
+            var logger = sp.GetRequiredService<ILogger<WildwoodMessagingService>>();
+            return new WildwoodMessagingService(httpClient, sessionManager, logger);
+        });
+
+        // Subscription service
+        services.AddScoped<IWildwoodSubscriptionService>(sp =>
+        {
+            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
+            var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
+            var logger = sp.GetRequiredService<ILogger<WildwoodSubscriptionService>>();
+            return new WildwoodSubscriptionService(httpClient, sessionManager, logger);
+        });
+
+        // Two-Factor Settings service
+        services.AddScoped<IWildwoodTwoFactorSettingsService>(sp =>
+        {
+            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
+            var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
+            var logger = sp.GetRequiredService<ILogger<WildwoodTwoFactorSettingsService>>();
+            return new WildwoodTwoFactorSettingsService(httpClient, sessionManager, logger);
+        });
+
+        // Disclaimer service
+        services.AddScoped<IWildwoodDisclaimerService>(sp =>
+        {
+            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
+            var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
+            var logger = sp.GetRequiredService<ILogger<WildwoodDisclaimerService>>();
+            return new WildwoodDisclaimerService(httpClient, sessionManager, logger);
+        });
+
+        // AI Chat service
+        services.AddScoped<IWildwoodAIChatService>(sp =>
+        {
+            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
+            var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
+            var logger = sp.GetRequiredService<ILogger<WildwoodAIChatService>>();
+            return new WildwoodAIChatService(httpClient, sessionManager, logger);
+        });
+
+        // AI Flow service
+        services.AddScoped<IWildwoodAIFlowService>(sp =>
+        {
+            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
+            var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
+            var logger = sp.GetRequiredService<ILogger<WildwoodAIFlowService>>();
+            return new WildwoodAIFlowService(httpClient, sessionManager, logger);
+        });
     }
 }
 

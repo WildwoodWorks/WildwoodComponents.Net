@@ -71,7 +71,7 @@
         <!-- Optional Token Card (shown when both modes allowed and no token validated) -->
         <div class="ww-optional-token-card card mb-3 border-info" style="display: none;">
             <div class="card-body">
-                <h6 class="card-title"><i class="fas fa-ticket-alt me-2"></i>Have a Registration Token?</h6>
+                <h6 class="card-title"><i class="bi bi-ticket-perforated me-2"></i>Have a Registration Token?</h6>
                 <p class="card-text small text-muted mb-2">
                     If you have a registration token, enter it below to unlock special access or pricing.
                 </p>
@@ -87,7 +87,7 @@
                 </div>
                 <div class="text-danger small mt-1 ww-opt-token-error" style="display: none;"></div>
                 <div class="text-success small mt-1 ww-opt-token-success" style="display: none;">
-                    <i class="fas fa-check-circle me-1"></i>Token applied successfully!
+                    <i class="bi bi-check-circle-fill me-1"></i>Token applied successfully!
                 </div>
             </div>
         </div>
@@ -96,11 +96,11 @@
         <div class="ww-token-info alert alert-info mb-3" style="display: none;">
             <div class="d-flex justify-content-between align-items-start">
                 <div>
-                    <h6><i class="fas fa-info-circle"></i> Token Information</h6>
+                    <h6><i class="bi bi-info-circle"></i> Token Information</h6>
                     <small class="ww-token-info-content"></small>
                 </div>
                 <button type="button" class="btn btn-sm btn-outline-secondary ww-clear-token-btn" style="display: none;">
-                    <i class="fas fa-times"></i>
+                    <i class="bi bi-x-lg"></i>
                 </button>
             </div>
         </div>
@@ -146,7 +146,7 @@
                     <input type="password" class="form-control" id="ww-password-@cid" name="password"
                            required minlength="8" maxlength="100" />
                     <button type="button" class="btn btn-outline-secondary ww-toggle-password-btn">
-                        <i class="fas fa-eye"></i>
+                        <i class="bi bi-eye"></i>
                     </button>
                 </div>
                 <div class="invalid-feedback">Password must be at least 8 characters</div>
@@ -161,7 +161,7 @@
             </div>
 
             <div class="alert alert-danger ww-reg-error" style="display: none;">
-                <i class="fas fa-exclamation-triangle"></i> <span class="ww-reg-error-msg"></span>
+                <i class="bi bi-exclamation-triangle"></i> <span class="ww-reg-error-msg"></span>
             </div>
 
             <div class="d-grid gap-2 mt-3">
@@ -182,7 +182,7 @@
 
     <!-- Disclaimer Step -->
     <div class="ww-reg-disclaimer-step" style="display: none;">
-        <h3><i class="fas fa-file-contract me-2"></i>Terms & Agreements</h3>
+        <h3><i class="bi bi-file-earmark-text me-2"></i>Terms & Agreements</h3>
         <p class="text-muted">Please review and accept the following before continuing.</p>
 
         <div class="ww-disclaimers-list"></div>
@@ -205,7 +205,7 @@
             </button>
         </div>
 
-        <h3><i class="fas fa-credit-card me-2"></i>Payment Setup</h3>
+        <h3><i class="bi bi-credit-card me-2"></i>Payment Setup</h3>
         <p class="text-muted ww-payment-subtitle">Complete your payment to activate your account.</p>
 
         <!-- Pricing Summary Card -->
@@ -221,7 +221,7 @@
                 </div>
                 <p class="ww-pricing-description" style="display: none;"></p>
                 <div class="ww-subscription-info" style="display: none;">
-                    <i class="fas fa-sync-alt me-1"></i>
+                    <i class="bi bi-arrow-repeat me-1"></i>
                     <small>Your card will be charged monthly. Cancel anytime.</small>
                 </div>
             </div>
@@ -233,12 +233,12 @@
         <!-- Fallback if no payment app configured -->
         <div class="ww-payment-fallback" style="display: none;">
             <div class="alert alert-warning">
-                <i class="fas fa-exclamation-triangle me-2"></i>
+                <i class="bi bi-exclamation-triangle me-2"></i>
                 Payment configuration is not available. Please contact support.
             </div>
             <div class="d-grid gap-2">
                 <button type="button" class="btn btn-outline-secondary ww-skip-payment-btn">
-                    <i class="fas fa-clock me-2"></i>Set Up Payment Later
+                    <i class="bi bi-clock me-2"></i>Set Up Payment Later
                 </button>
             </div>
         </div>
@@ -260,24 +260,24 @@
         <!-- Success content -->
         <div class="ww-success-content" style="display: none;">
             <div class="mb-4">
-                <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
             </div>
             <h4 class="ww-success-title">Account Created Successfully!</h4>
             <p class="text-muted ww-success-message">Your account has been created and you've been granted access to the application.</p>
 
             <!-- Granted Apps -->
             <div class="ww-granted-apps alert alert-info text-start mb-4" style="display: none;">
-                <h6><i class="fas fa-mobile-alt me-2"></i>Apps You Have Access To:</h6>
+                <h6><i class="bi bi-phone me-2"></i>Apps You Have Access To:</h6>
                 <ul class="mb-0 ww-granted-apps-list"></ul>
             </div>
 
             <!-- Payment Status -->
             <div class="ww-payment-success-msg alert alert-success" style="display: none;">
-                <i class="fas fa-check-circle me-2"></i>
+                <i class="bi bi-check-circle-fill me-2"></i>
                 Payment setup completed successfully!
             </div>
             <div class="ww-payment-skipped-msg alert alert-warning" style="display: none;">
-                <i class="fas fa-clock me-2"></i>
+                <i class="bi bi-clock me-2"></i>
                 Payment setup skipped. You can complete it later in your account settings.
             </div>
 
@@ -287,7 +287,7 @@
             <!-- Continue to Login button (shown when auto-login disabled or failed) -->
             <div class="mt-4 ww-continue-login" style="display: none;">
                 <button class="btn btn-primary btn-lg ww-continue-login-btn">
-                    <i class="fas fa-sign-in-alt me-2"></i>
+                    <i class="bi bi-box-arrow-in-right me-2"></i>
                     Continue to Login
                 </button>
             </div>

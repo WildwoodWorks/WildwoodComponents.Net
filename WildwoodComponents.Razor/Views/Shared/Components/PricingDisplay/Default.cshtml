@@ -1,0 +1,265 @@
+@using WildwoodComponents.Razor.Models
+@using WildwoodComponents.Razor.Helpers
+@using WildwoodComponents.Shared.Models
+@model PricingDisplayViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var tiers = Model.Tiers;
+
+    // Collect all unique feature codes across tiers for the comparison matrix
+    var allFeatures = new List<(string Code, string DisplayName)>();
+    var seenCodes = new HashSet<string>();
+    foreach (var tier in tiers)
+    {
+        foreach (var feature in tier.Features)
+        {
+            if (seenCodes.Add(feature.FeatureCode))
+            {
+                allFeatures.Add((feature.FeatureCode, string.IsNullOrEmpty(feature.DisplayName) ? feature.FeatureCode : feature.DisplayName));
+            }
+        }
+    }
+}
+
+<div id="ww-pricing-display-@cid"
+     class="ww-pricing-display-component"
+     data-component-id="@cid"
+     data-app-id="@Model.AppId"
+     data-proxy-base="@Model.ProxyBaseUrl"
+     data-currency="@Model.Currency"
+     data-pre-selected="@(Model.PreSelectedTierId ?? "")">
+
+    <!-- Header -->
+    @if (!string.IsNullOrEmpty(Model.Title))
+    {
+        <h3 class="text-center mb-2">@Model.Title</h3>
+    }
+    @if (!string.IsNullOrEmpty(Model.Subtitle))
+    {
+        <p class="text-center text-muted mb-4">@Model.Subtitle</p>
+    }
+
+    <!-- Billing Cycle Toggle -->
+    @if (Model.ShowBillingToggle && Model.HasMonthlyAndAnnual)
+    {
+        <div class="ww-pricing-billing-toggle text-center mb-4">
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-primary ww-pricing-billing-btn" data-cycle="monthly">
+                    Monthly
+                </button>
+                <button type="button" class="btn btn-outline-primary ww-pricing-billing-btn" data-cycle="annually">
+                    Annually
+                </button>
+            </div>
+        </div>
+    }
+
+    <!-- Tier Cards Grid (Read-Only) -->
+    <div class="ww-pricing-grid row justify-content-center">
+        @foreach (var tier in tiers)
+        {
+            var isPreSelected = tier.Id == Model.PreSelectedTierId;
+
+            <div class="col-md-4 mb-4">
+                <div class="ww-pricing-card card h-100 @(tier.IsDefault || isPreSelected ? "border-primary ww-highlighted" : "")"
+                     data-tier-id="@tier.Id"
+                     data-tier-name="@tier.Name"
+                     data-is-free="@tier.IsFreeTier.ToString().ToLower()">
+
+                    @if (!string.IsNullOrEmpty(tier.CustomBadgeText))
+                    {
+                        <div class="ww-pricing-badge @ViewHelpers.GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
+                            <small>@tier.CustomBadgeText</small>
+                        </div>
+                    }
+                    else if (tier.IsDefault)
+                    {
+                        <div class="ww-pricing-badge bg-primary text-white text-center py-1">
+                            <small>Most Popular</small>
+                        </div>
+                    }
+
+                    <div class="card-body text-center">
+                        @if (!string.IsNullOrEmpty(tier.IconClass))
+                        {
+                            <div class="ww-pricing-icon mb-2">
+                                <i class="@tier.IconClass" style="font-size: 2rem;"></i>
+                            </div>
+                        }
+                        <h5 class="ww-pricing-tier-name">@tier.Name</h5>
+
+                        @if (tier.ShowPrice)
+                        {
+                            <div class="ww-pricing-price my-3">
+                                @if (tier.IsFreeTier)
+                                {
+                                    <span class="ww-price-amount fs-3 fw-bold">Free</span>
+                                }
+                                else
+                                {
+                                    @foreach (var pricing in tier.PricingOptions)
+                                    {
+                                        <span class="ww-price-option"
+                                              data-pricing-id="@pricing.Id"
+                                              data-billing="@pricing.BillingFrequency.ToLower()"
+                                              data-price="@pricing.Price"
+                                              data-is-default="@pricing.IsDefault.ToString().ToLower()"
+                                              style="display:none;">
+                                            <span class="ww-price-currency">@ViewHelpers.GetCurrencySymbol(Model.Currency)</span>
+                                            <span class="ww-price-amount fs-3 fw-bold">@pricing.Price.ToString("N0")</span>
+                                            <span class="ww-price-period text-muted">/@pricing.BillingFrequencyLabel.ToLower()</span>
+                                        </span>
+                                    }
+                                }
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(tier.Description))
+                        {
+                            <p class="ww-pricing-description text-muted small">@tier.Description</p>
+                        }
+
+                        <!-- Features List -->
+                        @if (tier.Features.Count > 0)
+                        {
+                            <ul class="ww-pricing-features list-unstyled text-start mt-3">
+                                @foreach (var feature in tier.Features)
+                                {
+                                    <li class="mb-2">
+                                        @if (feature.IsEnabled)
+                                        {
+                                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-x-circle text-muted me-2"></i>
+                                        }
+                                        <span class="@(!feature.IsEnabled ? "text-muted" : "")">
+                                            @(string.IsNullOrEmpty(feature.DisplayName) ? feature.FeatureCode : feature.DisplayName)
+                                        </span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+
+                        <!-- Limits List -->
+                        @if (Model.ShowLimits && tier.Limits.Count > 0)
+                        {
+                            <ul class="ww-pricing-limits list-unstyled text-start">
+                                @foreach (var limit in tier.Limits)
+                                {
+                                    <li class="mb-1 small text-muted">
+                                        <i class="bi bi-speedometer2 me-1"></i>
+                                        @(string.IsNullOrEmpty(limit.DisplayName) ? limit.LimitCode : limit.DisplayName):
+                                        <strong>@limit.MaxValueDisplay</strong>
+                                        @if (!string.IsNullOrEmpty(limit.Unit))
+                                        {
+                                            <text> @limit.Unit</text>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
+
+                    <div class="card-footer bg-transparent border-0 text-center pb-3">
+                        @if (tier.ShowContactButton && !string.IsNullOrEmpty(tier.ContactButtonUrl))
+                        {
+                            <a href="@tier.ContactButtonUrl"
+                               class="btn btn-outline-primary w-100"
+                               @(tier.ContactButtonUrl.StartsWith("http") ? "target=\"_blank\" rel=\"noopener noreferrer\"" : "")>
+                                Contact Us
+                            </a>
+                        }
+                        else if (!string.IsNullOrEmpty(Model.EnterpriseContactUrl) && tier.ShowContactButton)
+                        {
+                            <a href="@Model.EnterpriseContactUrl"
+                               class="btn btn-outline-primary w-100"
+                               target="_blank" rel="noopener noreferrer">
+                                Contact Sales
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Feature Comparison Matrix -->
+    @if (Model.ShowFeatureComparison && allFeatures.Count > 0 && tiers.Count > 1)
+    {
+        <div class="ww-pricing-comparison mt-5">
+            <h4 class="text-center mb-4">Feature Comparison</h4>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ww-feature-col">Feature</th>
+                            @foreach (var tier in tiers)
+                            {
+                                <th class="text-center @(tier.IsDefault ? "table-primary" : "")">@tier.Name</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (code, displayName) in allFeatures)
+                        {
+                            <tr>
+                                <td>@displayName</td>
+                                @foreach (var tier in tiers)
+                                {
+                                    var feature = tier.Features.FirstOrDefault(f => f.FeatureCode == code);
+                                    <td class="text-center">
+                                        @if (feature != null && feature.IsEnabled)
+                                        {
+                                            <i class="bi bi-check-circle-fill text-success"></i>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-x text-muted"></i>
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .ww-pricing-display-component {
+        --ww-pricing-bg: var(--ww-bg-primary, #ffffff);
+        --ww-pricing-border: var(--ww-border-color, #dee2e6);
+        --ww-pricing-highlight: var(--ww-primary, #0d6efd);
+    }
+
+    .ww-pricing-card {
+        background: var(--ww-pricing-bg);
+        border-color: var(--ww-pricing-border);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .ww-pricing-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    }
+
+    .ww-pricing-card.ww-highlighted {
+        border-width: 2px;
+        border-color: var(--ww-pricing-highlight);
+    }
+
+    .ww-pricing-comparison .ww-feature-col {
+        min-width: 200px;
+    }
+
+    .ww-pricing-comparison th,
+    .ww-pricing-comparison td {
+        vertical-align: middle;
+    }
+</style>
+

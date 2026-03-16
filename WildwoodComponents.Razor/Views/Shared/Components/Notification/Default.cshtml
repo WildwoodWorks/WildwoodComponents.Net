@@ -1,0 +1,276 @@
+@using WildwoodComponents.Razor.Models
+@model NotificationViewModel
+
+@{
+    var cid = Model.ComponentId;
+
+    // Map position to CSS class
+    var posClass = Model.Position switch
+    {
+        "TopLeft" => "ww-notif-top-left",
+        "TopCenter" => "ww-notif-top-center",
+        "TopRight" => "ww-notif-top-right",
+        "BottomLeft" => "ww-notif-bottom-left",
+        "BottomCenter" => "ww-notif-bottom-center",
+        "BottomRight" => "ww-notif-bottom-right",
+        _ => "ww-notif-top-right"
+    };
+}
+
+<div id="ww-notification-@cid"
+     class="ww-notification-component @posClass"
+     data-component-id="@cid"
+     data-proxy-url="@Model.ProxyBaseUrl"
+     data-position="@Model.Position"
+     data-default-duration="@Model.DefaultDuration"
+     data-max-visible="@Model.MaxVisible"
+     data-show-dismiss-all="@Model.ShowDismissAll.ToString().ToLower()">
+
+    @* Dismiss All button (shown when multiple notifications are visible) *@
+    @if (Model.ShowDismissAll)
+    {
+        <div class="ww-notif-dismiss-all" id="ww-notif-dismiss-all-@cid" style="display:none;">
+            <button type="button" class="btn btn-sm btn-outline-secondary ww-notif-dismiss-all-btn">
+                <i class="bi bi-x-circle me-1"></i>Dismiss All
+            </button>
+        </div>
+    }
+
+    @* Notification items container *@
+    <div class="ww-notif-items" id="ww-notif-items-@cid"></div>
+
+    @* Notification item template (cloned by JS) *@
+    <template id="ww-notif-template-@cid">
+        <div class="ww-notif-item" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="ww-notif-item-inner">
+                <div class="ww-notif-icon-area">
+                    <i class="bi ww-notif-icon"></i>
+                </div>
+                <div class="ww-notif-content">
+                    <div class="ww-notif-header">
+                        <strong class="ww-notif-title"></strong>
+                        <small class="ww-notif-time text-muted"></small>
+                    </div>
+                    <div class="ww-notif-message"></div>
+                    <div class="ww-notif-actions"></div>
+                </div>
+                <button type="button" class="btn-close ww-notif-dismiss-btn" aria-label="Dismiss"></button>
+            </div>
+            <div class="ww-notif-progress">
+                <div class="ww-notif-progress-bar"></div>
+            </div>
+        </div>
+    </template>
+</div>
+
+<style>
+    .ww-notification-component {
+        --ww-notif-bg: var(--ww-bg-primary, #ffffff);
+        --ww-notif-text: var(--ww-text-primary, #212529);
+        --ww-notif-border: var(--ww-border-color, #dee2e6);
+        --ww-notif-shadow: var(--ww-shadow, 0 0.5rem 1rem rgba(0, 0, 0, 0.15));
+        --ww-notif-success: var(--ww-success, #198754);
+        --ww-notif-danger: var(--ww-danger, #dc3545);
+        --ww-notif-warning: var(--ww-warning, #ffc107);
+        --ww-notif-info: var(--ww-info, #0dcaf0);
+        --ww-notif-width: 380px;
+        --ww-notif-gap: 0.75rem;
+        --ww-notif-offset: 1.5rem;
+
+        position: fixed;
+        z-index: 1080;
+        display: flex;
+        flex-direction: column;
+        gap: var(--ww-notif-gap);
+        width: var(--ww-notif-width);
+        max-width: calc(100vw - 2rem);
+        pointer-events: none;
+    }
+
+    .ww-notification-component > * {
+        pointer-events: auto;
+    }
+
+    /* Position classes */
+    .ww-notif-top-right { top: var(--ww-notif-offset); right: var(--ww-notif-offset); }
+    .ww-notif-top-left { top: var(--ww-notif-offset); left: var(--ww-notif-offset); }
+    .ww-notif-top-center { top: var(--ww-notif-offset); left: 50%; transform: translateX(-50%); }
+    .ww-notif-bottom-right { bottom: var(--ww-notif-offset); right: var(--ww-notif-offset); }
+    .ww-notif-bottom-left { bottom: var(--ww-notif-offset); left: var(--ww-notif-offset); }
+    .ww-notif-bottom-center { bottom: var(--ww-notif-offset); left: 50%; transform: translateX(-50%); }
+
+    /* Bottom positions stack upward */
+    .ww-notif-bottom-right,
+    .ww-notif-bottom-left,
+    .ww-notif-bottom-center {
+        flex-direction: column-reverse;
+    }
+
+    .ww-notif-dismiss-all {
+        text-align: end;
+        margin-bottom: 0.25rem;
+    }
+
+    .ww-notif-item {
+        background-color: var(--ww-notif-bg);
+        border: 1px solid var(--ww-notif-border);
+        border-radius: 0.5rem;
+        box-shadow: var(--ww-notif-shadow);
+        overflow: hidden;
+        animation: ww-notif-slide-in 0.3s ease-out;
+    }
+
+    .ww-notif-item.ww-notif-removing {
+        animation: ww-notif-slide-out 0.3s ease-in forwards;
+    }
+
+    .ww-notif-item-inner {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+    }
+
+    .ww-notif-icon-area {
+        flex-shrink: 0;
+        font-size: 1.25rem;
+        line-height: 1;
+        padding-top: 0.15rem;
+    }
+
+    .ww-notif-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .ww-notif-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .ww-notif-title {
+        color: var(--ww-notif-text);
+        font-size: 0.9rem;
+    }
+
+    .ww-notif-message {
+        color: var(--ww-text-secondary, #6c757d);
+        font-size: 0.85rem;
+        line-height: 1.4;
+    }
+
+    .ww-notif-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+
+    .ww-notif-actions:empty {
+        display: none;
+    }
+
+    .ww-notif-dismiss-btn {
+        flex-shrink: 0;
+        font-size: 0.75rem;
+        opacity: 0.5;
+    }
+
+    .ww-notif-dismiss-btn:hover {
+        opacity: 1;
+    }
+
+    .ww-notif-progress {
+        height: 3px;
+        background-color: var(--ww-notif-border);
+    }
+
+    .ww-notif-progress-bar {
+        height: 100%;
+        width: 100%;
+        transform-origin: left;
+        transition: transform linear;
+    }
+
+    /* Type-specific styles */
+    .ww-notif-item[data-type="Success"] .ww-notif-icon-area { color: var(--ww-notif-success); }
+    .ww-notif-item[data-type="Success"] .ww-notif-progress-bar { background-color: var(--ww-notif-success); }
+    .ww-notif-item[data-type="Success"] { border-left: 4px solid var(--ww-notif-success); }
+
+    .ww-notif-item[data-type="Error"] .ww-notif-icon-area { color: var(--ww-notif-danger); }
+    .ww-notif-item[data-type="Error"] .ww-notif-progress-bar { background-color: var(--ww-notif-danger); }
+    .ww-notif-item[data-type="Error"] { border-left: 4px solid var(--ww-notif-danger); }
+
+    .ww-notif-item[data-type="Warning"] .ww-notif-icon-area { color: var(--ww-notif-warning); }
+    .ww-notif-item[data-type="Warning"] .ww-notif-progress-bar { background-color: var(--ww-notif-warning); }
+    .ww-notif-item[data-type="Warning"] { border-left: 4px solid var(--ww-notif-warning); }
+
+    .ww-notif-item[data-type="Info"] .ww-notif-icon-area { color: var(--ww-notif-info); }
+    .ww-notif-item[data-type="Info"] .ww-notif-progress-bar { background-color: var(--ww-notif-info); }
+    .ww-notif-item[data-type="Info"] { border-left: 4px solid var(--ww-notif-info); }
+
+    /* Animations */
+    @@keyframes ww-notif-slide-in {
+        from {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    .ww-notif-top-left .ww-notif-item,
+    .ww-notif-bottom-left .ww-notif-item {
+        animation-name: ww-notif-slide-in-left;
+    }
+
+    @@keyframes ww-notif-slide-in-left {
+        from {
+            opacity: 0;
+            transform: translateX(-100%);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    .ww-notif-top-center .ww-notif-item,
+    .ww-notif-bottom-center .ww-notif-item {
+        animation-name: ww-notif-slide-in-center;
+    }
+
+    @@keyframes ww-notif-slide-in-center {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@keyframes ww-notif-slide-out {
+        to {
+            opacity: 0;
+            transform: translateX(100%);
+            max-height: 0;
+            margin: 0;
+            padding: 0;
+            border: 0;
+        }
+    }
+
+    /* Responsive */
+    @@media (max-width: 480px) {
+        .ww-notification-component {
+            --ww-notif-width: calc(100vw - 2rem);
+            --ww-notif-offset: 1rem;
+        }
+    }
+</style>

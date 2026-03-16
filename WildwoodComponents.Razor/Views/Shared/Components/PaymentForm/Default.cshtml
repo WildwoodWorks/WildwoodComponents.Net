@@ -1,0 +1,200 @@
+@using WildwoodComponents.Razor.Models
+@using WildwoodComponents.Razor.Helpers
+@model PaymentFormViewModel
+
+@{
+    var cid = Model.ComponentId;
+}
+
+<div id="ww-payment-form-@cid"
+     class="ww-payment-form-component"
+     data-component-id="@cid"
+     data-app-id="@Model.AppId"
+     data-amount="@Model.Amount"
+     data-currency="@Model.Currency"
+     data-description="@(Model.Description ?? "")"
+     data-proxy-base="@Model.ProxyBaseUrl"
+     data-require-billing="@Model.RequireBillingAddress.ToString().ToLower()"
+     data-merchant-id="@(Model.MerchantId ?? "")"
+     data-order-id="@(Model.OrderId ?? "")">
+
+    <!-- Loading State -->
+    <div class="ww-pf-loading text-center py-4" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted ww-pf-loading-msg">Processing payment...</p>
+    </div>
+
+    <!-- Success State -->
+    <div class="ww-pf-success text-center py-4" style="display: none;">
+        <div class="mb-3">
+            <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+        </div>
+        <h4 class="text-success">Payment Successful!</h4>
+        <p class="ww-pf-txn-id">Transaction ID: <code></code></p>
+        <p class="mb-0">Amount: <strong class="ww-pf-success-amount"></strong></p>
+        <button class="btn btn-primary mt-3 ww-pf-continue-btn" style="display: none;">Continue</button>
+    </div>
+
+    <!-- Error State -->
+    <div class="ww-pf-error" style="display: none;">
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            <span class="ww-pf-error-msg"></span>
+            <button type="button" class="btn-close" aria-label="Close"></button>
+        </div>
+        <button class="btn btn-outline-primary ww-pf-retry-btn">
+            <i class="bi bi-arrow-clockwise me-2"></i>Try Again
+        </button>
+    </div>
+
+    <!-- Payment Form -->
+    <div class="ww-pf-form">
+        <!-- Amount Display -->
+        <div class="ww-pf-amount-display mb-4 text-center">
+            <span class="amount-value fs-3 fw-bold">@ViewHelpers.FormatAmount(Model.Amount, Model.Currency)</span>
+            @if (!string.IsNullOrEmpty(Model.Description))
+            {
+                <p class="text-muted mb-0">@Model.Description</p>
+            }
+        </div>
+
+        <!-- Card Details -->
+        <div class="ww-pf-card-fields">
+            <div class="mb-3">
+                <label class="form-label fw-bold">Card Number</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-credit-card"></i></span>
+                    <input type="text" class="form-control ww-pf-card-number"
+                           placeholder="1234 5678 9012 3456"
+                           maxlength="19"
+                           inputmode="numeric"
+                           autocomplete="cc-number" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-6">
+                    <div class="mb-3">
+                        <label class="form-label">Expiry Date</label>
+                        <input type="text" class="form-control ww-pf-card-expiry"
+                               placeholder="MM/YY"
+                               maxlength="5"
+                               inputmode="numeric"
+                               autocomplete="cc-exp" />
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="mb-3">
+                        <label class="form-label">CVV</label>
+                        <input type="text" class="form-control ww-pf-card-cvv"
+                               placeholder="123"
+                               maxlength="4"
+                               inputmode="numeric"
+                               autocomplete="cc-csc" />
+                    </div>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Cardholder Name</label>
+                <input type="text" class="form-control ww-pf-card-name"
+                       placeholder="Name on card"
+                       autocomplete="cc-name" />
+            </div>
+        </div>
+
+        <!-- Billing Address -->
+        @if (Model.RequireBillingAddress)
+        {
+            <div class="ww-pf-billing-address mt-3">
+                <h6 class="fw-bold">Billing Address</h6>
+                <div class="row">
+                    <div class="col-6">
+                        <div class="mb-3">
+                            <label class="form-label">First Name</label>
+                            <input type="text" class="form-control ww-pf-billing-first" autocomplete="given-name" />
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="mb-3">
+                            <label class="form-label">Last Name</label>
+                            <input type="text" class="form-control ww-pf-billing-last" autocomplete="family-name" />
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Address</label>
+                    <input type="text" class="form-control ww-pf-billing-address-line" autocomplete="street-address" />
+                </div>
+                <div class="row">
+                    <div class="col-6">
+                        <div class="mb-3">
+                            <label class="form-label">City</label>
+                            <input type="text" class="form-control ww-pf-billing-city" autocomplete="address-level2" />
+                        </div>
+                    </div>
+                    <div class="col-3">
+                        <div class="mb-3">
+                            <label class="form-label">State</label>
+                            <input type="text" class="form-control ww-pf-billing-state" autocomplete="address-level1" />
+                        </div>
+                    </div>
+                    <div class="col-3">
+                        <div class="mb-3">
+                            <label class="form-label">ZIP</label>
+                            <input type="text" class="form-control ww-pf-billing-zip" autocomplete="postal-code" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Submit Button -->
+        <div class="ww-pf-submit mt-4">
+            <button class="btn btn-primary btn-lg w-100 ww-pf-pay-btn" disabled>
+                <i class="bi bi-lock-fill me-2"></i>
+                Pay <span class="ww-pf-pay-amount">@ViewHelpers.FormatAmount(Model.Amount, Model.Currency)</span>
+            </button>
+        </div>
+
+        <!-- Security Notice -->
+        <div class="ww-pf-security text-center mt-3">
+            <small class="text-muted">
+                <i class="bi bi-shield-lock me-1"></i>
+                Your payment information is encrypted and secure.
+            </small>
+        </div>
+
+        <!-- Cancel Button -->
+        <div class="text-center mt-3 ww-pf-cancel" style="display: none;">
+            <button type="button" class="btn btn-link ww-pf-cancel-btn">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .ww-payment-form-component {
+        --ww-pf-bg: var(--ww-bg-primary, #ffffff);
+        --ww-pf-border: var(--ww-border-color, #dee2e6);
+        --ww-pf-primary: var(--ww-primary, #0d6efd);
+        max-width: 480px;
+        margin: 0 auto;
+    }
+
+    .ww-payment-form-component .form-control:focus {
+        border-color: var(--ww-pf-primary);
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+    }
+
+    .ww-pf-amount-display {
+        padding: 1rem;
+        background: var(--ww-bg-secondary, #f8f9fa);
+        border-radius: 0.5rem;
+    }
+
+    .ww-pf-card-fields .input-group-text {
+        background: var(--ww-bg-secondary, #f8f9fa);
+        border-color: var(--ww-pf-border);
+    }
+</style>
+

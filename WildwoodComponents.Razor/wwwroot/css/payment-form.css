@@ -1,0 +1,149 @@
+/* WildwoodComponents.Razor - Payment Form Component Styles
+ *
+ * Standalone card payment form with amount display, card fields, billing address.
+ * Base card/alert/spinner styles are in wildwood-razor-themes.css.
+ */
+
+/* ========================================
+   CONTAINER
+   ======================================== */
+
+.ww-payment-form-component {
+    max-width: 480px;
+    margin: 0 auto;
+    font-family: var(--ww-font-family, system-ui, -apple-system, sans-serif);
+}
+
+/* ========================================
+   AMOUNT DISPLAY
+   ======================================== */
+
+.ww-pf-amount-display {
+    background: var(--ww-bg-tertiary, #f8f9fa);
+    padding: 1.5rem;
+    border-radius: var(--ww-border-radius, 0.5rem);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    margin-bottom: 1.5rem;
+}
+
+.ww-pf-amount-display .amount-value {
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ========================================
+   CARD FIELDS
+   ======================================== */
+
+.ww-pf-card-fields .form-label {
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-pf-card-fields .form-control {
+    background: var(--ww-input-bg, #ffffff);
+    border-color: var(--ww-border-color, #dee2e6);
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-pf-card-fields .form-control:focus {
+    border-color: var(--ww-focus-border, #86b7fe);
+    box-shadow: 0 0 0 0.25rem var(--ww-focus-ring, rgba(13, 110, 253, 0.25));
+}
+
+.ww-pf-card-fields .form-control.is-invalid {
+    border-color: var(--ww-danger, #dc3545);
+}
+
+.ww-pf-card-fields .input-group-text {
+    background: var(--ww-bg-tertiary, #f8f9fa);
+    border-color: var(--ww-border-color, #dee2e6);
+    color: var(--ww-text-muted, #6c757d);
+}
+
+/* ========================================
+   BILLING ADDRESS
+   ======================================== */
+
+.ww-pf-billing-address .form-label {
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ========================================
+   SUBMIT BUTTON
+   ======================================== */
+
+.ww-pf-submit .btn-primary {
+    background: var(--ww-primary, #0d6efd);
+    border-color: var(--ww-primary, #0d6efd);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.ww-pf-submit .btn-primary:hover:not(:disabled) {
+    background: var(--ww-primary-dark, #0b5ed7);
+    border-color: var(--ww-primary-dark, #0b5ed7);
+}
+
+.ww-pf-submit .btn-primary:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+/* ========================================
+   SECURITY NOTICE
+   ======================================== */
+
+.ww-pf-security {
+    color: var(--ww-text-muted, #6c757d);
+}
+
+/* ========================================
+   SUCCESS STATE
+   ======================================== */
+
+.ww-pf-success .bi-check-circle-fill {
+    color: var(--ww-success, #198754);
+}
+
+.ww-pf-success h4 {
+    color: var(--ww-success, #198754);
+}
+
+.ww-pf-txn-id code {
+    background: var(--ww-bg-tertiary, #f8f9fa);
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.85rem;
+}
+
+/* ========================================
+   ERROR STATE
+   ======================================== */
+
+.ww-pf-error .alert-danger {
+    background: var(--ww-danger-bg, #f8d7da);
+    border-color: var(--ww-danger, #dc3545);
+    color: var(--ww-danger-text, #842029);
+}
+
+/* ========================================
+   LOADING STATE
+   ======================================== */
+
+.ww-pf-loading .spinner-border {
+    color: var(--ww-primary, #0d6efd) !important;
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+
+@media (max-width: 576px) {
+    .ww-payment-form-component {
+        max-width: 100%;
+        padding: 0 0.5rem;
+    }
+}

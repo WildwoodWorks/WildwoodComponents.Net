@@ -1,0 +1,276 @@
+@using WildwoodComponents.Razor.Models
+@using WildwoodComponents.Razor.Helpers
+@model SubscriptionManagerViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var currentSub = Model.CurrentSubscription;
+    var plans = Model.Plans;
+    var invoices = Model.Invoices;
+}
+
+<div id="ww-sub-manager-@cid"
+     class="ww-subscription-manager-component"
+     data-component-id="@cid"
+     data-app-id="@Model.AppId"
+     data-proxy-base="@Model.ProxyBaseUrl">
+
+    <!-- Message Area -->
+    <div class="ww-sub-manager-message" style="display: none;"></div>
+
+    <!-- Loading State -->
+    <div class="ww-sub-manager-loading text-center py-4" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted">Processing...</p>
+    </div>
+
+    @if (currentSub == null)
+    {
+        <!-- No Active Subscription -->
+        <div class="ww-no-subscription text-center py-5">
+            <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+            <h4 class="mt-3">No Active Subscription</h4>
+            <p class="text-muted">You don't have an active subscription.</p>
+        </div>
+    }
+    else
+    {
+        <!-- ===== SUBSCRIPTION DETAILS ===== -->
+        <div class="ww-sub-details-view">
+            <!-- Current Plan Card -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-credit-card me-2"></i>Subscription Details
+                    </h5>
+                    <span class="badge @ViewHelpers.GetStatusBadgeClass(currentSub.Status)">@currentSub.Status</span>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="mb-0">
+                                <dt class="text-muted small">Plan</dt>
+                                <dd class="fw-bold">@currentSub.PlanName</dd>
+
+                                @if (currentSub.Amount.HasValue)
+                                {
+                                    <dt class="text-muted small">Amount</dt>
+                                    <dd>
+                                        @ViewHelpers.GetCurrencySymbol(currentSub.Currency ?? "USD")@currentSub.Amount.Value.ToString("N2")
+                                        @if (!string.IsNullOrEmpty(currentSub.BillingFrequency))
+                                        {
+                                            <span class="text-muted">/ @currentSub.BillingFrequency.ToLower()</span>
+                                        }
+                                    </dd>
+                                }
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            <dl class="mb-0">
+                                @if (currentSub.StartDate.HasValue)
+                                {
+                                    <dt class="text-muted small">Started</dt>
+                                    <dd>@currentSub.StartDate.Value.ToString("MMM dd, yyyy")</dd>
+                                }
+                                @if (currentSub.CurrentPeriodEnd.HasValue)
+                                {
+                                    <dt class="text-muted small">
+                                        @(currentSub.CancelledAt.HasValue ? "Access Until" : "Next Renewal")
+                                    </dt>
+                                    <dd>@currentSub.CurrentPeriodEnd.Value.ToString("MMM dd, yyyy")</dd>
+                                }
+                                @if (currentSub.CancelledAt.HasValue)
+                                {
+                                    <dt class="text-muted small">Cancelled</dt>
+                                    <dd class="text-danger">@currentSub.CancelledAt.Value.ToString("MMM dd, yyyy")</dd>
+                                }
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <div class="d-flex gap-2 flex-wrap">
+                        @if (currentSub.IsActive && !currentSub.CancelledAt.HasValue)
+                        {
+                            <button class="btn btn-outline-warning btn-sm ww-pause-sub-btn"
+                                    data-subscription-id="@currentSub.Id"
+                                    style="@(string.Equals(currentSub.Status, "Paused", StringComparison.OrdinalIgnoreCase) ? "display:none;" : "")">
+                                <i class="bi bi-pause-circle me-1"></i>Pause
+                            </button>
+                            <button class="btn btn-outline-success btn-sm ww-resume-sub-btn"
+                                    data-subscription-id="@currentSub.Id"
+                                    style="@(!string.Equals(currentSub.Status, "Paused", StringComparison.OrdinalIgnoreCase) ? "display:none;" : "")">
+                                <i class="bi bi-play-circle me-1"></i>Resume
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm ww-cancel-sub-btn"
+                                    data-subscription-id="@currentSub.Id">
+                                <i class="bi bi-x-circle me-1"></i>Cancel
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upgrade/Downgrade Options -->
+            @if (plans.Count > 0 && currentSub.IsActive)
+            {
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-arrow-up-circle me-2"></i>Change Plan
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            @foreach (var plan in plans)
+                            {
+                                var isCurrent = plan.Id == currentSub.PlanId;
+                                <div class="col-md-4 mb-3">
+                                    <div class="card h-100 @(isCurrent ? "border-success" : "")">
+                                        <div class="card-body text-center">
+                                            <h6>@plan.Name</h6>
+                                            @if (plan.Price == 0)
+                                            {
+                                                <p class="fs-5 fw-bold mb-1">Free</p>
+                                            }
+                                            else
+                                            {
+                                                <p class="fs-5 fw-bold mb-1">
+                                                    @ViewHelpers.GetCurrencySymbol(Model.CurrentSubscription?.Currency ?? "USD")@plan.Price.ToString("N2")
+                                                    <small class="text-muted fw-normal">/@(plan.BillingFrequencyLabel ?? plan.BillingFrequency.ToLower())</small>
+                                                </p>
+                                            }
+                                            @if (!string.IsNullOrEmpty(plan.Description))
+                                            {
+                                                <p class="text-muted small">@plan.Description</p>
+                                            }
+                                        </div>
+                                        <div class="card-footer bg-transparent text-center">
+                                            @if (isCurrent)
+                                            {
+                                                <span class="badge bg-success">Current</span>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-outline-primary btn-sm w-100 ww-upgrade-btn"
+                                                        data-plan-id="@plan.Id"
+                                                        data-plan-name="@plan.Name"
+                                                        data-subscription-id="@currentSub.Id">
+                                                    @(plan.Price > (currentSub.Amount ?? 0) ? "Upgrade" : "Switch") to @plan.Name
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Invoice History -->
+            @if (invoices.Count > 0)
+            {
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-receipt me-2"></i>Invoice History
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Amount</th>
+                                        <th>Status</th>
+                                        <th class="text-end">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var invoice in invoices)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (invoice.InvoiceDate.HasValue)
+                                                {
+                                                    @invoice.InvoiceDate.Value.ToString("MMM dd, yyyy")
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">--</span>
+                                                }
+                                            </td>
+                                            <td>@ViewHelpers.GetCurrencySymbol(invoice.Currency)@invoice.Amount.ToString("N2")</td>
+                                            <td>
+                                                <span class="badge @ViewHelpers.GetInvoiceStatusBadge(invoice.Status)">
+                                                    @invoice.Status
+                                                </span>
+                                            </td>
+                                            <td class="text-end">
+                                                @if (!string.IsNullOrEmpty(invoice.InvoiceUrl))
+                                                {
+                                                    <a href="@invoice.InvoiceUrl" target="_blank" rel="noopener noreferrer"
+                                                       class="btn btn-outline-secondary btn-sm">
+                                                        <i class="bi bi-download me-1"></i>Download
+                                                    </a>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- ===== CANCEL CONFIRMATION VIEW ===== -->
+        <div class="ww-cancel-confirmation-view" style="display: none;">
+            <div class="card" style="max-width: 500px; margin: 0 auto;">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                    <h4 class="mt-3">Cancel Subscription?</h4>
+                    <p class="text-muted">
+                        Are you sure you want to cancel your <strong>@currentSub.PlanName</strong> subscription?
+                    </p>
+                    @if (currentSub.CurrentPeriodEnd.HasValue)
+                    {
+                        <p class="text-muted small">
+                            You will retain access until @currentSub.CurrentPeriodEnd.Value.ToString("MMM dd, yyyy").
+                        </p>
+                    }
+                    <div class="mt-4">
+                        <button class="btn btn-outline-secondary me-2 ww-keep-sub-btn">
+                            Keep Subscription
+                        </button>
+                        <button class="btn btn-danger ww-confirm-cancel-btn"
+                                data-subscription-id="@currentSub.Id">
+                            <span class="ww-btn-text">Yes, Cancel</span>
+                            <span class="ww-btn-spinner" style="display: none;">
+                                <span class="spinner-border spinner-border-sm me-2"></span> Cancelling...
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .ww-subscription-manager-component {
+        --ww-sub-mgr-bg: var(--ww-bg-primary, #ffffff);
+        --ww-sub-mgr-border: var(--ww-border-color, #dee2e6);
+    }
+
+    .ww-subscription-manager-component .card {
+        background: var(--ww-sub-mgr-bg);
+        border-color: var(--ww-sub-mgr-border);
+    }
+</style>
+

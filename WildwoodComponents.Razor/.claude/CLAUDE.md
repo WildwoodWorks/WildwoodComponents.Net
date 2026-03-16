@@ -25,18 +25,24 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 | Component | Blazor | Razor | @wildwood/core | @wildwood/react | @wildwood/react-native | @wildwood/node |
 |-----------|--------|-------|----------------|-----------------|------------------------|----------------|
 | Authentication | AuthenticationComponent | AuthenticationViewComponent | authService | AuthenticationComponent | AuthenticationComponent | authMiddleware |
-| AI Chat | AIChatComponent | -- | aiService | AIChatComponent | -- | -- |
+| AI Chat | AIChatComponent | AIChatViewComponent | aiService | AIChatComponent | -- | -- |
+| AI Flow | AIFlowComponent | AIFlowViewComponent | (via aiService) | -- | -- | -- |
 | AI Proxy | AIProxyComponent | AIProxyViewComponent | (via aiService) | AIProxyComponent | -- | -- |
-| Messaging | SecureMessagingComponent | -- | messagingService | SecureMessagingComponent | -- | -- |
+| Messaging | SecureMessagingComponent | SecureMessagingViewComponent | messagingService | SecureMessagingComponent | -- | -- |
 | Payment | PaymentComponent | PaymentViewComponent | paymentService | PaymentComponent | -- | -- |
-| Payment Form | PaymentFormComponent | -- | (via paymentService) | PaymentFormComponent | -- | -- |
-| Subscription | SubscriptionComponent | -- | subscriptionService | SubscriptionComponent | -- | -- |
-| Subscription Mgr | SubscriptionManagerComponent | -- | (via subscriptionService) | SubscriptionManagerComponent | -- | -- |
-| Notifications | NotificationComponent | -- | notificationService | NotificationComponent | -- | -- |
-| 2FA Settings | TwoFactorSettingsComponent | -- | twoFactorService | TwoFactorSettingsComponent | -- | -- |
+| Payment Form | PaymentFormComponent | PaymentFormViewComponent | (via paymentService) | PaymentFormComponent | -- | -- |
+| Subscription | SubscriptionComponent | SubscriptionViewComponent | subscriptionService | SubscriptionComponent | -- | -- |
+| Subscription Mgr | SubscriptionManagerComponent | SubscriptionManagerViewComponent | (via subscriptionService) | SubscriptionManagerComponent | -- | -- |
+| Notifications | NotificationComponent | NotificationViewComponent | notificationService | NotificationComponent | -- | -- |
+| Notification Toast | NotificationToastComponent | NotificationToastViewComponent | (via notificationService) | -- | -- | -- |
+| 2FA Settings | TwoFactorSettingsComponent | TwoFactorSettingsViewComponent | twoFactorService | TwoFactorSettingsComponent | -- | -- |
 | Token Registration | TokenRegistrationComponent | TokenRegistrationViewComponent | (via authService) | TokenRegistrationComponent | -- | -- |
 | App Tier | AppTierComponent | AppTierViewComponent | appTierService | AppTierComponent | -- | -- |
-| Disclaimer | DisclaimerComponent | -- | disclaimerService | DisclaimerComponent | -- | -- |
+| Pricing Display | PricingDisplayComponent | PricingDisplayViewComponent | (via appTierService) | -- | -- | -- |
+| Usage Dashboard | UsageDashboardComponent | UsageDashboardViewComponent | (via appTierService) | -- | -- | -- |
+| Overage Summary | OverageSummaryComponent | OverageSummaryViewComponent | (via appTierService) | -- | -- | -- |
+| Disclaimer | DisclaimerComponent | DisclaimerViewComponent | disclaimerService | DisclaimerComponent | -- | -- |
+| Signup + Sub | SignupWithSubscriptionComponent | SignupWithSubscriptionViewComponent | -- | -- | -- | -- |
 
 *`--` = not yet implemented on that platform*
 
@@ -146,33 +152,48 @@ builder.Services.AddWildwoodComponentsRazor(options =>
 WildwoodComponents.Razor/
     .claude/CLAUDE.md               # This file
     Components/
-        Authentication/             # Auth ViewComponent
+        AIChat/                     # AI Chat ViewComponent
+        AIFlow/                     # AI Flow ViewComponent
         AIProxy/                    # AI Proxy ViewComponent
-        AppTier/                    # App Tier ViewComponent
-        Payment/                    # Payment ViewComponent
-        Registration/               # Token Registration ViewComponent
-        Shared/Views/               # Shared partial views
+        AppTier/                    # App Tier + Pricing Display ViewComponents
+        Authentication/             # Auth ViewComponent
+        Disclaimer/                 # Disclaimer ViewComponent
+        Messaging/                  # Secure Messaging ViewComponent
+        Notification/               # Notification + Toast ViewComponents
+        Payment/                    # Payment + PaymentForm ViewComponents
+        Registration/               # Token Registration + Signup ViewComponents
+        Security/                   # Two-Factor Settings ViewComponent
+        Subscription/               # Subscription + Manager ViewComponents
+        Usage/                      # Usage Dashboard + Overage Summary ViewComponents
     Extensions/
         ServiceCollectionExtensions.cs
     Services/
-        IWildwoodAuthService.cs
-        IWildwoodAIProxyService.cs
-        IWildwoodAppTierService.cs
-        IWildwoodPaymentService.cs
-        IWildwoodRegistrationService.cs
-        IWildwoodSessionManager.cs
-        WildwoodAuthService.cs
-        WildwoodAIProxyService.cs
-        WildwoodAppTierService.cs
-        WildwoodPaymentService.cs
-        WildwoodRegistrationService.cs
-        WildwoodSessionManager.cs
+        IWildwoodAIChatService.cs + WildwoodAIChatService.cs
+        IWildwoodAIFlowService.cs + WildwoodAIFlowService.cs
+        IWildwoodAIProxyService.cs + WildwoodAIProxyService.cs
+        IWildwoodAppTierService.cs + WildwoodAppTierService.cs
+        IWildwoodAuthService.cs + WildwoodAuthService.cs
+        IWildwoodDisclaimerService.cs + WildwoodDisclaimerService.cs
+        IWildwoodMessagingService.cs + WildwoodMessagingService.cs
+        IWildwoodPaymentService.cs + WildwoodPaymentService.cs
+        IWildwoodRegistrationService.cs + WildwoodRegistrationService.cs
+        IWildwoodSessionManager.cs + WildwoodSessionManager.cs
+        IWildwoodSubscriptionService.cs + WildwoodSubscriptionService.cs
+        IWildwoodTwoFactorSettingsService.cs + WildwoodTwoFactorSettingsService.cs
     Models/
-        AuthenticationModels.cs
+        AIChatModels.cs
+        AIFlowModels.cs
         AIProxyModels.cs
         AppTierModels.cs
+        AuthenticationModels.cs
+        DisclaimerModels.cs
+        MessagingModels.cs
+        NotificationModels.cs
         PaymentModels.cs
+        SubscriptionModels.cs
         TokenRegistrationModels.cs
+        TwoFactorSettingsModels.cs
+        UsageModels.cs
     wwwroot/
         css/wildwood-razor-themes.css
     WildwoodComponents.Razor.csproj

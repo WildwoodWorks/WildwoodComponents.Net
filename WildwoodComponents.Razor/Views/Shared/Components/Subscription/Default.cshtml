@@ -1,0 +1,262 @@
+@using WildwoodComponents.Razor.Models
+@using WildwoodComponents.Razor.Helpers
+@model SubscriptionViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var plans = Model.Plans;
+    var currentSub = Model.CurrentSubscription;
+    var hasMonthlyAndAnnual = plans.Any(p =>
+        string.Equals(p.BillingFrequency, "Monthly", StringComparison.OrdinalIgnoreCase)) &&
+        plans.Any(p => string.Equals(p.BillingFrequency, "Annually", StringComparison.OrdinalIgnoreCase));
+}
+
+<div id="ww-subscription-@cid"
+     class="ww-subscription-component"
+     data-component-id="@cid"
+     data-app-id="@Model.AppId"
+     data-proxy-base="@Model.ProxyBaseUrl"
+     data-currency="@Model.Currency"
+     data-annual-discount="@Model.AnnualDiscount"
+     data-require-billing="@Model.RequireBillingAddress.ToString().ToLower()"
+     data-customer-id="@(Model.CustomerId ?? "")"
+     data-customer-email="@(Model.CustomerEmail ?? "")">
+
+    <!-- Message Area -->
+    <div class="ww-subscription-message" style="display: none;"></div>
+
+    <!-- Loading State -->
+    <div class="ww-subscription-loading text-center py-4" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted">Processing...</p>
+    </div>
+
+    <!-- ===== PLAN SELECTION VIEW ===== -->
+    <div class="ww-subscription-plans-view">
+        @if (Model.ShowBillingToggle && hasMonthlyAndAnnual)
+        {
+            <div class="ww-billing-toggle text-center mb-4">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-primary ww-billing-btn" data-cycle="monthly">
+                        Monthly
+                    </button>
+                    <button type="button" class="btn btn-outline-primary ww-billing-btn" data-cycle="annually">
+                        Annually
+                        @if (Model.AnnualDiscount > 0)
+                        {
+                            <span class="badge bg-success ms-1">Save @Model.AnnualDiscount%</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        }
+
+        <!-- Plan Cards Grid -->
+        <div class="ww-plan-grid row justify-content-center">
+            @foreach (var plan in plans)
+            {
+                var isCurrentPlan = currentSub != null &&
+                                    currentSub.PlanId == plan.Id &&
+                                    currentSub.IsActive;
+
+                <div class="col-md-4 mb-4">
+                    <div class="ww-plan-card card h-100 @(plan.IsDefault ? "border-primary ww-recommended" : "") @(isCurrentPlan ? "ww-current-plan" : "")"
+                         data-plan-id="@plan.Id"
+                         data-plan-name="@plan.Name"
+                         data-plan-price="@plan.Price"
+                         data-billing="@plan.BillingFrequency.ToLower()">
+
+                        @if (plan.IsDefault && !isCurrentPlan)
+                        {
+                            <div class="ww-plan-badge bg-primary text-white text-center py-1">
+                                <small>Recommended</small>
+                            </div>
+                        }
+                        @if (isCurrentPlan)
+                        {
+                            <div class="ww-plan-badge bg-success text-white text-center py-1">
+                                <small>Current Plan</small>
+                            </div>
+                        }
+
+                        <div class="card-body text-center">
+                            <h5 class="ww-plan-name">@plan.Name</h5>
+
+                            <div class="ww-plan-price my-3">
+                                @if (plan.Price == 0)
+                                {
+                                    <span class="ww-price-amount fs-3 fw-bold">Free</span>
+                                }
+                                else
+                                {
+                                    <span class="ww-price-currency">@ViewHelpers.GetCurrencySymbol(Model.Currency)</span>
+                                    <span class="ww-price-amount fs-3 fw-bold">@plan.Price.ToString("N2")</span>
+                                    <span class="ww-price-period text-muted">/@(plan.BillingFrequencyLabel ?? plan.BillingFrequency.ToLower())</span>
+                                }
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(plan.Description))
+                            {
+                                <p class="ww-plan-description text-muted small">@plan.Description</p>
+                            }
+
+                            @if (plan.Features.Count > 0)
+                            {
+                                <ul class="ww-plan-features list-unstyled text-start mt-3">
+                                    @foreach (var feature in plan.Features)
+                                    {
+                                        <li class="mb-2">
+                                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                            @feature
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+
+                        <div class="card-footer bg-transparent border-0 text-center pb-3">
+                            @if (isCurrentPlan)
+                            {
+                                <button class="btn btn-outline-secondary w-100" disabled>
+                                    Current Plan
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn @(plan.IsDefault ? "btn-primary" : "btn-outline-primary") w-100 ww-select-plan-btn"
+                                        data-plan-id="@plan.Id"
+                                        data-plan-name="@plan.Name"
+                                        data-plan-price="@plan.Price">
+                                    @if (plan.Price == 0)
+                                    {
+                                        <text>Get Started Free</text>
+                                    }
+                                    else if (currentSub != null && currentSub.IsActive)
+                                    {
+                                        <text>Switch to @plan.Name</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Choose @plan.Name</text>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Current Subscription Info -->
+        @if (currentSub != null && currentSub.IsActive)
+        {
+            <div class="ww-current-subscription mt-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h6 class="mb-1">Current Subscription</h6>
+                                <p class="mb-0">
+                                    <strong>@currentSub.PlanName</strong>
+                                    <span class="badge @ViewHelpers.GetStatusBadgeClass(currentSub.Status) ms-2">@currentSub.Status</span>
+                                </p>
+                                @if (currentSub.CurrentPeriodEnd.HasValue)
+                                {
+                                    <small class="text-muted">
+                                        Renews: @currentSub.CurrentPeriodEnd.Value.ToString("MMM dd, yyyy")
+                                    </small>
+                                }
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <button class="btn btn-outline-danger btn-sm ww-cancel-sub-btn"
+                                        data-subscription-id="@currentSub.Id">
+                                    Cancel Subscription
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- No Plans Warning -->
+        @if (plans.Count == 0)
+        {
+            <div class="alert alert-warning text-center">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>No subscription plans available</strong>
+                <p class="small mb-0 mt-2">No plans are configured for this application.</p>
+            </div>
+        }
+    </div>
+
+    <!-- ===== CANCEL CONFIRMATION VIEW ===== -->
+    <div class="ww-cancel-confirmation-view" style="display: none;">
+        <div class="card" style="max-width: 500px; margin: 0 auto;">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                <h4 class="mt-3">Cancel Subscription?</h4>
+                <p class="text-muted ww-cancel-plan-name"></p>
+                <p class="text-muted ww-cancel-period-end" style="display: none;"></p>
+                <div class="mt-4">
+                    <button class="btn btn-outline-secondary me-2 ww-keep-sub-btn">
+                        Keep Subscription
+                    </button>
+                    <button class="btn btn-danger ww-confirm-cancel-btn">
+                        <span class="ww-btn-text">Yes, Cancel</span>
+                        <span class="ww-btn-spinner" style="display: none;">
+                            <span class="spinner-border spinner-border-sm me-2"></span> Cancelling...
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== SUCCESS VIEW ===== -->
+    <div class="ww-subscription-success-view" style="display: none;">
+        <div class="text-center py-5">
+            <div class="mb-4">
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+            </div>
+            <h3 class="ww-success-plan-name">Subscribed!</h3>
+            <p class="text-muted">Your subscription is now active.</p>
+            <div class="mt-4">
+                <button class="btn btn-primary btn-lg ww-success-continue-btn">
+                    Get Started
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .ww-subscription-component {
+        --ww-sub-card-bg: var(--ww-bg-primary, #ffffff);
+        --ww-sub-card-border: var(--ww-border-color, #dee2e6);
+        --ww-sub-badge-bg: var(--ww-primary, #0d6efd);
+    }
+
+    .ww-plan-card {
+        background: var(--ww-sub-card-bg);
+        border-color: var(--ww-sub-card-border);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .ww-plan-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    }
+
+    .ww-plan-card.ww-recommended {
+        border-width: 2px;
+    }
+
+    .ww-plan-card.ww-current-plan {
+        border-color: var(--ww-success, #198754);
+        border-width: 2px;
+    }
+</style>
+

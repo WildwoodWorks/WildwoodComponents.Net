@@ -1,4 +1,4 @@
-@model WildwoodComponents.Razor.Components.Authentication.AuthenticationViewModel
+@model WildwoodComponents.Razor.Models.AuthenticationViewModel
 
 <div class="ww-auth-component" id="ww-auth-component"
      data-proxy-url="@Model.ProxyBaseUrl"
@@ -62,7 +62,7 @@
                                 "apple" => "bi-apple",
                                 _ => "bi-box-arrow-in-right"
                             };
-                            <a href="/Account/ExternalLogin?provider=@provider&returnUrl=@Uri.EscapeDataString(Model.ReturnUrl)"
+                            <a href="@(Model.ExternalLoginPath)?provider=@provider&returnUrl=@Uri.EscapeDataString(Model.ReturnUrl)"
                                class="btn btn-outline-secondary">
                                 <i class="bi @iconClass"></i> @provider
                             </a>
@@ -92,7 +92,7 @@
             <div class="ww-card">
                 <div class="ww-card-header">
                     <h2>Create Account</h2>
-                    <p>Join Form Forge</p>
+                    <p>@Model.Subtitle</p>
                 </div>
                 <div class="ww-card-body">
                     <form id="ww-register-form" novalidate>

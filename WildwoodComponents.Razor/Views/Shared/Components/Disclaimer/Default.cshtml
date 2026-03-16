@@ -1,0 +1,218 @@
+@using WildwoodComponents.Razor.Models
+@model DisclaimerViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var hasDisclaimers = Model.Disclaimers.Count > 0;
+    var requiredCount = Model.Disclaimers.Count(d => d.IsRequired);
+}
+
+<div id="ww-disclaimer-@cid"
+     class="ww-disclaimer-component"
+     data-component-id="@cid"
+     data-app-id="@Model.AppId"
+     data-user-id="@(Model.UserId ?? "")"
+     data-proxy-url="@Model.ProxyBaseUrl"
+     data-mode="@Model.Mode">
+
+    @* Error/Success message area *@
+    <div id="ww-disclaimer-message-@cid" class="ww-alert" style="display:none;"></div>
+
+    @if (!hasDisclaimers)
+    {
+        <div class="ww-disclaimer-empty text-center py-4">
+            <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
+            <p class="text-muted mt-2 mb-0">No pending disclaimers to review.</p>
+        </div>
+    }
+    else
+    {
+        <div class="ww-disclaimer-list">
+            @if (Model.Mode == "login")
+            {
+                <div class="ww-disclaimer-header mb-3">
+                    <h4 class="mb-1">Terms &amp; Agreements</h4>
+                    <p class="text-muted mb-0">
+                        Please review and accept the following before continuing.
+                        @if (requiredCount > 0)
+                        {
+                            <span class="fw-bold">@requiredCount required.</span>
+                        }
+                    </p>
+                </div>
+            }
+
+            @foreach (var disclaimer in Model.Disclaimers)
+            {
+                var disclaimerElId = $"ww-disclaimer-item-{cid}-{disclaimer.DisclaimerId}";
+                var isUpdated = disclaimer.PreviouslyAcceptedVersion.HasValue;
+
+                <div class="ww-disclaimer-item card mb-3" id="@disclaimerElId"
+                     data-disclaimer-id="@disclaimer.DisclaimerId"
+                     data-version-id="@disclaimer.VersionId"
+                     data-is-required="@disclaimer.IsRequired.ToString().ToLower()">
+
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <div>
+                            <h5 class="mb-0">@disclaimer.Title</h5>
+                            @if (!string.IsNullOrEmpty(disclaimer.DisclaimerType))
+                            {
+                                <small class="text-muted">@disclaimer.DisclaimerType</small>
+                            }
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            @if (disclaimer.IsRequired)
+                            {
+                                <span class="badge bg-danger">Required</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Optional</span>
+                            }
+                            <span class="badge bg-info text-dark">v@(disclaimer.VersionNumber)</span>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        @if (isUpdated && !string.IsNullOrEmpty(disclaimer.ChangeNotes))
+                        {
+                            <div class="alert alert-info mb-3">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <strong>Updated from v@(disclaimer.PreviouslyAcceptedVersion):</strong>
+                                @disclaimer.ChangeNotes
+                            </div>
+                        }
+                        else if (isUpdated)
+                        {
+                            <div class="alert alert-info mb-3">
+                                <i class="bi bi-info-circle me-2"></i>
+                                This agreement has been updated since you last accepted (v@(disclaimer.PreviouslyAcceptedVersion)).
+                            </div>
+                        }
+
+                        <div class="ww-disclaimer-content mb-3">
+                            @if (string.Equals(disclaimer.ContentFormat, "HTML", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="ww-disclaimer-html-content border rounded p-3"
+                                     style="max-height: 300px; overflow-y: auto;">
+                                    @Html.Raw(disclaimer.Content)
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="ww-disclaimer-text-content border rounded p-3"
+                                     style="max-height: 300px; overflow-y: auto; white-space: pre-wrap;">@disclaimer.Content</div>
+                            }
+                        </div>
+
+                        <div class="form-check">
+                            <input type="checkbox"
+                                   class="form-check-input ww-disclaimer-checkbox"
+                                   id="ww-disclaimer-accept-@cid-@disclaimer.DisclaimerId"
+                                   data-disclaimer-id="@disclaimer.DisclaimerId"
+                                   data-version-id="@disclaimer.VersionId"
+                                   data-is-required="@disclaimer.IsRequired.ToString().ToLower()" />
+                            <label class="form-check-label" for="ww-disclaimer-accept-@cid-@disclaimer.DisclaimerId">
+                                @if (disclaimer.IsRequired)
+                                {
+                                    <span>I have read and agree to the <strong>@disclaimer.Title</strong></span>
+                                }
+                                else
+                                {
+                                    <span>I accept the <strong>@disclaimer.Title</strong> (optional)</span>
+                                }
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @* Action Buttons *@
+            <div class="ww-disclaimer-actions d-flex gap-2 mt-3">
+                <button type="button"
+                        class="btn btn-primary ww-disclaimer-accept-all-btn"
+                        disabled
+                        data-required-count="@requiredCount">
+                    <span class="ww-btn-text">Accept &amp; Continue</span>
+                    <span class="ww-btn-spinner" style="display:none;">
+                        <span class="ww-spinner"></span> Submitting...
+                    </span>
+                </button>
+                @if (Model.ShowCancelButton)
+                {
+                    <button type="button" class="btn btn-outline-secondary ww-disclaimer-cancel-btn">
+                        Cancel
+                    </button>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .ww-disclaimer-component {
+        --ww-disc-bg: var(--ww-bg-primary, #ffffff);
+        --ww-disc-text: var(--ww-text-primary, #212529);
+        --ww-disc-border: var(--ww-border-color, #dee2e6);
+        --ww-disc-primary: var(--ww-primary, #0d6efd);
+        color: var(--ww-disc-text);
+    }
+
+    .ww-disclaimer-component .card {
+        background-color: var(--ww-disc-bg);
+        border-color: var(--ww-disc-border);
+    }
+
+    .ww-disclaimer-component .card-header {
+        background-color: var(--ww-bg-secondary, #f8f9fa);
+        border-bottom-color: var(--ww-disc-border);
+    }
+
+    .ww-disclaimer-component .ww-disclaimer-html-content,
+    .ww-disclaimer-component .ww-disclaimer-text-content {
+        background-color: var(--ww-bg-secondary, #f8f9fa);
+        border-color: var(--ww-disc-border) !important;
+        font-size: 0.9rem;
+        line-height: 1.6;
+    }
+
+    .ww-disclaimer-component .ww-disclaimer-html-content h1,
+    .ww-disclaimer-component .ww-disclaimer-html-content h2,
+    .ww-disclaimer-component .ww-disclaimer-html-content h3 {
+        font-size: 1.1rem;
+        margin-top: 1rem;
+    }
+
+    .ww-disclaimer-component .ww-alert {
+        padding: 0.75rem 1rem;
+        border-radius: 0.375rem;
+        margin-bottom: 1rem;
+    }
+
+    .ww-disclaimer-component .ww-alert.ww-alert-success {
+        background-color: rgba(25, 135, 84, 0.1);
+        color: var(--ww-success, #198754);
+        border: 1px solid var(--ww-success, #198754);
+    }
+
+    .ww-disclaimer-component .ww-alert.ww-alert-danger {
+        background-color: rgba(220, 53, 69, 0.1);
+        color: var(--ww-danger, #dc3545);
+        border: 1px solid var(--ww-danger, #dc3545);
+    }
+
+    .ww-disclaimer-component .ww-spinner {
+        display: inline-block;
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: ww-disc-spin 0.75s linear infinite;
+        vertical-align: middle;
+    }
+
+    @@keyframes ww-disc-spin {
+        to { transform: rotate(360deg); }
+    }
+</style>

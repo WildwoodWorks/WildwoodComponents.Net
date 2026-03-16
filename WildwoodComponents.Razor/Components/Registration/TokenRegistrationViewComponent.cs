@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using WildwoodComponents.Razor.Models;
 using WildwoodComponents.Razor.Services;
 
@@ -13,10 +14,12 @@ namespace WildwoodComponents.Razor.Components.Registration;
 public class TokenRegistrationViewComponent : ViewComponent
 {
     private readonly IWildwoodRegistrationService _registrationService;
+    private readonly ILogger<TokenRegistrationViewComponent> _logger;
 
-    public TokenRegistrationViewComponent(IWildwoodRegistrationService registrationService)
+    public TokenRegistrationViewComponent(IWildwoodRegistrationService registrationService, ILogger<TokenRegistrationViewComponent> logger)
     {
         _registrationService = registrationService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -58,18 +61,25 @@ public class TokenRegistrationViewComponent : ViewComponent
         // If a default pricing model is set for open registration, pre-load pricing info
         if (allowOpenRegistration && !string.IsNullOrEmpty(defaultPricingModelId))
         {
-            var pricing = await _registrationService.GetPricingModelAsync(defaultPricingModelId);
-            if (pricing != null)
+            try
             {
-                ViewData["DefaultPricing"] = new PricingDetails
+                var pricing = await _registrationService.GetPricingModelAsync(defaultPricingModelId);
+                if (pricing != null)
                 {
-                    PlanName = pricing.Name,
-                    PlanDescription = pricing.Description,
-                    PriceAmount = pricing.Price,
-                    Currency = pricing.Currency ?? "USD",
-                    IsSubscription = !string.Equals(pricing.BillingFrequency, "OneTime", StringComparison.OrdinalIgnoreCase),
-                    BillingFrequency = pricing.BillingFrequency
-                };
+                    ViewData["DefaultPricing"] = new PricingDetails
+                    {
+                        PlanName = pricing.Name,
+                        PlanDescription = pricing.Description,
+                        PriceAmount = pricing.Price,
+                        Currency = pricing.Currency ?? "USD",
+                        IsSubscription = !string.Equals(pricing.BillingFrequency, "OneTime", StringComparison.OrdinalIgnoreCase),
+                        BillingFrequency = pricing.BillingFrequency
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load pricing model {PricingModelId}", defaultPricingModelId);
             }
         }
 

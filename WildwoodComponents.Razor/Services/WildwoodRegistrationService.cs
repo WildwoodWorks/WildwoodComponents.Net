@@ -34,21 +34,11 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
         _appId = appId;
     }
 
-    private void SetAuthHeader()
-    {
-        var token = _sessionManager.GetAccessToken();
-        if (!string.IsNullOrEmpty(token))
-        {
-            _httpClient.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        }
-    }
-
     public async Task<TokenValidationResponse?> ValidateTokenAsync(string token)
     {
         try
         {
-            var response = await _httpClient.GetAsync($"api/registrationtokens/validate-detailed/{token}");
+            using var response = await _httpClient.GetAsync($"api/registrationtokens/validate-detailed/{token}");
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<TokenValidationResponse>(JsonOptions);
@@ -68,7 +58,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/userregistration/validate", request);
+            using var response = await _httpClient.PostAsJsonAsync("api/userregistration/validate", request);
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<RegistrationValidationResponse>(JsonOptions);
@@ -88,7 +78,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/userregistration/register-with-token", request);
+            using var response = await _httpClient.PostAsJsonAsync("api/userregistration/register-with-token", request);
             var content = await response.Content.ReadAsStringAsync();
 
             try
@@ -118,7 +108,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/userregistration/register", request);
+            using var response = await _httpClient.PostAsJsonAsync("api/userregistration/register", request);
             var content = await response.Content.ReadAsStringAsync();
 
             try
@@ -148,7 +138,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            var response = await _httpClient.GetAsync($"api/auth/password-requirements/{appId}");
+            using var response = await _httpClient.GetAsync($"api/auth/password-requirements/{appId}");
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadAsStringAsync();
@@ -165,7 +155,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            var response = await _httpClient.GetAsync($"api/pricingmodels/{pricingModelId}/public");
+            using var response = await _httpClient.GetAsync($"api/pricingmodels/{pricingModelId}/public");
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<PricingModelResponse>(JsonOptions);
@@ -185,7 +175,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            var response = await _httpClient.GetAsync($"api/registrationpayment/pricing/{token}");
+            using var response = await _httpClient.GetAsync($"api/registrationpayment/pricing/{token}");
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<PricingDetails>(JsonOptions);
@@ -202,7 +192,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/registrationpayment/skip", request);
+            using var response = await _httpClient.PostAsJsonAsync("api/registrationpayment/skip", request);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -216,7 +206,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            SetAuthHeader();
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var request = new
             {
                 ExternalTransactionId = externalTransactionId,
@@ -224,7 +214,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
                 CompanyClientId = companyClientId
             };
 
-            var response = await _httpClient.PostAsJsonAsync("api/payment/link-transaction", request);
+            using var response = await _httpClient.PostAsJsonAsync("api/payment/link-transaction", request);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -239,7 +229,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            var response = await _httpClient.GetAsync($"api/disclaimeracceptance/pending/{appId}?showOn=registration");
+            using var response = await _httpClient.GetAsync($"api/disclaimeracceptance/pending/{appId}?showOn=registration");
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<PendingDisclaimersResponse>(JsonOptions);
@@ -264,7 +254,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
                 AppId = appId ?? _appId
             };
 
-            var response = await _httpClient.PostAsJsonAsync("api/auth/login", loginRequest);
+            using var response = await _httpClient.PostAsJsonAsync("api/auth/login", loginRequest);
             var content = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)

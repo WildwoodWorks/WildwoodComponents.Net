@@ -25,6 +25,9 @@ public interface IWildwoodAppTierService
     Task<bool> SubscribeToAddOnAsync(string appId, string addOnId, string? pricingId, string? paymentTransactionId);
     Task<bool> CancelAddOnSubscriptionAsync(string subscriptionId);
 
+    // Usage / limit statuses (bulk)
+    Task<List<AppTierLimitStatusModel>> GetAllLimitStatusesAsync(string appId);
+
     // Feature gating
     Task<Dictionary<string, bool>> GetUserFeaturesAsync(string appId);
     Task<AppFeatureCheckResultModel?> CheckFeatureAsync(string appId, string featureCode);

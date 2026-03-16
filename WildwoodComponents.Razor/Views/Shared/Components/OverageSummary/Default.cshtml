@@ -1,0 +1,105 @@
+@using WildwoodComponents.Shared.Models
+@model WildwoodComponents.Razor.Models.OverageSummaryViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var overages = Model.OverageLimits;
+    var sub = Model.Subscription;
+    var exceededCount = overages.Count(l => l.IsExceeded);
+    var warningCount = overages.Count(l => l.IsAtWarningThreshold && !l.IsExceeded);
+}
+
+@if (overages.Count > 0)
+{
+    <div id="ww-overage-summary-@cid"
+         class="ww-overage-summary-component"
+         data-component-id="@cid"
+         data-app-id="@Model.AppId"
+         data-proxy-url="@Model.ProxyBaseUrl">
+
+        @* ===== EXCEEDED LIMITS BANNER ===== *@
+        @if (exceededCount > 0)
+        {
+            <div class="ww-overage-banner ww-overage-exceeded alert alert-danger d-flex align-items-start mb-3">
+                <div class="ww-overage-icon me-3 flex-shrink-0">
+                    <i class="bi bi-exclamation-triangle-fill" style="font-size: 1.5rem;"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <h6 class="alert-heading mb-1">
+                        @exceededCount Usage Limit@(exceededCount > 1 ? "s" : "") Exceeded
+                    </h6>
+                    <div class="ww-overage-list mb-2">
+                        @foreach (var limit in overages.Where(l => l.IsExceeded))
+                        {
+                            <div class="ww-overage-item d-flex justify-content-between align-items-center py-1">
+                                <div>
+                                    <span class="fw-medium">@(string.IsNullOrEmpty(limit.DisplayName) ? limit.LimitCode : limit.DisplayName)</span>
+                                    @if (limit.IsHardBlocked)
+                                    {
+                                        <span class="badge bg-danger ms-1">Blocked</span>
+                                    }
+                                </div>
+                                <div class="text-end">
+                                    <span class="fw-medium text-danger">@limit.CurrentUsage.ToString("N0")</span>
+                                    <span class="text-muted"> / @limit.MaxValue.ToString("N0")</span>
+                                    @if (!string.IsNullOrEmpty(limit.Unit))
+                                    {
+                                        <span class="text-muted small ms-1">@limit.Unit</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-danger btn-sm ww-upgrade-plan-btn" data-app-id="@Model.AppId">
+                            <i class="bi bi-arrow-up-circle me-1"></i> Upgrade Now
+                        </button>
+                        @if (sub != null)
+                        {
+                            <span class="align-self-center small">
+                                Current plan: <strong>@sub.TierName</strong>
+                            </span>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* ===== WARNING LIMITS BANNER ===== *@
+        @if (warningCount > 0)
+        {
+            <div class="ww-overage-banner ww-overage-warning alert alert-warning d-flex align-items-start mb-3">
+                <div class="ww-overage-icon me-3 flex-shrink-0">
+                    <i class="bi bi-exclamation-circle" style="font-size: 1.5rem;"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <h6 class="alert-heading mb-1">
+                        @warningCount Usage Limit@(warningCount > 1 ? "s" : "") Approaching
+                    </h6>
+                    <div class="ww-overage-list mb-2">
+                        @foreach (var limit in overages.Where(l => l.IsAtWarningThreshold && !l.IsExceeded))
+                        {
+                            <div class="ww-overage-item d-flex justify-content-between align-items-center py-1">
+                                <div>
+                                    <span class="fw-medium">@(string.IsNullOrEmpty(limit.DisplayName) ? limit.LimitCode : limit.DisplayName)</span>
+                                </div>
+                                <div class="text-end">
+                                    <span class="fw-medium">@limit.CurrentUsage.ToString("N0")</span>
+                                    <span class="text-muted"> / @limit.MaxValue.ToString("N0")</span>
+                                    <span class="text-muted small ms-1">(@limit.UsagePercent.ToString("N0")%)</span>
+                                    @if (!string.IsNullOrEmpty(limit.Unit))
+                                    {
+                                        <span class="text-muted small ms-1">@limit.Unit</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <button class="btn btn-warning btn-sm ww-upgrade-plan-btn" data-app-id="@Model.AppId">
+                        <i class="bi bi-arrow-up-circle me-1"></i> Upgrade Plan
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+}

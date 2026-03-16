@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using WildwoodComponents.Razor.Models;
 using WildwoodComponents.Razor.Services;
 
 namespace WildwoodComponents.Razor.Components.AIProxy;
@@ -11,10 +13,12 @@ namespace WildwoodComponents.Razor.Components.AIProxy;
 public class AIProxyViewComponent : ViewComponent
 {
     private readonly IWildwoodAIProxyService _aiService;
+    private readonly ILogger<AIProxyViewComponent> _logger;
 
-    public AIProxyViewComponent(IWildwoodAIProxyService aiService)
+    public AIProxyViewComponent(IWildwoodAIProxyService aiService, ILogger<AIProxyViewComponent> logger)
     {
         _aiService = aiService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -41,10 +45,17 @@ public class AIProxyViewComponent : ViewComponent
         // If only name provided, try to resolve to ID
         if (string.IsNullOrEmpty(configurationId) && !string.IsNullOrEmpty(configurationName))
         {
-            var configs = await _aiService.GetConfigurationsAsync();
-            var match = configs.FirstOrDefault(c => c.IsActive &&
-                c.Name.Equals(configurationName, StringComparison.OrdinalIgnoreCase));
-            configurationId = match?.Id;
+            try
+            {
+                var configs = await _aiService.GetConfigurationsAsync();
+                var match = configs.FirstOrDefault(c => c.IsActive &&
+                    c.Name.Equals(configurationName, StringComparison.OrdinalIgnoreCase));
+                configurationId = match?.Id;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to resolve AI configuration name '{Name}'", configurationName);
+            }
         }
 
         var model = new AIProxyViewModel
@@ -61,16 +72,4 @@ public class AIProxyViewComponent : ViewComponent
 
         return View(model);
     }
-}
-
-public class AIProxyViewModel
-{
-    public string? ConfigurationId { get; set; }
-    public string? ConfigurationName { get; set; }
-    public string Placeholder { get; set; } = "Describe what you need...";
-    public bool AllowFileUpload { get; set; }
-    public string ProxyBaseUrl { get; set; } = "/api/ai-proxy";
-    public string? OnCompleteCallback { get; set; }
-    public string Title { get; set; } = "AI Assistant";
-    public string SubmitLabel { get; set; } = "Generate";
 }

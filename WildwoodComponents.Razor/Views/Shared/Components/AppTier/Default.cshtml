@@ -1,5 +1,6 @@
 @using WildwoodComponents.Razor.Models
-@model WildwoodComponents.Razor.Components.AppTier.AppTierViewModel
+@using WildwoodComponents.Razor.Helpers
+@model WildwoodComponents.Razor.Models.AppTierViewModel
 
 <div class="ww-app-tier-component" id="ww-app-tier-component"
      data-app-id="@Model.AppId"
@@ -58,7 +59,7 @@
 
                         @if (!string.IsNullOrEmpty(tier.CustomBadgeText) && !isCurrentPlan)
                         {
-                            <div class="ww-tier-badge @GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
+                            <div class="ww-tier-badge @ViewHelpers.GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
                                 <small>@tier.CustomBadgeText</small>
                             </div>
                         }
@@ -96,7 +97,7 @@
                                                   data-price="@pricing.Price"
                                                   data-is-default="@pricing.IsDefault.ToString().ToLower()"
                                                   style="display:none;">
-                                                <span class="ww-price-currency">@GetCurrencySymbol(Model.Currency)</span>
+                                                <span class="ww-price-currency">@ViewHelpers.GetCurrencySymbol(Model.Currency)</span>
                                                 <span class="ww-price-amount">@pricing.Price.ToString("N0")</span>
                                                 <span class="ww-price-period">/@pricing.BillingFrequencyLabel.ToLower()</span>
                                             </span>
@@ -302,7 +303,7 @@
                                     @if (pricing != null && !isBundled)
                                     {
                                         <p class="mb-2">
-                                            <strong>@GetCurrencySymbol(Model.Currency)@pricing.Price.ToString("N2")</strong>
+                                            <strong>@ViewHelpers.GetCurrencySymbol(Model.Currency)@pricing.Price.ToString("N2")</strong>
                                             <span class="text-muted small">/ @pricing.BillingFrequency.ToLower()</span>
                                         </p>
                                     }
@@ -386,23 +387,3 @@
     </div>
 </div>
 
-@functions {
-    static string GetBadgeColorClass(string badgeColor)
-    {
-        if (string.IsNullOrEmpty(badgeColor)) return "bg-primary";
-        if (string.Equals(badgeColor, "primary", StringComparison.OrdinalIgnoreCase)) return "bg-primary";
-        if (string.Equals(badgeColor, "success", StringComparison.OrdinalIgnoreCase)) return "bg-success";
-        if (string.Equals(badgeColor, "warning", StringComparison.OrdinalIgnoreCase)) return "bg-warning";
-        if (string.Equals(badgeColor, "danger", StringComparison.OrdinalIgnoreCase)) return "bg-danger";
-        if (string.Equals(badgeColor, "info", StringComparison.OrdinalIgnoreCase)) return "bg-info";
-        return "bg-primary";
-    }
-
-    static string GetCurrencySymbol(string currency)
-    {
-        if (string.Equals(currency, "USD", StringComparison.OrdinalIgnoreCase)) return "$";
-        if (string.Equals(currency, "EUR", StringComparison.OrdinalIgnoreCase)) return "\u20AC";
-        if (string.Equals(currency, "GBP", StringComparison.OrdinalIgnoreCase)) return "\u00A3";
-        return currency;
-    }
-}

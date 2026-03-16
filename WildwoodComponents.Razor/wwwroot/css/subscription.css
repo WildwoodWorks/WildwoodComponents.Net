@@ -1,0 +1,194 @@
+/* WildwoodComponents.Razor - Subscription & Subscription Manager Component Styles
+ *
+ * Plan cards, billing toggle, subscription details, cancel confirmation, invoices.
+ * Covers both SubscriptionViewComponent and SubscriptionManagerViewComponent.
+ * Base card/alert/spinner styles are in wildwood-razor-themes.css.
+ */
+
+/* ========================================
+   CONTAINER
+   ======================================== */
+
+.ww-subscription-component,
+.ww-subscription-manager-component {
+    font-family: var(--ww-font-family, system-ui, -apple-system, sans-serif);
+}
+
+/* ========================================
+   BILLING TOGGLE
+   ======================================== */
+
+.ww-billing-toggle {
+    margin-bottom: 1.5rem;
+}
+
+.ww-billing-btn.btn-primary {
+    background: var(--ww-primary, #0d6efd);
+    border-color: var(--ww-primary, #0d6efd);
+}
+
+.ww-billing-btn.btn-outline-primary {
+    color: var(--ww-primary, #0d6efd);
+    border-color: var(--ww-primary, #0d6efd);
+}
+
+.ww-billing-btn.btn-outline-primary:hover {
+    background: var(--ww-primary, #0d6efd);
+    color: var(--ww-btn-primary-text, white);
+}
+
+/* ========================================
+   PLAN CARDS
+   ======================================== */
+
+.ww-plan-card {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ww-plan-card:hover {
+    box-shadow: 0 4px 12px var(--ww-shadow, rgba(0, 0, 0, 0.1));
+}
+
+.ww-plan-card.ww-recommended {
+    border-color: var(--ww-primary, #0d6efd);
+}
+
+.ww-plan-card.ww-current-plan {
+    border-color: var(--ww-success, #198754);
+}
+
+.ww-plan-badge {
+    background: var(--ww-primary, #0d6efd);
+    color: var(--ww-btn-primary-text, white);
+}
+
+.ww-plan-name {
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-plan-description {
+    color: var(--ww-text-muted, #6c757d);
+}
+
+/* ========================================
+   PLAN PRICING
+   ======================================== */
+
+.ww-plan-price {
+    margin: 1rem 0;
+}
+
+.ww-price-currency {
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-price-amount {
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-price-period {
+    color: var(--ww-text-muted, #6c757d);
+}
+
+/* ========================================
+   PLAN FEATURES
+   ======================================== */
+
+.ww-plan-features {
+    text-align: left;
+}
+
+.ww-plan-features li {
+    padding: 0.25rem 0;
+    color: var(--ww-text-secondary, #495057);
+}
+
+.ww-plan-features .bi-check-circle-fill {
+    color: var(--ww-success, #198754);
+}
+
+/* ========================================
+   SELECT BUTTON
+   ======================================== */
+
+.ww-select-plan-btn.btn-primary {
+    background: var(--ww-primary, #0d6efd);
+    border-color: var(--ww-primary, #0d6efd);
+}
+
+.ww-select-plan-btn.btn-outline-primary {
+    color: var(--ww-primary, #0d6efd);
+    border-color: var(--ww-primary, #0d6efd);
+}
+
+/* ========================================
+   CURRENT SUBSCRIPTION (Manager)
+   ======================================== */
+
+.ww-sub-details-view .card {
+    border-color: var(--ww-border-color, #dee2e6);
+}
+
+.ww-sub-details-view .card-header {
+    background: var(--ww-bg-secondary, #f8f9fa);
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-sub-details-view dt {
+    color: var(--ww-text-muted, #6c757d);
+    font-size: 0.85rem;
+}
+
+.ww-sub-details-view dd {
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ========================================
+   CANCEL CONFIRMATION
+   ======================================== */
+
+.ww-cancel-confirmation-view .card {
+    max-width: 500px;
+    margin: 0 auto;
+    border-color: var(--ww-warning, #ffc107);
+}
+
+.ww-cancel-confirmation-view .bi-exclamation-triangle {
+    color: var(--ww-warning, #ffc107);
+}
+
+/* ========================================
+   INVOICE TABLE
+   ======================================== */
+
+.ww-subscription-manager-component .table {
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-subscription-manager-component .table th {
+    color: var(--ww-text-secondary, #495057);
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.ww-download-invoice-btn {
+    color: var(--ww-primary, #0d6efd);
+}
+
+/* ========================================
+   SUCCESS VIEW
+   ======================================== */
+
+.ww-subscription-success-view .bi-check-circle-fill {
+    color: var(--ww-success, #198754);
+}
+
+/* ========================================
+   MESSAGE AREA
+   ======================================== */
+
+.ww-subscription-message,
+.ww-sub-manager-message {
+    padding: 0.75rem 1rem;
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+}

@@ -1,0 +1,485 @@
+@using WildwoodComponents.Razor.Models
+@model SecureMessagingViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var threads = Model.Threads;
+    var users = Model.Users;
+}
+
+<div id="ww-messaging-@cid"
+     class="ww-messaging-component"
+     data-component-id="@cid"
+     data-company-app-id="@Model.CompanyAppId"
+     data-proxy-url="@Model.ProxyBaseUrl"
+     data-enable-reactions="@Model.EnableReactions.ToString().ToLower()"
+     data-enable-attachments="@Model.EnableAttachments.ToString().ToLower()"
+     data-enable-typing="@Model.EnableTypingIndicators.ToString().ToLower()">
+
+    <!-- Message Area (alerts) -->
+    <div class="ww-messaging-message" style="display: none;"></div>
+
+    <!-- Loading State -->
+    <div class="ww-messaging-loading text-center py-4" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted">Loading messages...</p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.Title))
+    {
+        <h4 class="ww-messaging-title mb-3">@Model.Title</h4>
+    }
+
+    <!-- Main Layout: 2-column -->
+    <div class="ww-messaging-layout d-flex" style="height: 600px; border: 1px solid var(--ww-border-color, #dee2e6); border-radius: 0.375rem; overflow: hidden;">
+
+        @* ===== THREAD LIST SIDEBAR ===== *@
+        @if (Model.ShowThreadList)
+        {
+            <div class="ww-thread-sidebar border-end d-flex flex-column" style="width: 300px; min-width: 300px; background: var(--ww-bg-secondary, #f8f9fa);">
+                <!-- Sidebar Header -->
+                <div class="ww-thread-sidebar-header p-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">Conversations</h6>
+                    <button class="btn btn-sm btn-primary ww-new-thread-btn" title="New conversation">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                </div>
+
+                @* User Search *@
+                @if (Model.ShowUserSearch)
+                {
+                    <div class="ww-user-search p-2 border-bottom position-relative">
+                        <input type="text"
+                               class="form-control form-control-sm ww-user-search-input"
+                               placeholder="Search users..."
+                               data-company-app-id="@Model.CompanyAppId"
+                               autocomplete="off" />
+                        <div class="ww-user-search-results position-absolute w-100 bg-white border rounded shadow-sm"
+                             style="display: none; z-index: 100; top: 100%; left: 0; max-height: 200px; overflow-y: auto;">
+                        </div>
+                    </div>
+                }
+
+                <!-- Thread List -->
+                <div class="ww-thread-list flex-grow-1" style="overflow-y: auto;">
+                    @if (threads.Count == 0)
+                    {
+                        <div class="text-center text-muted p-4">
+                            <i class="bi bi-chat-dots" style="font-size: 2rem;"></i>
+                            <p class="small mt-2 mb-0">No conversations yet</p>
+                            <p class="small text-muted">Start a new conversation</p>
+                        </div>
+                    }
+                    @foreach (var thread in threads.OrderByDescending(t => t.LastActivity ?? t.CreatedAt))
+                    {
+                        var participantNames = string.Join(", ", thread.Participants.Select(p => p.UserName ?? "Unknown"));
+                        var displayName = !string.IsNullOrEmpty(thread.Subject) ? thread.Subject : participantNames;
+                        var hasUnread = thread.UnreadCount > 0;
+
+                        <div class="ww-thread-item p-3 border-bottom @(hasUnread ? "ww-thread-unread" : "")"
+                             data-thread-id="@thread.Id"
+                             data-thread-type="@thread.ThreadType"
+                             role="button">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1 text-truncate me-2">
+                                    <div class="ww-thread-name fw-medium text-truncate @(hasUnread ? "fw-bold" : "")">
+                                        @displayName
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(thread.LastMessagePreview))
+                                    {
+                                        <div class="ww-thread-preview text-muted small text-truncate">
+                                            @thread.LastMessagePreview
+                                        </div>
+                                    }
+                                </div>
+                                <div class="text-end flex-shrink-0">
+                                    <div class="ww-thread-time text-muted small">
+                                        @SecureMessagingViewModel.FormatTime(thread.LastActivity ?? thread.CreatedAt)
+                                    </div>
+                                    @if (hasUnread)
+                                    {
+                                        <span class="badge bg-primary rounded-pill ww-unread-badge">@thread.UnreadCount</span>
+                                    }
+                                </div>
+                            </div>
+                            @* Online indicators for participants *@
+                            <div class="ww-thread-participants mt-1">
+                                @foreach (var participant in thread.Participants.Take(3))
+                                {
+                                    <span class="ww-participant-dot @(participant.IsOnline ? "ww-online" : "")"
+                                          title="@(participant.UserName ?? "User")"></span>
+                                }
+                                @if (thread.Participants.Count > 3)
+                                {
+                                    <span class="text-muted small">+@(thread.Participants.Count - 3)</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @* ===== MAIN MESSAGE AREA ===== *@
+        <div class="ww-message-area d-flex flex-column flex-grow-1" style="background: var(--ww-bg-primary, #ffffff);">
+
+            <!-- Chat Header -->
+            <div class="ww-chat-header p-3 border-bottom d-flex align-items-center" style="display: none !important;"
+                 data-default-display="none">
+                <div class="flex-grow-1">
+                    <h6 class="ww-chat-thread-name mb-0"></h6>
+                    <small class="ww-chat-thread-info text-muted"></small>
+                </div>
+                <div class="ww-chat-actions">
+                    <button class="btn btn-sm btn-outline-secondary ww-thread-info-btn" title="Thread info">
+                        <i class="bi bi-info-circle"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Messages Container -->
+            <div class="ww-messages-container flex-grow-1 p-3" style="overflow-y: auto;">
+                <!-- Empty state (shown when no thread selected) -->
+                <div class="ww-no-thread-selected text-center text-muted" style="margin-top: 120px;">
+                    <i class="bi bi-chat-square-text" style="font-size: 3rem;"></i>
+                    <p class="mt-3 mb-0">Select a conversation or start a new one</p>
+                </div>
+                <!-- Messages will be loaded here via JS -->
+                <div class="ww-messages-list" style="display: none;"></div>
+                <!-- Loading messages spinner -->
+                <div class="ww-messages-loading text-center py-4" style="display: none;">
+                    <div class="spinner-border spinner-border-sm text-primary"></div>
+                    <span class="text-muted small ms-2">Loading messages...</span>
+                </div>
+            </div>
+
+            @* Typing Indicator *@
+            @if (Model.EnableTypingIndicators)
+            {
+                <div class="ww-typing-indicator px-3 pb-1" style="display: none;">
+                    <small class="text-muted fst-italic">
+                        <span class="ww-typing-user"></span> is typing
+                        <span class="ww-typing-dots">
+                            <span>.</span><span>.</span><span>.</span>
+                        </span>
+                    </small>
+                </div>
+            }
+
+            <!-- Message Input -->
+            <div class="ww-message-input border-top p-3" style="display: none;" data-default-display="none">
+                <div class="d-flex align-items-end gap-2">
+                    @if (Model.EnableAttachments)
+                    {
+                        <button class="btn btn-sm btn-outline-secondary ww-attach-btn" title="Attach file">
+                            <i class="bi bi-paperclip"></i>
+                        </button>
+                        <input type="file" class="ww-file-input" style="display: none;" multiple />
+                    }
+                    <div class="flex-grow-1">
+                        <!-- Reply preview -->
+                        <div class="ww-reply-preview mb-2 p-2 rounded border-start border-3 border-primary bg-light"
+                             style="display: none;">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <small class="fw-medium ww-reply-to-name"></small>
+                                    <div class="small text-muted text-truncate ww-reply-to-content"></div>
+                                </div>
+                                <button class="btn btn-sm btn-link p-0 ww-cancel-reply">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Attachment preview -->
+                        <div class="ww-attachment-preview mb-2" style="display: none;"></div>
+                        <textarea class="form-control ww-message-textarea"
+                                  rows="1"
+                                  placeholder="Type a message..."
+                                  style="resize: none; max-height: 120px;"></textarea>
+                    </div>
+                    @if (Model.EnableReactions)
+                    {
+                        <button class="btn btn-sm btn-outline-secondary ww-emoji-btn" title="Add emoji">
+                            <i class="bi bi-emoji-smile"></i>
+                        </button>
+                    }
+                    <button class="btn btn-primary ww-send-btn" title="Send message">
+                        <i class="bi bi-send"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ===== NEW THREAD MODAL ===== *@
+    <div class="ww-new-thread-modal" style="display: none;">
+        <div class="card" style="max-width: 500px; margin: 2rem auto;">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">New Conversation</h6>
+                <button class="btn btn-sm btn-link ww-close-new-thread">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Subject (optional)</label>
+                    <input type="text" class="form-control ww-new-thread-subject" placeholder="Conversation subject" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Participants</label>
+                    <div class="ww-participant-search position-relative">
+                        <input type="text" class="form-control ww-participant-search-input" placeholder="Search users to add..." autocomplete="off" />
+                        <div class="ww-participant-search-results position-absolute w-100 bg-white border rounded shadow-sm"
+                             style="display: none; z-index: 100; max-height: 150px; overflow-y: auto;">
+                        </div>
+                    </div>
+                    <div class="ww-selected-participants mt-2 d-flex flex-wrap gap-1"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Type</label>
+                    <select class="form-select ww-new-thread-type">
+                        <option value="Direct">Direct Message</option>
+                        <option value="Group">Group Chat</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-footer text-end">
+                <button class="btn btn-outline-secondary me-2 ww-cancel-new-thread">Cancel</button>
+                <button class="btn btn-primary ww-create-thread-btn">
+                    <span class="ww-btn-text">Create</span>
+                    <span class="ww-btn-spinner" style="display: none;">
+                        <span class="spinner-border spinner-border-sm me-1"></span> Creating...
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .ww-messaging-component {
+        --ww-msg-bg: var(--ww-bg-primary, #ffffff);
+        --ww-msg-sidebar-bg: var(--ww-bg-secondary, #f8f9fa);
+        --ww-msg-border: var(--ww-border-color, #dee2e6);
+        --ww-msg-bubble-sent: var(--ww-primary, #0d6efd);
+        --ww-msg-bubble-sent-text: #ffffff;
+        --ww-msg-bubble-received: var(--ww-bg-tertiary, #e9ecef);
+        --ww-msg-bubble-received-text: var(--ww-text-primary, #212529);
+        --ww-msg-unread-bg: rgba(13, 110, 253, 0.05);
+    }
+
+    .ww-thread-item {
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+
+    .ww-thread-item:hover {
+        background-color: var(--ww-bg-tertiary, #e9ecef);
+    }
+
+    .ww-thread-item.ww-active {
+        background-color: var(--ww-primary-light, rgba(13, 110, 253, 0.1));
+        border-left: 3px solid var(--ww-primary, #0d6efd);
+    }
+
+    .ww-thread-item.ww-thread-unread {
+        background-color: var(--ww-msg-unread-bg);
+    }
+
+    .ww-participant-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: var(--ww-text-muted, #6c757d);
+        margin-right: 2px;
+    }
+
+    .ww-participant-dot.ww-online {
+        background-color: var(--ww-success, #198754);
+    }
+
+    .ww-message-bubble {
+        max-width: 70%;
+        padding: 0.5rem 0.75rem;
+        border-radius: 1rem;
+        margin-bottom: 0.5rem;
+        word-wrap: break-word;
+    }
+
+    .ww-message-bubble.ww-sent {
+        background-color: var(--ww-msg-bubble-sent);
+        color: var(--ww-msg-bubble-sent-text);
+        margin-left: auto;
+        border-bottom-right-radius: 0.25rem;
+    }
+
+    .ww-message-bubble.ww-received {
+        background-color: var(--ww-msg-bubble-received);
+        color: var(--ww-msg-bubble-received-text);
+        margin-right: auto;
+        border-bottom-left-radius: 0.25rem;
+    }
+
+    .ww-message-sender {
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-bottom: 0.125rem;
+    }
+
+    .ww-message-time {
+        font-size: 0.675rem;
+        opacity: 0.7;
+        margin-top: 0.125rem;
+    }
+
+    .ww-message-reactions {
+        display: flex;
+        gap: 0.25rem;
+        margin-top: 0.25rem;
+    }
+
+    .ww-reaction-badge {
+        font-size: 0.75rem;
+        padding: 0.125rem 0.375rem;
+        border-radius: 1rem;
+        background: var(--ww-bg-tertiary, #e9ecef);
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: border-color 0.15s ease;
+    }
+
+    .ww-reaction-badge:hover {
+        border-color: var(--ww-primary, #0d6efd);
+    }
+
+    .ww-reaction-badge.ww-my-reaction {
+        border-color: var(--ww-primary, #0d6efd);
+        background: var(--ww-primary-light, rgba(13, 110, 253, 0.1));
+    }
+
+    .ww-message-edited {
+        font-size: 0.675rem;
+        font-style: italic;
+        opacity: 0.6;
+    }
+
+    .ww-message-deleted {
+        font-style: italic;
+        opacity: 0.5;
+    }
+
+    .ww-reply-indicator {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        margin-bottom: 0.25rem;
+        border-left: 2px solid var(--ww-primary, #0d6efd);
+        background: rgba(0, 0, 0, 0.03);
+        border-radius: 0.25rem;
+        cursor: pointer;
+    }
+
+    .ww-message-actions {
+        display: none;
+        position: absolute;
+        top: -0.5rem;
+        right: 0.5rem;
+        background: var(--ww-bg-primary, #ffffff);
+        border: 1px solid var(--ww-border-color, #dee2e6);
+        border-radius: 0.375rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        padding: 0.125rem;
+    }
+
+    .ww-message-wrapper:hover .ww-message-actions {
+        display: flex;
+        gap: 0.125rem;
+    }
+
+    .ww-message-actions button {
+        border: none;
+        background: none;
+        padding: 0.25rem 0.375rem;
+        font-size: 0.75rem;
+        cursor: pointer;
+        border-radius: 0.25rem;
+        color: var(--ww-text-muted, #6c757d);
+    }
+
+    .ww-message-actions button:hover {
+        background: var(--ww-bg-tertiary, #e9ecef);
+        color: var(--ww-text-primary, #212529);
+    }
+
+    .ww-typing-dots span {
+        animation: ww-typing-bounce 1.4s infinite ease-in-out;
+        display: inline-block;
+    }
+
+    .ww-typing-dots span:nth-child(1) { animation-delay: 0s; }
+    .ww-typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .ww-typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @@keyframes ww-typing-bounce {
+        0%, 60%, 100% { transform: translateY(0); }
+        30% { transform: translateY(-3px); }
+    }
+
+    .ww-message-textarea:focus {
+        box-shadow: 0 0 0 0.2rem rgba(var(--ww-primary-rgb, 13, 110, 253), 0.15);
+        border-color: var(--ww-primary, #0d6efd);
+    }
+
+    .ww-unread-badge {
+        font-size: 0.65rem;
+        min-width: 18px;
+    }
+
+    .ww-user-search-results .ww-user-result,
+    .ww-participant-search-results .ww-user-result {
+        padding: 0.5rem 0.75rem;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+
+    .ww-user-search-results .ww-user-result:hover,
+    .ww-participant-search-results .ww-user-result:hover {
+        background-color: var(--ww-bg-tertiary, #e9ecef);
+    }
+
+    .ww-selected-participant-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.5rem;
+        background: var(--ww-primary-light, rgba(13, 110, 253, 0.1));
+        border: 1px solid var(--ww-primary, #0d6efd);
+        border-radius: 1rem;
+        font-size: 0.8rem;
+    }
+
+    .ww-selected-participant-tag .ww-remove-participant {
+        cursor: pointer;
+        font-weight: bold;
+        opacity: 0.7;
+    }
+
+    .ww-selected-participant-tag .ww-remove-participant:hover {
+        opacity: 1;
+    }
+
+    .ww-attachment-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.25rem 0.5rem;
+        background: var(--ww-bg-tertiary, #e9ecef);
+        border-radius: 0.375rem;
+        font-size: 0.8rem;
+        margin-right: 0.25rem;
+        margin-bottom: 0.25rem;
+    }
+</style>
+

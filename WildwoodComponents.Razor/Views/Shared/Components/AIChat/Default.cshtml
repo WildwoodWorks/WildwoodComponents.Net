@@ -1,0 +1,159 @@
+@model WildwoodComponents.Razor.Models.AIChatViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var configs = Model.Configurations;
+    var sessions = Model.Sessions;
+}
+
+<div id="ww-ai-chat-@cid"
+     class="ww-ai-chat-component"
+     data-component-id="@cid"
+     data-proxy-url="@Model.ProxyBaseUrl"
+     data-configuration-id="@(Model.ConfigurationId ?? "")"
+     data-enable-tts="@Model.EnableTTS.ToString().ToLower()"
+     data-enable-stt="@Model.EnableSTT.ToString().ToLower()"
+     data-enable-file-upload="@Model.EnableFileUpload.ToString().ToLower()">
+
+    <div class="ww-ai-chat-layout d-flex" style="height: 600px;">
+        @* Session Sidebar *@
+        @if (Model.ShowSessionSidebar)
+        {
+            <div class="ww-ai-sidebar border-end" style="width: 260px; overflow-y: auto;">
+                <div class="p-3">
+                    <button class="btn btn-primary w-100 mb-3 ww-new-session-btn">
+                        <i class="bi bi-plus-lg me-1"></i> New Chat
+                    </button>
+
+                    <div class="ww-session-list">
+                        @if (sessions.Count == 0)
+                        {
+                            <p class="text-muted small text-center">No sessions yet</p>
+                        }
+                        @foreach (var session in sessions.OrderByDescending(s => s.LastAccessedAt ?? s.CreatedAt))
+                        {
+                            <div class="ww-session-item p-2 rounded mb-1 @(session.IsActive ? "" : "text-muted")"
+                                 data-session-id="@session.Id"
+                                 role="button">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="text-truncate small fw-medium">
+                                        @(session.Name ?? $"Chat {session.CreatedAt:MMM dd}")
+                                    </div>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-link p-0 text-muted ww-session-menu" data-bs-toggle="dropdown">
+                                            <i class="bi bi-three-dots-vertical"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <li><a class="dropdown-item ww-rename-session" href="#" data-session-id="@session.Id">Rename</a></li>
+                                            <li><a class="dropdown-item ww-end-session" href="#" data-session-id="@session.Id">End</a></li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li><a class="dropdown-item text-danger ww-delete-session" href="#" data-session-id="@session.Id">Delete</a></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="text-truncate text-muted" style="font-size: 0.75rem;">
+                                    @(session.LastMessagePreview ?? "Empty")
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* Main Chat Area *@
+        <div class="ww-ai-chat-main d-flex flex-column flex-grow-1">
+            @* Header *@
+            <div class="ww-ai-chat-header border-bottom p-3 d-flex align-items-center justify-content-between">
+                <div>
+                    @if (!string.IsNullOrEmpty(Model.Title))
+                    {
+                        <h5 class="mb-0">@Model.Title</h5>
+                    }
+                    else
+                    {
+                        <h5 class="mb-0 ww-chat-title">AI Chat</h5>
+                    }
+                </div>
+                @if (Model.ShowConfigurationSelector && configs.Count > 1)
+                {
+                    <select class="form-select form-select-sm ww-config-selector" style="width: auto;">
+                        @foreach (var config in configs.Where(c => c.IsActive))
+                        {
+                            <option value="@config.Id"
+                                    @(config.Id == Model.ConfigurationId ? "selected" : "")>
+                                @config.Name
+                            </option>
+                        }
+                    </select>
+                }
+            </div>
+
+            @* Messages Area *@
+            <div class="ww-ai-messages flex-grow-1 overflow-auto p-3" id="ww-messages-@cid">
+                <div class="ww-empty-state text-center text-muted py-5">
+                    <i class="bi bi-chat-dots" style="font-size: 3rem;"></i>
+                    <p class="mt-2">Start a conversation</p>
+                </div>
+            </div>
+
+            @* Typing Indicator *@
+            <div class="ww-typing-indicator px-3 py-1" style="display: none;">
+                <small class="text-muted">
+                    <span class="spinner-grow spinner-grow-sm me-1" style="width: 0.5rem; height: 0.5rem;"></span>
+                    AI is thinking...
+                </small>
+            </div>
+
+            @* Input Area *@
+            <div class="ww-ai-input border-top p-3">
+                <div class="d-flex gap-2">
+                    @if (Model.EnableFileUpload)
+                    {
+                        <button class="btn btn-outline-secondary ww-attach-btn" title="Attach file">
+                            <i class="bi bi-paperclip"></i>
+                        </button>
+                        <input type="file" class="ww-file-input" style="display: none;" />
+                    }
+                    @if (Model.EnableSTT)
+                    {
+                        <button class="btn btn-outline-secondary ww-stt-btn" title="Voice input">
+                            <i class="bi bi-mic"></i>
+                        </button>
+                    }
+                    <textarea class="form-control ww-chat-input"
+                              rows="1"
+                              placeholder="@(Model.PlaceholderText ?? "Type a message...")"
+                              style="resize: none;"></textarea>
+                    <button class="btn btn-primary ww-send-btn" disabled>
+                        <i class="bi bi-send"></i>
+                    </button>
+                </div>
+                <div class="ww-file-preview mt-2" style="display: none;">
+                    <span class="badge bg-secondary ww-file-name"></span>
+                    <button class="btn btn-sm btn-link text-danger ww-remove-file">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .ww-ai-chat-component { border: 1px solid var(--ww-border-color, #dee2e6); border-radius: 0.5rem; overflow: hidden; background: var(--ww-bg-primary, #fff); }
+    .ww-ai-sidebar { background: var(--ww-bg-secondary, #f8f9fa); }
+    .ww-session-item:hover { background: var(--ww-bg-hover, #e9ecef); cursor: pointer; }
+    .ww-session-item.active { background: var(--ww-primary-light, #cfe2ff); }
+    .ww-ai-messages { min-height: 300px; }
+    .ww-message { margin-bottom: 1rem; max-width: 80%; }
+    .ww-message.user { margin-left: auto; }
+    .ww-message .ww-message-bubble { padding: 0.75rem 1rem; border-radius: 1rem; }
+    .ww-message.user .ww-message-bubble { background: var(--ww-primary, #0d6efd); color: white; border-bottom-right-radius: 0.25rem; }
+    .ww-message.assistant .ww-message-bubble { background: var(--ww-bg-secondary, #f8f9fa); border-bottom-left-radius: 0.25rem; }
+    .ww-message .ww-message-meta { font-size: 0.7rem; color: var(--ww-text-muted, #6c757d); margin-top: 0.25rem; }
+    .ww-message.user .ww-message-meta { text-align: right; }
+    .ww-message .ww-tts-btn { font-size: 0.75rem; padding: 0; border: none; background: none; color: var(--ww-text-muted, #6c757d); cursor: pointer; }
+    .ww-message .ww-tts-btn:hover { color: var(--ww-primary, #0d6efd); }
+    .ww-chat-input:focus { box-shadow: none; border-color: var(--ww-primary, #0d6efd); }
+</style>

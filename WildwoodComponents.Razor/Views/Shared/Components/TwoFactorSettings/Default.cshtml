@@ -1,0 +1,501 @@
+@using WildwoodComponents.Razor.Models
+@model TwoFactorSettingsViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var isEnabled = Model.Status?.IsEnabled ?? false;
+}
+
+<div id="ww-2fa-settings-@cid"
+     class="ww-2fa-settings-component"
+     data-component-id="@cid"
+     data-proxy-url="@Model.ProxyBaseUrl"
+     data-is-enabled="@isEnabled.ToString().ToLower()">
+
+    @* Error/Success message area *@
+    <div id="ww-2fa-message-@cid" class="ww-alert" style="display:none;"></div>
+
+    @* ===== STATUS HEADER ===== *@
+    <div class="ww-2fa-status-header mb-4">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h4 class="mb-1">Two-Factor Authentication</h4>
+                <p class="text-muted mb-0">
+                    @if (isEnabled)
+                    {
+                        <span class="badge bg-success me-2">Enabled</span>
+                        <span>@(Model.Status?.MethodCount ?? 0) method(s) configured</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-warning text-dark me-2">Disabled</span>
+                        <span>Add a method to enable two-factor authentication</span>
+                    }
+                </p>
+            </div>
+            @if (Model.Status?.IsRequired == true)
+            {
+                <span class="badge bg-danger">Required</span>
+            }
+        </div>
+    </div>
+
+    @* ===== AUTHENTICATOR APP SECTION ===== *@
+    <div class="ww-2fa-section card mb-3">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <h5 class="mb-0">
+                <i class="bi bi-phone me-2"></i>Authenticator App
+            </h5>
+            <button type="button"
+                    class="btn btn-sm btn-outline-primary ww-2fa-add-authenticator-btn"
+                    data-action="begin-authenticator">
+                <i class="bi bi-plus-lg me-1"></i>Add Authenticator
+            </button>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">Use an authenticator app like Google Authenticator or Authy to generate verification codes.</p>
+
+            @* Authenticator enrollment form (hidden by default) *@
+            <div id="ww-2fa-authenticator-enroll-@cid" class="ww-2fa-enroll-panel" style="display:none;">
+                <div class="mb-3">
+                    <label for="ww-2fa-authenticator-name-@cid" class="form-label">Friendly Name (optional)</label>
+                    <input type="text" class="form-control" id="ww-2fa-authenticator-name-@cid"
+                           placeholder="e.g., My Phone" />
+                </div>
+
+                @* QR Code display area *@
+                <div id="ww-2fa-qr-area-@cid" class="text-center mb-3" style="display:none;">
+                    <p class="fw-bold">Scan this QR code with your authenticator app:</p>
+                    <div class="ww-2fa-qr-container d-inline-block p-3 bg-white rounded border">
+                        <img id="ww-2fa-qr-img-@cid" src="" alt="QR Code" style="max-width: 200px; height: auto;" />
+                    </div>
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-link btn-sm ww-2fa-toggle-manual" data-target="ww-2fa-manual-key-@cid">
+                            Can't scan? Enter key manually
+                        </button>
+                    </div>
+                    <div id="ww-2fa-manual-key-@cid" class="mt-2" style="display:none;">
+                        <code id="ww-2fa-manual-key-value-@cid" class="d-block p-2 bg-light rounded user-select-all"></code>
+                    </div>
+                </div>
+
+                @* Verification code input *@
+                <div id="ww-2fa-authenticator-verify-@cid" style="display:none;">
+                    <div class="mb-3">
+                        <label for="ww-2fa-authenticator-code-@cid" class="form-label">Verification Code</label>
+                        <input type="text" class="form-control" id="ww-2fa-authenticator-code-@cid"
+                               maxlength="6" pattern="[0-9]{6}" inputmode="numeric"
+                               placeholder="Enter 6-digit code" autocomplete="one-time-code" />
+                        <div class="invalid-feedback">Please enter a valid 6-digit code.</div>
+                    </div>
+                    <input type="hidden" id="ww-2fa-authenticator-credential-id-@cid" value="" />
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary ww-2fa-verify-authenticator-btn">
+                            <span class="ww-btn-text">Verify & Enable</span>
+                            <span class="ww-btn-spinner" style="display:none;">
+                                <span class="ww-spinner"></span> Verifying...
+                            </span>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary ww-2fa-cancel-enroll-btn">Cancel</button>
+                    </div>
+                </div>
+
+                @* Initial "Begin Setup" button *@
+                <div id="ww-2fa-authenticator-begin-@cid">
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary ww-2fa-begin-authenticator-btn">
+                            <span class="ww-btn-text">Generate QR Code</span>
+                            <span class="ww-btn-spinner" style="display:none;">
+                                <span class="ww-spinner"></span> Generating...
+                            </span>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary ww-2fa-cancel-enroll-btn">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ===== EMAIL 2FA SECTION ===== *@
+    <div class="ww-2fa-section card mb-3">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <h5 class="mb-0">
+                <i class="bi bi-envelope me-2"></i>Email Verification
+            </h5>
+            <button type="button"
+                    class="btn btn-sm btn-outline-primary ww-2fa-add-email-btn"
+                    data-action="begin-email">
+                <i class="bi bi-plus-lg me-1"></i>Add Email
+            </button>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">Receive a verification code via email when signing in.</p>
+
+            @* Email enrollment form (hidden by default) *@
+            <div id="ww-2fa-email-enroll-@cid" class="ww-2fa-enroll-panel" style="display:none;">
+                <div class="mb-3">
+                    <label for="ww-2fa-email-address-@cid" class="form-label">Email Address (optional, uses account email if blank)</label>
+                    <input type="email" class="form-control" id="ww-2fa-email-address-@cid"
+                           placeholder="Leave blank to use your account email" />
+                </div>
+
+                @* Email verification code input *@
+                <div id="ww-2fa-email-verify-@cid" style="display:none;">
+                    <p class="text-muted">A verification code has been sent to <strong id="ww-2fa-email-sent-to-@cid"></strong>.</p>
+                    <div class="mb-3">
+                        <label for="ww-2fa-email-code-@cid" class="form-label">Verification Code</label>
+                        <input type="text" class="form-control" id="ww-2fa-email-code-@cid"
+                               maxlength="6" pattern="[0-9]{6}" inputmode="numeric"
+                               placeholder="Enter 6-digit code" autocomplete="one-time-code" />
+                        <div class="invalid-feedback">Please enter a valid 6-digit code.</div>
+                    </div>
+                    <input type="hidden" id="ww-2fa-email-credential-id-@cid" value="" />
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary ww-2fa-verify-email-btn">
+                            <span class="ww-btn-text">Verify</span>
+                            <span class="ww-btn-spinner" style="display:none;">
+                                <span class="ww-spinner"></span> Verifying...
+                            </span>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary ww-2fa-cancel-enroll-btn">Cancel</button>
+                    </div>
+                </div>
+
+                @* Initial "Send Code" button *@
+                <div id="ww-2fa-email-begin-@cid">
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary ww-2fa-send-email-btn">
+                            <span class="ww-btn-text">Send Verification Code</span>
+                            <span class="ww-btn-spinner" style="display:none;">
+                                <span class="ww-spinner"></span> Sending...
+                            </span>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary ww-2fa-cancel-enroll-btn">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ===== CREDENTIALS LIST ===== *@
+    <div class="ww-2fa-section card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-shield-check me-2"></i>Active Methods
+            </h5>
+        </div>
+        <div class="card-body">
+            @if (Model.Credentials.Count == 0)
+            {
+                <p class="text-muted mb-0">No two-factor methods configured.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Method</th>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Last Used</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ww-2fa-credentials-list-@cid">
+                            @foreach (var cred in Model.Credentials)
+                            {
+                                var iconClass = cred.ProviderType.ToLower() switch
+                                {
+                                    "authenticator" or "totp" => "bi-phone",
+                                    "email" => "bi-envelope",
+                                    _ => "bi-shield-lock"
+                                };
+                                <tr data-credential-id="@cred.Id">
+                                    <td>
+                                        <i class="bi @iconClass me-1"></i>
+                                        @cred.ProviderType
+                                    </td>
+                                    <td>
+                                        @(cred.DisplayName ?? cred.MaskedEmail ?? "—")
+                                        @if (cred.IsPrimary)
+                                        {
+                                            <span class="badge bg-primary ms-1">Primary</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (cred.IsVerified && cred.IsActive)
+                                        {
+                                            <span class="badge bg-success">Active</span>
+                                        }
+                                        else if (!cred.IsVerified)
+                                        {
+                                            <span class="badge bg-warning text-dark">Unverified</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Inactive</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (cred.LastUsedAt.HasValue)
+                                        {
+                                            <span title="@cred.LastUsedAt.Value.ToString("g")">@cred.LastUsedAt.Value.ToString("MMM d, yyyy")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Never</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        @if (!cred.IsPrimary)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-outline-primary me-1 ww-2fa-set-primary-btn"
+                                                    data-credential-id="@cred.Id" title="Set as primary">
+                                                <i class="bi bi-star"></i>
+                                            </button>
+                                        }
+                                        <button type="button" class="btn btn-sm btn-outline-danger ww-2fa-remove-btn"
+                                                data-credential-id="@cred.Id" title="Remove">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* ===== TRUSTED DEVICES ===== *@
+    <div class="ww-2fa-section card mb-3">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <h5 class="mb-0">
+                <i class="bi bi-laptop me-2"></i>Trusted Devices
+            </h5>
+            @if (Model.TrustedDevices.Count > 0)
+            {
+                <button type="button" class="btn btn-sm btn-outline-danger ww-2fa-revoke-all-devices-btn">
+                    <i class="bi bi-x-circle me-1"></i>Revoke All
+                </button>
+            }
+        </div>
+        <div class="card-body">
+            @if (Model.TrustedDevices.Count == 0)
+            {
+                <p class="text-muted mb-0">No trusted devices.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>Location</th>
+                                <th>Last Used</th>
+                                <th>Expires</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ww-2fa-devices-list-@cid">
+                            @foreach (var device in Model.TrustedDevices)
+                            {
+                                <tr data-device-id="@device.Id" class="@(device.IsExpired ? "table-secondary" : "")">
+                                    <td>
+                                        <i class="bi bi-display me-1"></i>
+                                        @(device.DeviceName ?? "Unknown Device")
+                                    </td>
+                                    <td>@(device.Location ?? "—")</td>
+                                    <td>
+                                        @if (device.LastUsedAt.HasValue)
+                                        {
+                                            <span title="@device.LastUsedAt.Value.ToString("g")">@device.LastUsedAt.Value.ToString("MMM d, yyyy")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Never</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (device.IsExpired)
+                                        {
+                                            <span class="badge bg-danger">Expired</span>
+                                        }
+                                        else if (device.ExpiresAt != default)
+                                        {
+                                            <span title="@device.ExpiresAt.ToString("g")">@device.ExpiresAt.ToString("MMM d, yyyy")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No expiry</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <button type="button" class="btn btn-sm btn-outline-danger ww-2fa-revoke-device-btn"
+                                                data-device-id="@device.Id" title="Revoke">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* ===== RECOVERY CODES ===== *@
+    <div class="ww-2fa-section card mb-3">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <h5 class="mb-0">
+                <i class="bi bi-key me-2"></i>Recovery Codes
+            </h5>
+            @if (isEnabled)
+            {
+                <button type="button" class="btn btn-sm btn-outline-warning ww-2fa-regenerate-codes-btn">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Regenerate
+                </button>
+            }
+        </div>
+        <div class="card-body">
+            @if (Model.RecoveryCodeInfo != null)
+            {
+                <div class="d-flex align-items-center gap-3 mb-2">
+                    <div>
+                        <span class="fw-bold fs-4">@Model.RecoveryCodeInfo.Remaining</span>
+                        <span class="text-muted">/ @Model.RecoveryCodeInfo.TotalGenerated remaining</span>
+                    </div>
+                    @if (Model.RecoveryCodeInfo.Remaining <= 2)
+                    {
+                        <span class="badge bg-danger">Low</span>
+                    }
+                </div>
+                @if (Model.RecoveryCodeInfo.GeneratedAt.HasValue)
+                {
+                    <p class="text-muted small mb-0">
+                        Generated on @Model.RecoveryCodeInfo.GeneratedAt.Value.ToString("MMMM d, yyyy 'at' h:mm tt")
+                    </p>
+                }
+            }
+            else
+            {
+                <p class="text-muted mb-0">
+                    @if (isEnabled)
+                    {
+                        <span>No recovery codes generated. Click <strong>Regenerate</strong> to create new codes.</span>
+                    }
+                    else
+                    {
+                        <span>Enable two-factor authentication to generate recovery codes.</span>
+                    }
+                </p>
+            }
+
+            @* Recovery codes display (shown after regeneration) *@
+            <div id="ww-2fa-recovery-codes-display-@cid" style="display:none;" class="mt-3">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Save these codes!</strong> Each code can only be used once. Store them in a safe place.
+                </div>
+                <div id="ww-2fa-recovery-codes-list-@cid" class="row row-cols-2 g-2 mb-3"></div>
+                <button type="button" class="btn btn-sm btn-outline-secondary ww-2fa-copy-codes-btn">
+                    <i class="bi bi-clipboard me-1"></i>Copy All Codes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @* ===== CONFIRMATION MODAL ===== *@
+    <div class="modal fade" id="ww-2fa-confirm-modal-@cid" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="ww-2fa-confirm-title-@cid">Confirm Action</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="ww-2fa-confirm-message-@cid"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="ww-2fa-confirm-action-@cid">
+                        <span class="ww-btn-text">Confirm</span>
+                        <span class="ww-btn-spinner" style="display:none;">
+                            <span class="ww-spinner"></span> Processing...
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .ww-2fa-settings-component {
+        --ww-2fa-bg: var(--ww-bg-primary, #ffffff);
+        --ww-2fa-text: var(--ww-text-primary, #212529);
+        --ww-2fa-border: var(--ww-border-color, #dee2e6);
+        --ww-2fa-primary: var(--ww-primary, #0d6efd);
+        --ww-2fa-danger: var(--ww-danger, #dc3545);
+        --ww-2fa-success: var(--ww-success, #198754);
+        --ww-2fa-warning: var(--ww-warning, #ffc107);
+        color: var(--ww-2fa-text);
+    }
+
+    .ww-2fa-settings-component .card {
+        background-color: var(--ww-2fa-bg);
+        border-color: var(--ww-2fa-border);
+    }
+
+    .ww-2fa-settings-component .card-header {
+        background-color: var(--ww-bg-secondary, #f8f9fa);
+        border-bottom-color: var(--ww-2fa-border);
+    }
+
+    .ww-2fa-settings-component .ww-2fa-enroll-panel {
+        border-top: 1px solid var(--ww-2fa-border);
+        padding-top: 1rem;
+        margin-top: 0.5rem;
+    }
+
+    .ww-2fa-settings-component .ww-2fa-qr-container {
+        border-color: var(--ww-2fa-border) !important;
+    }
+
+    .ww-2fa-settings-component .ww-alert {
+        padding: 0.75rem 1rem;
+        border-radius: 0.375rem;
+        margin-bottom: 1rem;
+    }
+
+    .ww-2fa-settings-component .ww-alert.ww-alert-success {
+        background-color: rgba(25, 135, 84, 0.1);
+        color: var(--ww-2fa-success);
+        border: 1px solid var(--ww-2fa-success);
+    }
+
+    .ww-2fa-settings-component .ww-alert.ww-alert-danger {
+        background-color: rgba(220, 53, 69, 0.1);
+        color: var(--ww-2fa-danger);
+        border: 1px solid var(--ww-2fa-danger);
+    }
+
+    .ww-2fa-settings-component .ww-spinner {
+        display: inline-block;
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: ww-spin 0.75s linear infinite;
+        vertical-align: middle;
+    }
+
+    @@keyframes ww-spin {
+        to { transform: rotate(360deg); }
+    }
+</style>

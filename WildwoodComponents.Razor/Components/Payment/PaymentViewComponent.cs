@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using WildwoodComponents.Razor.Models;
 using WildwoodComponents.Razor.Services;
 using WildwoodComponents.Shared.Models;
@@ -14,10 +15,12 @@ namespace WildwoodComponents.Razor.Components.Payment;
 public class PaymentViewComponent : ViewComponent
 {
     private readonly IWildwoodPaymentService _paymentService;
+    private readonly ILogger<PaymentViewComponent> _logger;
 
-    public PaymentViewComponent(IWildwoodPaymentService paymentService)
+    public PaymentViewComponent(IWildwoodPaymentService paymentService, ILogger<PaymentViewComponent> logger)
     {
         _paymentService = paymentService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -38,6 +41,9 @@ public class PaymentViewComponent : ViewComponent
     /// <param name="requireBillingAddress">Whether billing address is required</param>
     /// <param name="returnUrl">Return URL for redirect-based providers (BNPL)</param>
     /// <param name="cancelUrl">Cancel URL for redirect-based providers</param>
+    /// <param name="metadata">Optional metadata dictionary to attach to the payment</param>
+    /// <param name="preloadedProviders">Pre-loaded providers to skip API discovery call</param>
+    /// <param name="preselectedProviderId">Provider ID to pre-select as default</param>
     public async Task<IViewComponentResult> InvokeAsync(
         string appId,
         decimal amount,
@@ -78,13 +84,16 @@ public class PaymentViewComponent : ViewComponent
         }
         else
         {
-            var platformInfo = await _paymentService.GetAvailableProvidersAsync(appId);
-            providers = platformInfo?.AvailableProviders ?? new List<PaymentProviderDto>();
-            defaultProvider = platformInfo?.DefaultProvider;
-
-            if (defaultProvider == null && providers.Count > 0)
+            try
             {
-                defaultProvider = providers[0];
+                var platformInfo = await _paymentService.GetAvailableProvidersAsync(appId);
+                providers = platformInfo?.AvailableProviders ?? new List<PaymentProviderDto>();
+                defaultProvider = platformInfo?.DefaultProvider;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load payment providers for app {AppId}", appId);
+                providers = new List<PaymentProviderDto>();
             }
         }
 

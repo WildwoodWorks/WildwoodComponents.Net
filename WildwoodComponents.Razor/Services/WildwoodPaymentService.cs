@@ -32,24 +32,14 @@ public class WildwoodPaymentService : IWildwoodPaymentService
         _logger = logger;
     }
 
-    private void SetAuthHeader()
-    {
-        var token = _sessionManager.GetAccessToken();
-        if (!string.IsNullOrEmpty(token))
-        {
-            _httpClient.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        }
-    }
-
     #region Provider Discovery
 
     public async Task<AppPaymentConfigurationDto?> GetAppPaymentConfigurationAsync(string appId)
     {
         try
         {
-            SetAuthHeader();
-            var response = await _httpClient.GetAsync($"api/payment/configuration/{appId}");
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
+            using var response = await _httpClient.GetAsync($"api/payment/configuration/{appId}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -70,9 +60,9 @@ public class WildwoodPaymentService : IWildwoodPaymentService
     {
         try
         {
-            SetAuthHeader();
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
             // Web platform = 1
-            var response = await _httpClient.GetAsync($"api/payment/providers/{appId}?platform=Web");
+            using var response = await _httpClient.GetAsync($"api/payment/providers/{appId}?platform=Web");
 
             if (response.IsSuccessStatusCode)
             {
@@ -97,9 +87,9 @@ public class WildwoodPaymentService : IWildwoodPaymentService
     {
         try
         {
-            SetAuthHeader();
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var content = new StringContent(JsonSerializer.Serialize(request, JsonOptions), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync("api/payment/initiate", content);
+            using var response = await _httpClient.PostAsync("api/payment/initiate", content);
 
             if (response.IsSuccessStatusCode)
             {
@@ -122,10 +112,10 @@ public class WildwoodPaymentService : IWildwoodPaymentService
     {
         try
         {
-            SetAuthHeader();
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var body = new { PaymentIntentId = paymentIntentId, ProviderType = providerType };
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync("api/payment/confirm", content);
+            using var response = await _httpClient.PostAsync("api/payment/confirm", content);
 
             if (response.IsSuccessStatusCode)
             {
@@ -151,8 +141,8 @@ public class WildwoodPaymentService : IWildwoodPaymentService
     {
         try
         {
-            SetAuthHeader();
-            var response = await _httpClient.GetAsync($"api/payment/methods/{customerId}");
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
+            using var response = await _httpClient.GetAsync($"api/payment/methods/{customerId}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -172,8 +162,8 @@ public class WildwoodPaymentService : IWildwoodPaymentService
     {
         try
         {
-            SetAuthHeader();
-            var response = await _httpClient.DeleteAsync($"api/payment/methods/{paymentMethodId}");
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
+            using var response = await _httpClient.DeleteAsync($"api/payment/methods/{paymentMethodId}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -187,8 +177,8 @@ public class WildwoodPaymentService : IWildwoodPaymentService
     {
         try
         {
-            SetAuthHeader();
-            var response = await _httpClient.PostAsync($"api/payment/methods/{paymentMethodId}/default", null);
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
+            using var response = await _httpClient.PostAsync($"api/payment/methods/{paymentMethodId}/default", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -206,8 +196,8 @@ public class WildwoodPaymentService : IWildwoodPaymentService
     {
         try
         {
-            SetAuthHeader();
-            var response = await _httpClient.GetAsync($"api/payment/status/{transactionId}");
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
+            using var response = await _httpClient.GetAsync($"api/payment/status/{transactionId}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -226,7 +216,7 @@ public class WildwoodPaymentService : IWildwoodPaymentService
     {
         try
         {
-            SetAuthHeader();
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var body = new
             {
                 ExternalTransactionId = externalTransactionId,
@@ -234,7 +224,7 @@ public class WildwoodPaymentService : IWildwoodPaymentService
                 CompanyClientId = companyClientId
             };
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync("api/payment/link-transaction", content);
+            using var response = await _httpClient.PostAsync("api/payment/link-transaction", content);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

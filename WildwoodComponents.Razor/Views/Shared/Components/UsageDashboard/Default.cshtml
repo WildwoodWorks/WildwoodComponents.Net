@@ -1,0 +1,189 @@
+@using WildwoodComponents.Shared.Models
+@using WildwoodComponents.Razor.Models
+@model UsageDashboardViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var limits = Model.LimitStatuses;
+    var sub = Model.Subscription;
+}
+
+<div id="ww-usage-dashboard-@cid"
+     class="ww-usage-dashboard-component"
+     data-component-id="@cid"
+     data-app-id="@Model.AppId"
+     data-proxy-url="@Model.ProxyBaseUrl"
+     data-warning-threshold="@Model.WarningThreshold">
+
+    <!-- Message Area -->
+    <div class="ww-usage-message" style="display: none;"></div>
+
+    @if (!string.IsNullOrEmpty(Model.Title))
+    {
+        <h4 class="ww-usage-title mb-1">@Model.Title</h4>
+    }
+    @if (!string.IsNullOrEmpty(Model.Subtitle))
+    {
+        <p class="ww-usage-subtitle text-muted mb-4">@Model.Subtitle</p>
+    }
+
+    @* ===== SUBSCRIPTION INFO ===== *@
+    @if (sub != null)
+    {
+        <div class="ww-usage-subscription card mb-4">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <div class="d-flex align-items-center gap-2">
+                            <h5 class="mb-0">@sub.TierName</h5>
+                            <span class="badge @(sub.IsActive ? "bg-success" : "bg-secondary")">@sub.Status</span>
+                            @if (sub.IsFreeTier)
+                            {
+                                <span class="badge bg-info">Free</span>
+                            }
+                        </div>
+                        @if (!string.IsNullOrEmpty(sub.TierDescription))
+                        {
+                            <p class="text-muted small mb-0 mt-1">@sub.TierDescription</p>
+                        }
+                        @if (sub.CurrentPeriodEnd.HasValue)
+                        {
+                            <small class="text-muted">
+                                <i class="bi bi-calendar3 me-1"></i>
+                                Current period ends: @sub.CurrentPeriodEnd.Value.ToString("MMM dd, yyyy")
+                            </small>
+                        }
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <button class="btn btn-outline-primary btn-sm ww-upgrade-plan-btn"
+                                data-app-id="@Model.AppId">
+                            <i class="bi bi-arrow-up-circle me-1"></i> Upgrade Plan
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-info mb-4">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>No active subscription</strong>
+            <p class="small mb-0 mt-1">Subscribe to a plan to view your usage limits.</p>
+            <button class="btn btn-primary btn-sm mt-2 ww-subscribe-btn" data-app-id="@Model.AppId">
+                View Plans
+            </button>
+        </div>
+    }
+
+    @* ===== USAGE LIMITS ===== *@
+    @if (limits.Count > 0)
+    {
+        <div class="ww-usage-limits">
+            <h6 class="mb-3">Usage Limits</h6>
+
+            @foreach (var limit in limits)
+            {
+                var percent = limit.IsUnlimited ? 0 : Math.Min(limit.UsagePercent, 100);
+                var barClass = UsageDashboardViewModel.GetBarClass(limit, Model.WarningThreshold);
+
+                <div class="ww-usage-limit-item card mb-3" data-limit-code="@limit.LimitCode">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <span class="fw-medium">@(string.IsNullOrEmpty(limit.DisplayName) ? limit.LimitCode : limit.DisplayName)</span>
+                                @if (!string.IsNullOrEmpty(limit.Unit))
+                                {
+                                    <span class="text-muted small ms-1">(@limit.Unit)</span>
+                                }
+                            </div>
+                            <div class="text-end">
+                                @if (limit.IsUnlimited)
+                                {
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-infinity me-1"></i> Unlimited
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="fw-medium">@limit.CurrentUsage.ToString("N0")</span>
+                                    <span class="text-muted"> / @limit.MaxValue.ToString("N0")</span>
+                                }
+                            </div>
+                        </div>
+
+                        @if (!limit.IsUnlimited)
+                        {
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar @barClass"
+                                     role="progressbar"
+                                     style="width: @percent%;"
+                                     aria-valuenow="@limit.CurrentUsage"
+                                     aria-valuemin="0"
+                                     aria-valuemax="@limit.MaxValue">
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between mt-1">
+                                <small class="text-muted">@limit.UsagePercent.ToString("N0")% used</small>
+                                @if (!string.IsNullOrEmpty(limit.StatusMessage))
+                                {
+                                    <small class="@UsageDashboardViewModel.GetStatusTextClass(limit, Model.WarningThreshold)">
+                                        @limit.StatusMessage
+                                    </small>
+                                }
+                            </div>
+                        }
+
+                        @* Overage Warning *@
+                        @if (Model.ShowOverageInfo && limit.IsExceeded)
+                        {
+                            <div class="alert alert-danger py-2 px-3 mt-2 mb-0 small">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                <strong>Limit exceeded</strong>
+                                @if (limit.IsHardBlocked)
+                                {
+                                    <text> &mdash; This feature is blocked until your usage is reduced or your plan is upgraded.</text>
+                                }
+                                else
+                                {
+                                    <text> &mdash; Overage charges may apply. Consider upgrading your plan.</text>
+                                }
+                            </div>
+                        }
+                        else if (Model.ShowOverageInfo && limit.IsAtWarningThreshold)
+                        {
+                            <div class="alert alert-warning py-2 px-3 mt-2 mb-0 small">
+                                <i class="bi bi-exclamation-circle me-1"></i>
+                                <strong>Approaching limit</strong> &mdash; You've used @limit.UsagePercent.ToString("N0")% of your allowance.
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else if (sub != null)
+    {
+        <div class="text-center text-muted py-4">
+            <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+            <p class="mt-2 mb-0">No usage limits configured for your plan.</p>
+        </div>
+    }
+
+    @* ===== UPGRADE CTA ===== *@
+    @if (limits.Any(l => l.IsExceeded || l.IsAtWarningThreshold))
+    {
+        <div class="ww-upgrade-cta card border-primary mt-4">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-rocket-takeoff text-primary" style="font-size: 2rem;"></i>
+                <h5 class="mt-2">Need more capacity?</h5>
+                <p class="text-muted">Upgrade your plan to increase your limits and unlock additional features.</p>
+                <button class="btn btn-primary ww-upgrade-plan-btn" data-app-id="@Model.AppId">
+                    <i class="bi bi-arrow-up-circle me-1"></i> Upgrade Plan
+                </button>
+            </div>
+        </div>
+    }
+</div>
+

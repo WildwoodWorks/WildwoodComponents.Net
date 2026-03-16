@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using WildwoodComponents.Razor.Models;
 using WildwoodComponents.Razor.Services;
 
@@ -12,10 +13,12 @@ namespace WildwoodComponents.Razor.Components.AppTier;
 public class AppTierViewComponent : ViewComponent
 {
     private readonly IWildwoodAppTierService _appTierService;
+    private readonly ILogger<AppTierViewComponent> _logger;
 
-    public AppTierViewComponent(IWildwoodAppTierService appTierService)
+    public AppTierViewComponent(IWildwoodAppTierService appTierService, ILogger<AppTierViewComponent> logger)
     {
         _appTierService = appTierService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -62,9 +65,10 @@ public class AppTierViewComponent : ViewComponent
                 myAddOns = await _appTierService.GetMyAddOnsAsync(appId);
             }
         }
-        catch
+        catch (Exception ex)
         {
             // User may not be authenticated - tiers still show for browsing
+            _logger.LogDebug(ex, "Failed to load subscription/add-on data for app {AppId} (user may not be authenticated)", appId);
         }
 
         var model = new AppTierViewModel
@@ -106,23 +110,4 @@ public class AppTierViewComponent : ViewComponent
         }
         return false;
     }
-}
-
-public class AppTierViewModel
-{
-    public string AppId { get; set; } = string.Empty;
-    public string ProxyBaseUrl { get; set; } = "/api/wildwood-app-tiers";
-    public string? Title { get; set; }
-    public string? Subtitle { get; set; }
-    public bool ShowAddOns { get; set; } = true;
-    public bool ShowBillingToggle { get; set; } = true;
-    public bool ShowCurrentPlan { get; set; } = true;
-    public string Currency { get; set; } = "USD";
-    public int AnnualDiscount { get; set; } = 20;
-    public bool AllowRegistration { get; set; }
-    public List<AppTierModel> Tiers { get; set; } = new();
-    public UserTierSubscriptionModel? CurrentSubscription { get; set; }
-    public List<AppTierAddOnModel> AddOns { get; set; } = new();
-    public List<UserAddOnSubscriptionModel> MyAddOns { get; set; } = new();
-    public bool HasMonthlyAndAnnual { get; set; }
 }

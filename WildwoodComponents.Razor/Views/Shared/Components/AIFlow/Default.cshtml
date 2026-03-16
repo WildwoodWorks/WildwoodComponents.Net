@@ -1,0 +1,99 @@
+@model WildwoodComponents.Razor.Models.AIFlowViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var flows = Model.AvailableFlows.Where(f => f.IsActive && !f.IsDraft).ToList();
+    var selected = Model.SelectedFlow;
+}
+
+<div id="ww-ai-flow-@cid"
+     class="ww-ai-flow-component"
+     data-component-id="@cid"
+     data-app-id="@Model.AppId"
+     data-proxy-url="@Model.ProxyBaseUrl">
+
+    <div id="ww-flow-message-@cid" class="ww-alert" style="display:none;"></div>
+
+    @* Flow Selection *@
+    <div class="ww-flow-selection" @(selected != null ? "style=display:none;" : "")>
+        @if (flows.Count == 0)
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>No AI flows are available for this application.
+            </div>
+        }
+        else
+        {
+            <h5 class="mb-3">Available Flows</h5>
+            <div class="row">
+                @foreach (var flow in flows)
+                {
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 ww-flow-card" data-flow-id="@flow.Id" role="button">
+                            <div class="card-body text-center">
+                                @if (!string.IsNullOrEmpty(flow.IconClass))
+                                {
+                                    <i class="@flow.IconClass mb-2" style="font-size: 2rem; color: @(flow.Color ?? "var(--ww-primary, #0d6efd)");"></i>
+                                }
+                                <h6>@flow.Name</h6>
+                                @if (!string.IsNullOrEmpty(flow.Description))
+                                {
+                                    <p class="text-muted small mb-0">@flow.Description</p>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @* Flow Input Form *@
+    <div class="ww-flow-input" style="display: none;">
+        <div class="d-flex align-items-center mb-3">
+            <button class="btn btn-link p-0 me-2 ww-flow-back-btn">
+                <i class="bi bi-arrow-left"></i>
+            </button>
+            <h5 class="mb-0 ww-flow-name"></h5>
+        </div>
+        <p class="text-muted ww-flow-description"></p>
+
+        <form class="ww-flow-form" novalidate>
+            <div class="ww-flow-fields"></div>
+            <button type="submit" class="btn btn-primary mt-3">
+                <span class="ww-btn-text"><i class="bi bi-play-fill me-1"></i>Execute Flow</span>
+                <span class="ww-btn-spinner" style="display:none;">
+                    <span class="spinner-border spinner-border-sm me-2"></span>Executing...
+                </span>
+            </button>
+        </form>
+    </div>
+
+    @* Execution Progress *@
+    <div class="ww-flow-progress" style="display: none;">
+        <h5 class="mb-3">Execution Progress</h5>
+        <div class="ww-step-list"></div>
+        <div class="ww-flow-result mt-3" style="display: none;">
+            <h6>Result</h6>
+            <pre class="bg-light p-3 rounded ww-flow-output" style="max-height: 400px; overflow: auto;"></pre>
+        </div>
+        <div class="mt-3">
+            <button class="btn btn-outline-secondary ww-flow-back-btn">
+                <i class="bi bi-arrow-left me-1"></i>Back to Flows
+            </button>
+            <button class="btn btn-outline-danger ww-cancel-execution-btn" style="display: none;">
+                <i class="bi bi-x-circle me-1"></i>Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .ww-ai-flow-component { padding: 1.5rem; background: var(--ww-bg-primary, #fff); border: 1px solid var(--ww-border-color, #dee2e6); border-radius: 0.5rem; }
+    .ww-flow-card { cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; }
+    .ww-flow-card:hover { border-color: var(--ww-primary, #0d6efd); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .ww-step-item { padding: 0.75rem; border-left: 3px solid var(--ww-border-color, #dee2e6); margin-bottom: 0.5rem; background: var(--ww-bg-secondary, #f8f9fa); border-radius: 0 0.25rem 0.25rem 0; }
+    .ww-step-item.completed { border-left-color: var(--ww-success, #198754); }
+    .ww-step-item.running { border-left-color: var(--ww-primary, #0d6efd); }
+    .ww-step-item.failed { border-left-color: var(--ww-danger, #dc3545); }
+</style>

@@ -1,0 +1,177 @@
+/* WildwoodComponents.Razor - Two-Factor Settings Component Styles
+ *
+ * 2FA settings sections, QR code display, credential tables, recovery codes.
+ * Base card/alert/spinner styles are in wildwood-razor-themes.css.
+ */
+
+/* ========================================
+   CONTAINER
+   ======================================== */
+
+.ww-2fa-settings-component {
+    font-family: var(--ww-font-family, system-ui, -apple-system, sans-serif);
+}
+
+/* ========================================
+   STATUS HEADER
+   ======================================== */
+
+.ww-2fa-status-header {
+    margin-bottom: 1.5rem;
+}
+
+.ww-2fa-status-header h4 {
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ========================================
+   SECTIONS
+   ======================================== */
+
+.ww-2fa-section .card {
+    border-color: var(--ww-border-color, #dee2e6);
+}
+
+.ww-2fa-section .card-header {
+    background: var(--ww-bg-secondary, #f8f9fa);
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ========================================
+   QR CODE
+   ======================================== */
+
+.ww-2fa-qr-area {
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.ww-2fa-qr-container {
+    display: inline-block;
+    padding: 1rem;
+    background: #ffffff;
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius, 0.375rem);
+}
+
+.ww-2fa-qr-img {
+    max-width: 200px;
+    height: auto;
+}
+
+/* ========================================
+   MANUAL KEY
+   ======================================== */
+
+.ww-2fa-manual-key {
+    margin-top: 0.75rem;
+}
+
+.ww-2fa-manual-key-value {
+    font-family: monospace;
+    font-size: 0.9rem;
+    padding: 0.5rem;
+    background: var(--ww-bg-tertiary, #f8f9fa);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    user-select: all;
+    word-break: break-all;
+}
+
+/* ========================================
+   VERIFICATION CODE INPUT
+   ======================================== */
+
+.ww-2fa-authenticator-code,
+.ww-2fa-email-code {
+    text-align: center;
+    font-size: 1.25rem;
+    letter-spacing: 0.4rem;
+    font-family: monospace;
+    max-width: 200px;
+}
+
+/* ========================================
+   CREDENTIALS TABLE
+   ======================================== */
+
+.ww-2fa-credentials-list .table {
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-2fa-credentials-list .table th {
+    color: var(--ww-text-secondary, #495057);
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+/* ========================================
+   DEVICES TABLE
+   ======================================== */
+
+.ww-2fa-devices-list .table {
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ========================================
+   RECOVERY CODES
+   ======================================== */
+
+.ww-2fa-recovery-codes-display {
+    margin-top: 1rem;
+}
+
+.ww-2fa-recovery-codes-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.5rem;
+    padding: 1rem;
+    background: var(--ww-bg-tertiary, #f8f9fa);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius, 0.375rem);
+}
+
+.ww-2fa-recovery-codes-list code {
+    display: block;
+    text-align: center;
+    padding: 0.25rem 0.5rem;
+    background: var(--ww-bg-primary, #ffffff);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    font-size: 0.875rem;
+    user-select: all;
+}
+
+/* ========================================
+   CONFIRM MODAL
+   ======================================== */
+
+.ww-2fa-confirm-modal .modal-content {
+    border-color: var(--ww-border-color, #dee2e6);
+}
+
+.ww-2fa-confirm-modal .modal-header {
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+/* ========================================
+   ALERTS
+   ======================================== */
+
+.ww-2fa-settings-component .ww-alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    margin-bottom: 1rem;
+}
+
+.ww-2fa-settings-component .ww-alert-success {
+    background: var(--ww-success-bg, rgba(40, 167, 69, 0.15));
+    border: 1px solid var(--ww-success, #198754);
+    color: var(--ww-success-text, #0f5132);
+}
+
+.ww-2fa-settings-component .ww-alert-danger {
+    background: var(--ww-danger-bg, rgba(220, 53, 69, 0.15));
+    border: 1px solid var(--ww-danger, #dc3545);
+    color: var(--ww-danger-text, #842029);
+}

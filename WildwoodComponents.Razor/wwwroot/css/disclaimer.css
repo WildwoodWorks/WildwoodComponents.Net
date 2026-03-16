@@ -1,0 +1,112 @@
+/* WildwoodComponents.Razor - Disclaimer Component Styles
+ *
+ * Disclaimer cards, content display, acceptance checkboxes, and action buttons.
+ * Base card/alert/spinner styles are in wildwood-razor-themes.css.
+ */
+
+/* ========================================
+   CONTAINER
+   ======================================== */
+
+.ww-disclaimer-component {
+    font-family: var(--ww-font-family, system-ui, -apple-system, sans-serif);
+}
+
+/* ========================================
+   DISCLAIMER ITEMS
+   ======================================== */
+
+.ww-disclaimer-item {
+    margin-bottom: 1rem;
+}
+
+.ww-disclaimer-item .card-header {
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+.ww-disclaimer-item .card-header h5 {
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ========================================
+   CONTENT AREA
+   ======================================== */
+
+.ww-disclaimer-content {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    background: var(--ww-bg-primary, #ffffff);
+}
+
+.ww-disclaimer-html-content {
+    line-height: 1.6;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-disclaimer-text-content {
+    white-space: pre-wrap;
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ========================================
+   CHECKBOX
+   ======================================== */
+
+.ww-disclaimer-checkbox .form-check-input:checked {
+    background-color: var(--ww-primary, #0d6efd);
+    border-color: var(--ww-primary, #0d6efd);
+}
+
+.ww-disclaimer-checkbox .form-check-label {
+    color: var(--ww-text-primary, #212529);
+    font-weight: 500;
+}
+
+/* ========================================
+   ACTION BUTTONS
+   ======================================== */
+
+.ww-disclaimer-actions {
+    margin-top: 1.5rem;
+}
+
+.ww-disclaimer-accept-all-btn {
+    background: var(--ww-primary, #0d6efd);
+    border-color: var(--ww-primary, #0d6efd);
+}
+
+.ww-disclaimer-accept-all-btn:hover:not(:disabled) {
+    background: var(--ww-primary-dark, #0b5ed7);
+    border-color: var(--ww-primary-dark, #0b5ed7);
+}
+
+.ww-disclaimer-accept-all-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+/* ========================================
+   ALERTS
+   ======================================== */
+
+.ww-disclaimer-component .ww-alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    margin-bottom: 1rem;
+}
+
+.ww-disclaimer-component .ww-alert-success {
+    background: var(--ww-success-bg, rgba(40, 167, 69, 0.15));
+    border: 1px solid var(--ww-success, #198754);
+    color: var(--ww-success-text, #0f5132);
+}
+
+.ww-disclaimer-component .ww-alert-danger {
+    background: var(--ww-danger-bg, rgba(220, 53, 69, 0.15));
+    border: 1px solid var(--ww-danger, #dc3545);
+    color: var(--ww-danger-text, #842029);
+}

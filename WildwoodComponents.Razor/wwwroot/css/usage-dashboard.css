@@ -1,0 +1,90 @@
+/* WildwoodComponents.Razor - Usage Dashboard Component Styles
+ *
+ * Usage limit cards, progress bars, subscription info, upgrade CTA.
+ * Base card/alert/spinner styles are in wildwood-razor-themes.css.
+ */
+
+/* ========================================
+   CONTAINER
+   ======================================== */
+
+.ww-usage-dashboard-component {
+    font-family: var(--ww-font-family, system-ui, -apple-system, sans-serif);
+}
+
+/* ========================================
+   TITLE
+   ======================================== */
+
+.ww-usage-title {
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-usage-subtitle {
+    color: var(--ww-text-muted, #6c757d);
+}
+
+/* ========================================
+   SUBSCRIPTION CARD
+   ======================================== */
+
+.ww-usage-subscription {
+    background: var(--ww-bg-primary, #ffffff);
+    border-color: var(--ww-border-color, #dee2e6);
+}
+
+/* ========================================
+   USAGE LIMIT ITEMS
+   ======================================== */
+
+.ww-usage-limit-item {
+    border-color: var(--ww-border-color, #dee2e6);
+    transition: box-shadow 0.15s ease;
+}
+
+.ww-usage-limit-item:hover {
+    box-shadow: 0 2px 8px var(--ww-shadow, rgba(0, 0, 0, 0.06));
+}
+
+/* ========================================
+   PROGRESS BARS
+   ======================================== */
+
+.ww-usage-dashboard-component .progress {
+    background-color: var(--ww-bg-tertiary, #e9ecef);
+    border-radius: 0.5rem;
+}
+
+.ww-usage-dashboard-component .progress-bar {
+    border-radius: 0.5rem;
+    transition: width 0.4s ease;
+}
+
+.ww-usage-dashboard-component .progress-bar.ww-bar-normal {
+    background-color: var(--ww-success, #198754);
+}
+
+.ww-usage-dashboard-component .progress-bar.ww-bar-warning {
+    background-color: var(--ww-warning, #ffc107);
+}
+
+.ww-usage-dashboard-component .progress-bar.ww-bar-danger {
+    background-color: var(--ww-danger, #dc3545);
+}
+
+/* ========================================
+   UPGRADE CTA
+   ======================================== */
+
+.ww-upgrade-cta {
+    background: var(--ww-primary-light, rgba(13, 110, 253, 0.03));
+}
+
+/* ========================================
+   BUTTONS
+   ======================================== */
+
+.ww-upgrade-plan-btn {
+    color: var(--ww-primary, #0d6efd);
+    border-color: var(--ww-primary, #0d6efd);
+}

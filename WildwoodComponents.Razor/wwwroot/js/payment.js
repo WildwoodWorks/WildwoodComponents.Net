@@ -428,8 +428,8 @@
                     return;
                 }
 
-                // If no client-side confirmation needed (trial, \/usr/bin/bash, or payment succeeded immediately)
-                if (\!response.requiresClientConfirmation || \!response.clientSecret) {
+                // If no client-side confirmation needed (trial or payment succeeded immediately)
+                if (!response.requiresClientConfirmation || !response.clientSecret) {
                     return self._apiPost('/confirm', {
                         paymentIntentId: response.paymentIntentId || response.subscriptionId,
                         providerType: PT.Stripe

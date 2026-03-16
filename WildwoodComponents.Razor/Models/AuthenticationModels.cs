@@ -4,6 +4,25 @@ using WildwoodComponents.Shared.Models;
 namespace WildwoodComponents.Razor.Models;
 
 // ──────────────────────────────────────────────
+// View Models
+// ──────────────────────────────────────────────
+
+/// <summary>
+/// View model for the AuthenticationViewComponent
+/// </summary>
+public class AuthenticationViewModel
+{
+    public string ReturnUrl { get; set; } = "/";
+    public string ProxyBaseUrl { get; set; } = "/api/wildwood-auth";
+    public bool AllowRegistration { get; set; } = true;
+    public List<string> ExternalProviders { get; set; } = new();
+    public bool EnableTwoFactor { get; set; }
+    public string Title { get; set; } = "Welcome";
+    public string Subtitle { get; set; } = "Sign in to your account";
+    public string ExternalLoginPath { get; set; } = "/Account/ExternalLogin";
+}
+
+// ──────────────────────────────────────────────
 // Client-facing request DTOs (used by proxy controllers)
 // ──────────────────────────────────────────────
 

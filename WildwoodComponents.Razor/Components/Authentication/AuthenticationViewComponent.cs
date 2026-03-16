@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using WildwoodComponents.Razor.Models;
 using WildwoodComponents.Razor.Services;
 
 namespace WildwoodComponents.Razor.Components.Authentication;
@@ -11,10 +13,12 @@ namespace WildwoodComponents.Razor.Components.Authentication;
 public class AuthenticationViewComponent : ViewComponent
 {
     private readonly IWildwoodAuthService _authService;
+    private readonly ILogger<AuthenticationViewComponent> _logger;
 
-    public AuthenticationViewComponent(IWildwoodAuthService authService)
+    public AuthenticationViewComponent(IWildwoodAuthService authService, ILogger<AuthenticationViewComponent> logger)
     {
         _authService = authService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -25,14 +29,24 @@ public class AuthenticationViewComponent : ViewComponent
     /// <param name="allowRegistration">Whether to show the registration form</param>
     /// <param name="title">Card header title</param>
     /// <param name="subtitle">Card header subtitle</param>
+    /// <param name="externalLoginPath">Path for external login redirect (default: /Account/ExternalLogin)</param>
     public async Task<IViewComponentResult> InvokeAsync(
         string? returnUrl = null,
         string proxyBaseUrl = "/api/wildwood-auth",
         bool allowRegistration = true,
         string title = "Welcome",
-        string subtitle = "Sign in to Form Forge")
+        string? subtitle = null,
+        string externalLoginPath = "/Account/ExternalLogin")
     {
-        var config = await _authService.GetAuthConfigAsync();
+        AuthConfigResponse? config = null;
+        try
+        {
+            config = await _authService.GetAuthConfigAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load auth configuration");
+        }
 
         var model = new AuthenticationViewModel
         {
@@ -42,20 +56,10 @@ public class AuthenticationViewComponent : ViewComponent
             ExternalProviders = config?.ExternalProviders ?? new List<string>(),
             EnableTwoFactor = config?.EnableTwoFactor ?? false,
             Title = title,
-            Subtitle = subtitle
+            Subtitle = subtitle ?? "Sign in to your account",
+            ExternalLoginPath = externalLoginPath
         };
 
         return View(model);
     }
-}
-
-public class AuthenticationViewModel
-{
-    public string ReturnUrl { get; set; } = "/";
-    public string ProxyBaseUrl { get; set; } = "/api/wildwood-auth";
-    public bool AllowRegistration { get; set; } = true;
-    public List<string> ExternalProviders { get; set; } = new();
-    public bool EnableTwoFactor { get; set; }
-    public string Title { get; set; } = "Welcome";
-    public string Subtitle { get; set; } = "Sign in to Form Forge";
 }

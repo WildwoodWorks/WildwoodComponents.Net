@@ -1,0 +1,41 @@
+/* WildwoodComponents.Razor - Overage Summary Component Styles
+ *
+ * Exceeded/warning limit banners, overage item lists.
+ * Base card/alert/spinner styles are in wildwood-razor-themes.css.
+ */
+
+/* ========================================
+   CONTAINER
+   ======================================== */
+
+.ww-overage-summary-component {
+    font-family: var(--ww-font-family, system-ui, -apple-system, sans-serif);
+}
+
+/* ========================================
+   OVERAGE BANNERS
+   ======================================== */
+
+.ww-overage-banner {
+    border-radius: var(--ww-border-radius, 0.5rem);
+}
+
+.ww-overage-banner.ww-overage-exceeded {
+    border-left: 4px solid var(--ww-danger, #dc3545);
+}
+
+.ww-overage-banner.ww-overage-warning {
+    border-left: 4px solid var(--ww-warning, #ffc107);
+}
+
+/* ========================================
+   OVERAGE ITEMS
+   ======================================== */
+
+.ww-overage-item {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.ww-overage-item:last-child {
+    border-bottom: none;
+}

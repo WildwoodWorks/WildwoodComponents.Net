@@ -45,7 +45,7 @@ public class WildwoodAuthService : IWildwoodAuthService
                 AppId = _appId
             };
 
-            var response = await _httpClient.PostAsJsonAsync("auth/login", apiRequest);
+            using var response = await _httpClient.PostAsJsonAsync("auth/login", apiRequest);
             var content = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
@@ -94,7 +94,7 @@ public class WildwoodAuthService : IWildwoodAuthService
                 AppId = _appId
             };
 
-            var response = await _httpClient.PostAsJsonAsync("auth/register", apiRequest);
+            using var response = await _httpClient.PostAsJsonAsync("auth/register", apiRequest);
             var content = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
@@ -148,7 +148,7 @@ public class WildwoodAuthService : IWildwoodAuthService
                 return AuthResult.Failure("No refresh token available");
 
             var apiRequest = new WildwoodRefreshTokenRequest { RefreshToken = refreshToken };
-            var response = await _httpClient.PostAsJsonAsync("auth/refresh-token", apiRequest);
+            using var response = await _httpClient.PostAsJsonAsync("auth/refresh-token", apiRequest);
             var content = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
@@ -183,7 +183,7 @@ public class WildwoodAuthService : IWildwoodAuthService
                 AppId = _appId
             };
 
-            var response = await _httpClient.PostAsJsonAsync("auth/forgot-password", apiRequest);
+            using var response = await _httpClient.PostAsJsonAsync("auth/forgot-password", apiRequest);
             return response.IsSuccessStatusCode
                 ? ApiResult.Ok("If an account with that email exists, a reset link has been sent.")
                 : ApiResult.Fail("Failed to process password reset request.");
@@ -206,7 +206,7 @@ public class WildwoodAuthService : IWildwoodAuthService
                 AppId = _appId
             };
 
-            var response = await _httpClient.PostAsJsonAsync("auth/reset-password", apiRequest);
+            using var response = await _httpClient.PostAsJsonAsync("auth/reset-password", apiRequest);
             var content = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
@@ -233,7 +233,7 @@ public class WildwoodAuthService : IWildwoodAuthService
                 RememberDevice = request.RememberDevice
             };
 
-            var response = await _httpClient.PostAsJsonAsync("twofactor/verify", apiRequest);
+            using var response = await _httpClient.PostAsJsonAsync("twofactor/verify", apiRequest);
             var content = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
@@ -265,7 +265,7 @@ public class WildwoodAuthService : IWildwoodAuthService
     {
         try
         {
-            var response = await _httpClient.GetAsync($"twofactor/configuration/{_appId}");
+            using var response = await _httpClient.GetAsync($"twofactor/configuration/{_appId}");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();

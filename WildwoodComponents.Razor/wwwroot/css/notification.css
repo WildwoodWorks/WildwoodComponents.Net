@@ -1,0 +1,266 @@
+/* WildwoodComponents.Razor - Notification & Toast Component Styles
+ *
+ * Positioned notification containers, notification items, progress bars,
+ * and toast styling. Covers both NotificationViewComponent and NotificationToastViewComponent.
+ * Base card/alert/spinner styles are in wildwood-razor-themes.css.
+ */
+
+/* ========================================
+   NOTIFICATION CONTAINER POSITIONING
+   ======================================== */
+
+.ww-notification-component,
+.ww-toast-component {
+    position: fixed;
+    z-index: 9999;
+    pointer-events: none;
+    font-family: var(--ww-font-family, system-ui, -apple-system, sans-serif);
+}
+
+.ww-notification-component > *,
+.ww-toast-component > * {
+    pointer-events: auto;
+}
+
+/* Top positions */
+.ww-notif-top-left, .ww-toast-top-left { top: 1rem; left: 1rem; }
+.ww-notif-top-center, .ww-toast-top-center { top: 1rem; left: 50%; transform: translateX(-50%); }
+.ww-notif-top-right, .ww-toast-top-right { top: 1rem; right: 1rem; }
+
+/* Bottom positions */
+.ww-notif-bottom-left, .ww-toast-bottom-left { bottom: 1rem; left: 1rem; }
+.ww-notif-bottom-center, .ww-toast-bottom-center { bottom: 1rem; left: 50%; transform: translateX(-50%); }
+.ww-notif-bottom-right, .ww-toast-bottom-right { bottom: 1rem; right: 1rem; }
+
+/* ========================================
+   NOTIFICATION ITEMS
+   ======================================== */
+
+.ww-notif-items,
+.ww-toast-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 380px;
+    min-width: 320px;
+}
+
+.ww-notif-item {
+    background: var(--ww-bg-primary, #ffffff);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius, 0.375rem);
+    box-shadow: 0 4px 12px var(--ww-shadow, rgba(0, 0, 0, 0.15));
+    overflow: hidden;
+    animation: ww-notif-slide-in 0.3s ease;
+}
+
+.ww-notif-item-inner {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+}
+
+.ww-notif-icon-area {
+    flex-shrink: 0;
+    padding-top: 0.125rem;
+}
+
+.ww-notif-icon {
+    font-size: 1.25rem;
+}
+
+.ww-notif-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.ww-notif-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.25rem;
+}
+
+.ww-notif-title {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-notif-time {
+    font-size: 0.7rem;
+    color: var(--ww-text-muted, #6c757d);
+    white-space: nowrap;
+}
+
+.ww-notif-message {
+    font-size: 0.85rem;
+    color: var(--ww-text-secondary, #495057);
+    line-height: 1.4;
+}
+
+.ww-notif-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.ww-notif-dismiss-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+}
+
+/* ========================================
+   NOTIFICATION PROGRESS BAR
+   ======================================== */
+
+.ww-notif-progress {
+    height: 3px;
+    background: var(--ww-bg-tertiary, #e9ecef);
+}
+
+.ww-notif-progress-bar {
+    height: 100%;
+    background: var(--ww-primary, #0d6efd);
+    transition: transform 0.1s linear;
+    transform-origin: left;
+}
+
+/* ========================================
+   NOTIFICATION TYPE COLORS
+   ======================================== */
+
+.ww-notif-item[data-type="success"] { border-left: 4px solid var(--ww-success, #198754); }
+.ww-notif-item[data-type="error"] { border-left: 4px solid var(--ww-danger, #dc3545); }
+.ww-notif-item[data-type="warning"] { border-left: 4px solid var(--ww-warning, #ffc107); }
+.ww-notif-item[data-type="info"] { border-left: 4px solid var(--ww-info, #0dcaf0); }
+
+/* ========================================
+   TOAST ITEMS
+   ======================================== */
+
+.ww-toast-item {
+    background: var(--ww-bg-primary, #ffffff);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius, 0.375rem);
+    box-shadow: 0 4px 12px var(--ww-shadow, rgba(0, 0, 0, 0.15));
+    overflow: hidden;
+    animation: ww-notif-slide-in 0.3s ease;
+}
+
+.ww-toast-body {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    align-items: flex-start;
+}
+
+.ww-toast-icon-wrap {
+    flex-shrink: 0;
+    font-size: 1.25rem;
+}
+
+.ww-toast-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.ww-toast-title {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-toast-message {
+    font-size: 0.85rem;
+    color: var(--ww-text-secondary, #495057);
+    line-height: 1.4;
+}
+
+.ww-toast-close {
+    flex-shrink: 0;
+}
+
+.ww-toast-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0 1rem 0.5rem;
+}
+
+/* ========================================
+   TOAST TIMER BAR
+   ======================================== */
+
+.ww-toast-timer {
+    height: 3px;
+    background: var(--ww-bg-tertiary, #e9ecef);
+}
+
+.ww-toast-timer-bar {
+    height: 100%;
+    background: var(--ww-primary, #0d6efd);
+    transition: transform 0.1s linear;
+    transform-origin: left;
+}
+
+/* ========================================
+   TOAST TYPE COLORS
+   ======================================== */
+
+.ww-toast-item[data-type="success"] { border-left: 4px solid var(--ww-success, #198754); }
+.ww-toast-item[data-type="error"] { border-left: 4px solid var(--ww-danger, #dc3545); }
+.ww-toast-item[data-type="warning"] { border-left: 4px solid var(--ww-warning, #ffc107); }
+.ww-toast-item[data-type="info"] { border-left: 4px solid var(--ww-info, #0dcaf0); }
+
+/* ========================================
+   DISMISS ALL
+   ======================================== */
+
+.ww-notif-dismiss-all,
+.ww-toast-dismiss-all {
+    margin-bottom: 0.5rem;
+}
+
+/* ========================================
+   ANIMATIONS
+   ======================================== */
+
+@keyframes ww-notif-slide-in {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ww-notif-removing,
+.ww-toast-removing {
+    animation: ww-notif-slide-out 0.3s ease forwards;
+}
+
+@keyframes ww-notif-slide-out {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+
+@media (max-width: 576px) {
+    .ww-notif-items,
+    .ww-toast-items {
+        max-width: calc(100vw - 2rem);
+        min-width: calc(100vw - 2rem);
+    }
+}

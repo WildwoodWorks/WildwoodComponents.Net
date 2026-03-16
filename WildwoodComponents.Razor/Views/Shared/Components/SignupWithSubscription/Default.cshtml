@@ -1,0 +1,457 @@
+@using WildwoodComponents.Razor.Models
+@using WildwoodComponents.Razor.Helpers
+@using WildwoodComponents.Shared.Models
+@model SignupWithSubscriptionViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var tiers = Model.Tiers;
+    var hasFreeTier = tiers.Any(t => t.IsFreeTier);
+}
+
+<div id="ww-signup-sub-@cid"
+     class="ww-signup-subscription-component"
+     data-component-id="@cid"
+     data-app-id="@Model.AppId"
+     data-auth-proxy="@Model.AuthProxyBaseUrl"
+     data-sub-proxy="@Model.SubscriptionProxyBaseUrl"
+     data-payment-proxy="@Model.PaymentProxyBaseUrl"
+     data-return-url="@(Model.ReturnUrl ?? "")"
+     data-allow-registration="@Model.AllowRegistration.ToString().ToLower()"
+     data-currency="@Model.Currency">
+
+    <!-- Header -->
+    @if (!string.IsNullOrEmpty(Model.Title))
+    {
+        <h3 class="text-center mb-2">@Model.Title</h3>
+    }
+    @if (!string.IsNullOrEmpty(Model.Subtitle))
+    {
+        <p class="text-center text-muted mb-4">@Model.Subtitle</p>
+    }
+
+    <!-- Step Indicator -->
+    <div class="ww-step-indicator mb-4">
+        <div class="d-flex justify-content-center align-items-center">
+            <div class="ww-step active" data-step="1">
+                <span class="ww-step-number">1</span>
+                <span class="ww-step-label">Choose Plan</span>
+            </div>
+            <div class="ww-step-line"></div>
+            <div class="ww-step" data-step="2">
+                <span class="ww-step-number">2</span>
+                <span class="ww-step-label">Create Account</span>
+            </div>
+            <div class="ww-step-line ww-step-line-payment">
+            </div>
+            <div class="ww-step ww-step-payment" data-step="3">
+                <span class="ww-step-number">3</span>
+                <span class="ww-step-label">Payment</span>
+            </div>
+            <div class="ww-step-line"></div>
+            <div class="ww-step" data-step="4">
+                <span class="ww-step-number">4</span>
+                <span class="ww-step-label">Complete</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Area -->
+    <div class="ww-signup-sub-message" style="display: none;"></div>
+
+    <!-- Loading Overlay -->
+    <div class="ww-signup-sub-loading text-center py-4" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 text-muted ww-signup-sub-loading-msg">Processing...</p>
+    </div>
+
+    <!-- ===== STEP 1: PLAN SELECTION ===== -->
+    <div class="ww-signup-step ww-step-1" data-step="1">
+        <div class="ww-plan-grid row justify-content-center">
+            @foreach (var tier in tiers)
+            {
+                <div class="col-md-4 mb-4">
+                    <div class="ww-plan-select-card card h-100 @(tier.IsDefault ? "border-primary ww-recommended" : "")"
+                         data-tier-id="@tier.Id"
+                         data-tier-name="@tier.Name"
+                         data-is-free="@tier.IsFreeTier.ToString().ToLower()">
+
+                        @if (!string.IsNullOrEmpty(tier.CustomBadgeText))
+                        {
+                            <div class="ww-plan-badge @ViewHelpers.GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
+                                <small>@tier.CustomBadgeText</small>
+                            </div>
+                        }
+                        else if (tier.IsDefault)
+                        {
+                            <div class="ww-plan-badge bg-primary text-white text-center py-1">
+                                <small>Recommended</small>
+                            </div>
+                        }
+
+                        <div class="card-body text-center">
+                            @if (!string.IsNullOrEmpty(tier.IconClass))
+                            {
+                                <div class="ww-plan-icon mb-2">
+                                    <i class="@tier.IconClass" style="font-size: 2rem;"></i>
+                                </div>
+                            }
+                            <h5>@tier.Name</h5>
+
+                            @if (tier.ShowPrice)
+                            {
+                                <div class="ww-plan-price my-3">
+                                    @if (tier.IsFreeTier)
+                                    {
+                                        <span class="fs-3 fw-bold">Free</span>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var pricing in tier.PricingOptions)
+                                        {
+                                            <span class="ww-price-option"
+                                                  data-pricing-id="@pricing.Id"
+                                                  data-billing="@pricing.BillingFrequency.ToLower()"
+                                                  data-price="@pricing.Price"
+                                                  data-is-default="@pricing.IsDefault.ToString().ToLower()"
+                                                  style="display:none;">
+                                                <span class="ww-price-currency">@ViewHelpers.GetCurrencySymbol(Model.Currency)</span>
+                                                <span class="fs-3 fw-bold">@pricing.Price.ToString("N0")</span>
+                                                <span class="text-muted">/@pricing.BillingFrequencyLabel.ToLower()</span>
+                                            </span>
+                                        }
+                                    }
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(tier.Description))
+                            {
+                                <p class="text-muted small">@tier.Description</p>
+                            }
+
+                            @if (tier.Features.Count > 0)
+                            {
+                                <ul class="list-unstyled text-start mt-3">
+                                    @foreach (var feature in tier.Features.Where(f => f.IsEnabled))
+                                    {
+                                        <li class="mb-2">
+                                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                            @(string.IsNullOrEmpty(feature.DisplayName) ? feature.FeatureCode : feature.DisplayName)
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+
+                        <div class="card-footer bg-transparent border-0 text-center pb-3">
+                            @if (tier.ShowContactButton && !string.IsNullOrEmpty(tier.ContactButtonUrl))
+                            {
+                                <a href="@tier.ContactButtonUrl"
+                                   class="btn btn-outline-primary w-100"
+                                   @(tier.ContactButtonUrl.StartsWith("http") ? "target=\"_blank\" rel=\"noopener noreferrer\"" : "")>
+                                    Contact Us
+                                </a>
+                            }
+                            else if (tier.ShowSubscribeButton)
+                            {
+                                <button class="btn @(tier.IsDefault ? "btn-primary" : "btn-outline-primary") w-100 ww-choose-tier-btn"
+                                        data-tier-id="@tier.Id"
+                                        data-tier-name="@tier.Name"
+                                        data-is-free="@tier.IsFreeTier.ToString().ToLower()">
+                                    @if (tier.IsFreeTier)
+                                    {
+                                        <text>Get Started Free</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Choose @tier.Name</text>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- ===== STEP 2: REGISTRATION FORM ===== -->
+    <div class="ww-signup-step ww-step-2" data-step="2" style="display: none;">
+        <div class="card" style="max-width: 500px; margin: 0 auto;">
+            <div class="card-body p-4">
+                <h4 class="text-center mb-1">Create Your Account</h4>
+                <p class="text-center text-muted mb-4 ww-selected-plan-info">
+                    Selected: <strong class="ww-selected-plan-name"></strong>
+                </p>
+
+                <!-- External Providers -->
+                @if (Model.ExternalProviders.Count > 0)
+                {
+                    <div class="ww-external-providers mb-3">
+                        @foreach (var provider in Model.ExternalProviders)
+                        {
+                            <button class="btn btn-outline-secondary w-100 mb-2 ww-external-login-btn"
+                                    data-provider="@provider">
+                                <i class="bi bi-@provider.ToLower() me-2"></i>
+                                Continue with @provider
+                            </button>
+                        }
+                        <div class="text-center my-3">
+                            <span class="text-muted">or</span>
+                        </div>
+                    </div>
+                }
+
+                @if (Model.AllowRegistration)
+                {
+                    <form class="ww-registration-form" novalidate>
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="mb-3">
+                                    <label class="form-label">First Name</label>
+                                    <input type="text" class="form-control ww-reg-first-name" required autocomplete="given-name" />
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Last Name</label>
+                                    <input type="text" class="form-control ww-reg-last-name" required autocomplete="family-name" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control ww-reg-email" required autocomplete="email" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Password</label>
+                            <input type="password" class="form-control ww-reg-password" required minlength="8" autocomplete="new-password" />
+                            <div class="form-text">Minimum 8 characters</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confirm Password</label>
+                            <input type="password" class="form-control ww-reg-confirm-password" required autocomplete="new-password" />
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 ww-reg-submit-btn">
+                            <span class="ww-btn-text">Continue</span>
+                            <span class="ww-btn-spinner" style="display: none;">
+                                <span class="spinner-border spinner-border-sm me-2"></span> Creating Account...
+                            </span>
+                        </button>
+                    </form>
+                }
+                else
+                {
+                    <div class="alert alert-info text-center">
+                        <i class="bi bi-info-circle me-2"></i>
+                        New account registration is currently disabled.
+                    </div>
+                }
+
+                <div class="text-center mt-3">
+                    <button class="btn btn-link ww-back-to-plans-btn">
+                        <i class="bi bi-arrow-left me-1"></i>Back to Plans
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== STEP 3: PAYMENT (for paid plans) ===== -->
+    <div class="ww-signup-step ww-step-3" data-step="3" style="display: none;">
+        <div class="card" style="max-width: 500px; margin: 0 auto;">
+            <div class="card-body p-4">
+                <h4 class="text-center mb-1">Payment Details</h4>
+                <p class="text-center text-muted mb-4">
+                    <strong class="ww-payment-plan-name"></strong> -
+                    <span class="ww-payment-plan-price"></span>
+                </p>
+
+                <div class="ww-payment-card-fields">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Card Number</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-credit-card"></i></span>
+                            <input type="text" class="form-control ww-pay-card-number"
+                                   placeholder="1234 5678 9012 3456"
+                                   maxlength="19"
+                                   inputmode="numeric"
+                                   autocomplete="cc-number" />
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="mb-3">
+                                <label class="form-label">Expiry</label>
+                                <input type="text" class="form-control ww-pay-card-expiry"
+                                       placeholder="MM/YY" maxlength="5"
+                                       inputmode="numeric" autocomplete="cc-exp" />
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="mb-3">
+                                <label class="form-label">CVV</label>
+                                <input type="text" class="form-control ww-pay-card-cvv"
+                                       placeholder="123" maxlength="4"
+                                       inputmode="numeric" autocomplete="cc-csc" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cardholder Name</label>
+                        <input type="text" class="form-control ww-pay-card-name"
+                               placeholder="Name on card" autocomplete="cc-name" />
+                    </div>
+                </div>
+
+                <button class="btn btn-primary btn-lg w-100 ww-complete-payment-btn" disabled>
+                    <i class="bi bi-lock-fill me-2"></i>
+                    <span class="ww-btn-text">Complete Payment</span>
+                    <span class="ww-btn-spinner" style="display: none;">
+                        <span class="spinner-border spinner-border-sm me-2"></span> Processing...
+                    </span>
+                </button>
+
+                <div class="text-center mt-3">
+                    <small class="text-muted">
+                        <i class="bi bi-shield-lock me-1"></i>
+                        Your payment information is encrypted and secure.
+                    </small>
+                </div>
+
+                <div class="text-center mt-3">
+                    <button class="btn btn-link ww-back-to-register-btn">
+                        <i class="bi bi-arrow-left me-1"></i>Back
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== STEP 4: SUCCESS ===== -->
+    <div class="ww-signup-step ww-step-4" data-step="4" style="display: none;">
+        <div class="text-center py-5">
+            <div class="mb-4">
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+            </div>
+            <h3>Welcome!</h3>
+            <p class="text-muted">
+                Your account has been created and your
+                <strong class="ww-success-plan-name"></strong> subscription is active.
+            </p>
+            <div class="mt-4">
+                <button class="btn btn-primary btn-lg ww-get-started-btn">
+                    Get Started
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .ww-signup-subscription-component {
+        --ww-signup-bg: var(--ww-bg-primary, #ffffff);
+        --ww-signup-border: var(--ww-border-color, #dee2e6);
+        --ww-signup-primary: var(--ww-primary, #0d6efd);
+        --ww-signup-success: var(--ww-success, #198754);
+    }
+
+    /* Step Indicator */
+    .ww-step-indicator {
+        padding: 0 1rem;
+    }
+
+    .ww-step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        position: relative;
+    }
+
+    .ww-step-number {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--ww-signup-border);
+        color: #6c757d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 0.875rem;
+        transition: all 0.3s ease;
+    }
+
+    .ww-step.active .ww-step-number {
+        background: var(--ww-signup-primary);
+        color: #ffffff;
+    }
+
+    .ww-step.completed .ww-step-number {
+        background: var(--ww-signup-success);
+        color: #ffffff;
+    }
+
+    .ww-step-label {
+        font-size: 0.75rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+        white-space: nowrap;
+    }
+
+    .ww-step.active .ww-step-label {
+        color: var(--ww-signup-primary);
+        font-weight: 600;
+    }
+
+    .ww-step-line {
+        flex: 1;
+        height: 2px;
+        background: var(--ww-signup-border);
+        margin: 0 0.5rem;
+        margin-bottom: 1.25rem;
+        transition: background 0.3s ease;
+    }
+
+    .ww-step-line.completed {
+        background: var(--ww-signup-success);
+    }
+
+    /* Plan Cards */
+    .ww-plan-select-card {
+        background: var(--ww-signup-bg);
+        border-color: var(--ww-signup-border);
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .ww-plan-select-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    }
+
+    .ww-plan-select-card.ww-recommended {
+        border-width: 2px;
+    }
+
+    .ww-plan-select-card.ww-selected {
+        border-color: var(--ww-signup-primary);
+        border-width: 2px;
+        box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+    }
+
+    /* Registration Form */
+    .ww-registration-form .form-control:focus {
+        border-color: var(--ww-signup-primary);
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+    }
+
+    /* Payment Fields */
+    .ww-payment-card-fields .input-group-text {
+        background: var(--ww-bg-secondary, #f8f9fa);
+    }
+</style>
+

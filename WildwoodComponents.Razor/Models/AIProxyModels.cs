@@ -3,6 +3,25 @@ using WildwoodComponents.Shared.Models;
 namespace WildwoodComponents.Razor.Models;
 
 // ──────────────────────────────────────────────
+// View Models
+// ──────────────────────────────────────────────
+
+/// <summary>
+/// View model for the AIProxyViewComponent
+/// </summary>
+public class AIProxyViewModel
+{
+    public string? ConfigurationId { get; set; }
+    public string? ConfigurationName { get; set; }
+    public string Placeholder { get; set; } = "Describe what you need...";
+    public bool AllowFileUpload { get; set; }
+    public string ProxyBaseUrl { get; set; } = "/api/ai-proxy";
+    public string? OnCompleteCallback { get; set; }
+    public string Title { get; set; } = "AI Assistant";
+    public string SubmitLabel { get; set; } = "Generate";
+}
+
+// ──────────────────────────────────────────────
 // Client-facing request/response DTOs
 // ──────────────────────────────────────────────
 
