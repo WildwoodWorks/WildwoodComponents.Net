@@ -43,56 +43,42 @@ namespace WildwoodComponents.Blazor.Services
         private string BuildUrl(string path)
         {
             if (!string.IsNullOrEmpty(_apiBaseUrl))
-                return $"{_apiBaseUrl}/{path.TrimStart('/')}";
+                return $"{_apiBaseUrl}/api/{path.TrimStart('/')}";
             return $"/api/{path.TrimStart('/')}";
+        }
+
+        private async Task EnsureSuccessAsync(HttpResponseMessage response, string operation)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = string.Empty;
+                try { body = await response.Content.ReadAsStringAsync(); } catch { }
+                var message = $"{operation} failed: HTTP {(int)response.StatusCode} {response.StatusCode}";
+                if (!string.IsNullOrEmpty(body))
+                    message += $" - {body}";
+                _logger.LogWarning("{Message}", message);
+                throw new HttpRequestException(message);
+            }
         }
 
         #region Tier Browsing
 
         public async Task<List<AppTierModel>> GetAvailableTiersAsync(string appId)
         {
-            try
-            {
-                var url = BuildUrl($"app-tiers/{appId}");
-                var response = await _httpClient.GetAsync(url);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var result = await response.Content.ReadFromJsonAsync<List<AppTierModel>>(JsonOptions);
-                    return result ?? new List<AppTierModel>();
-                }
-
-                _logger.LogWarning("Failed to get available tiers for app {AppId}: {StatusCode}", appId, response.StatusCode);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting available tiers for app {AppId}", appId);
-            }
-
-            return new List<AppTierModel>();
+            var url = BuildUrl($"app-tiers/{appId}");
+            var response = await _httpClient.GetAsync(url);
+            await EnsureSuccessAsync(response, $"GetAvailableTiers({appId})");
+            var result = await response.Content.ReadFromJsonAsync<List<AppTierModel>>(JsonOptions);
+            return result ?? new List<AppTierModel>();
         }
 
         public async Task<List<AppTierAddOnModel>> GetAvailableAddOnsAsync(string appId)
         {
-            try
-            {
-                var url = BuildUrl($"app-tier-addons/{appId}/available");
-                var response = await _httpClient.GetAsync(url);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var result = await response.Content.ReadFromJsonAsync<List<AppTierAddOnModel>>(JsonOptions);
-                    return result ?? new List<AppTierAddOnModel>();
-                }
-
-                _logger.LogWarning("Failed to get available add-ons for app {AppId}: {StatusCode}", appId, response.StatusCode);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting available add-ons for app {AppId}", appId);
-            }
-
-            return new List<AppTierAddOnModel>();
+            var url = BuildUrl($"app-tier-addons/{appId}/available");
+            var response = await _httpClient.GetAsync(url);
+            await EnsureSuccessAsync(response, $"GetAvailableAddOns({appId})");
+            var result = await response.Content.ReadFromJsonAsync<List<AppTierAddOnModel>>(JsonOptions);
+            return result ?? new List<AppTierAddOnModel>();
         }
 
         public async Task<List<AppTierModel>> GetPublicTiersAsync(string appId)
@@ -124,25 +110,11 @@ namespace WildwoodComponents.Blazor.Services
 
         public async Task<List<AppTierLimitStatusModel>> GetAllLimitStatusesAsync(string appId)
         {
-            try
-            {
-                var url = BuildUrl($"app-tiers/{appId}/limit-statuses");
-                var response = await _httpClient.GetAsync(url);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var result = await response.Content.ReadFromJsonAsync<List<AppTierLimitStatusModel>>(JsonOptions);
-                    return result ?? new List<AppTierLimitStatusModel>();
-                }
-
-                _logger.LogWarning("Failed to get limit statuses for app {AppId}: {StatusCode}", appId, response.StatusCode);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting limit statuses for app {AppId}", appId);
-            }
-
-            return new List<AppTierLimitStatusModel>();
+            var url = BuildUrl($"app-tiers/{appId}/limit-statuses");
+            var response = await _httpClient.GetAsync(url);
+            await EnsureSuccessAsync(response, $"GetAllLimitStatuses({appId})");
+            var result = await response.Content.ReadFromJsonAsync<List<AppTierLimitStatusModel>>(JsonOptions);
+            return result ?? new List<AppTierLimitStatusModel>();
         }
 
         #endregion
@@ -151,50 +123,21 @@ namespace WildwoodComponents.Blazor.Services
 
         public async Task<UserTierSubscriptionModel?> GetMySubscriptionAsync(string appId)
         {
-            try
-            {
-                var url = BuildUrl($"app-tiers/{appId}/my-subscription");
-                var response = await _httpClient.GetAsync(url);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    return await response.Content.ReadFromJsonAsync<UserTierSubscriptionModel>(JsonOptions);
-                }
-
-                if ((int)response.StatusCode == 404)
-                    return null;
-
-                _logger.LogWarning("Failed to get subscription for app {AppId}: {StatusCode}", appId, response.StatusCode);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting subscription for app {AppId}", appId);
-            }
-
-            return null;
+            var url = BuildUrl($"app-tiers/{appId}/my-subscription");
+            var response = await _httpClient.GetAsync(url);
+            if ((int)response.StatusCode == 404)
+                return null;
+            await EnsureSuccessAsync(response, $"GetMySubscription({appId})");
+            return await response.Content.ReadFromJsonAsync<UserTierSubscriptionModel>(JsonOptions);
         }
 
         public async Task<List<UserAddOnSubscriptionModel>> GetMyAddOnsAsync(string appId)
         {
-            try
-            {
-                var url = BuildUrl($"app-tier-addons/{appId}/my-addons");
-                var response = await _httpClient.GetAsync(url);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var result = await response.Content.ReadFromJsonAsync<List<UserAddOnSubscriptionModel>>(JsonOptions);
-                    return result ?? new List<UserAddOnSubscriptionModel>();
-                }
-
-                _logger.LogWarning("Failed to get add-on subscriptions for app {AppId}: {StatusCode}", appId, response.StatusCode);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting add-on subscriptions for app {AppId}", appId);
-            }
-
-            return new List<UserAddOnSubscriptionModel>();
+            var url = BuildUrl($"app-tier-addons/{appId}/my-addons");
+            var response = await _httpClient.GetAsync(url);
+            await EnsureSuccessAsync(response, $"GetMyAddOns({appId})");
+            var result = await response.Content.ReadFromJsonAsync<List<UserAddOnSubscriptionModel>>(JsonOptions);
+            return result ?? new List<UserAddOnSubscriptionModel>();
         }
 
         #endregion
@@ -330,73 +273,30 @@ namespace WildwoodComponents.Blazor.Services
 
         public async Task<UserTierSubscriptionModel?> GetCompanySubscriptionAsync(string appId, string companyId)
         {
-            try
-            {
-                var url = BuildUrl($"app-tiers/{appId}/subscription/company/{companyId}");
-                var response = await _httpClient.GetAsync(url);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    return await response.Content.ReadFromJsonAsync<UserTierSubscriptionModel>(JsonOptions);
-                }
-
-                if ((int)response.StatusCode == 404)
-                    return null;
-
-                _logger.LogWarning("Failed to get company subscription for {CompanyId}: {StatusCode}", companyId, response.StatusCode);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting company subscription for {CompanyId}", companyId);
-            }
-
-            return null;
+            var url = BuildUrl($"app-tiers/{appId}/subscription/company/{companyId}");
+            var response = await _httpClient.GetAsync(url);
+            if ((int)response.StatusCode == 404)
+                return null;
+            await EnsureSuccessAsync(response, $"GetCompanySubscription({companyId})");
+            return await response.Content.ReadFromJsonAsync<UserTierSubscriptionModel>(JsonOptions);
         }
 
         public async Task<List<UserAddOnSubscriptionModel>> GetCompanyAddOnSubscriptionsAsync(string appId, string companyId)
         {
-            try
-            {
-                var url = BuildUrl($"app-tier-addons/{appId}/company/{companyId}/addon-subscriptions");
-                var response = await _httpClient.GetAsync(url);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var result = await response.Content.ReadFromJsonAsync<List<UserAddOnSubscriptionModel>>(JsonOptions);
-                    return result ?? new List<UserAddOnSubscriptionModel>();
-                }
-
-                _logger.LogWarning("Failed to get company add-on subscriptions for {CompanyId}: {StatusCode}", companyId, response.StatusCode);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting company add-on subscriptions for {CompanyId}", companyId);
-            }
-
-            return new List<UserAddOnSubscriptionModel>();
+            var url = BuildUrl($"app-tier-addons/{appId}/company/{companyId}/addon-subscriptions");
+            var response = await _httpClient.GetAsync(url);
+            await EnsureSuccessAsync(response, $"GetCompanyAddOnSubscriptions({companyId})");
+            var result = await response.Content.ReadFromJsonAsync<List<UserAddOnSubscriptionModel>>(JsonOptions);
+            return result ?? new List<UserAddOnSubscriptionModel>();
         }
 
         public async Task<List<AppTierLimitStatusModel>> GetCompanyLimitStatusesAsync(string appId, string companyId)
         {
-            try
-            {
-                var url = BuildUrl($"app-tiers/{appId}/limits/company/{companyId}");
-                var response = await _httpClient.GetAsync(url);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var result = await response.Content.ReadFromJsonAsync<List<AppTierLimitStatusModel>>(JsonOptions);
-                    return result ?? new List<AppTierLimitStatusModel>();
-                }
-
-                _logger.LogWarning("Failed to get company limit statuses for {CompanyId}: {StatusCode}", companyId, response.StatusCode);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting company limit statuses for {CompanyId}", companyId);
-            }
-
-            return new List<AppTierLimitStatusModel>();
+            var url = BuildUrl($"app-tiers/{appId}/limits/company/{companyId}");
+            var response = await _httpClient.GetAsync(url);
+            await EnsureSuccessAsync(response, $"GetCompanyLimitStatuses({companyId})");
+            var result = await response.Content.ReadFromJsonAsync<List<AppTierLimitStatusModel>>(JsonOptions);
+            return result ?? new List<AppTierLimitStatusModel>();
         }
 
         #endregion
@@ -405,48 +305,20 @@ namespace WildwoodComponents.Blazor.Services
 
         public async Task<List<AppFeatureDefinitionModel>> GetFeatureDefinitionsAsync(string appId)
         {
-            try
-            {
-                var url = BuildUrl($"app-feature-definitions/{appId}?activeOnly=true");
-                var response = await _httpClient.GetAsync(url);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var result = await response.Content.ReadFromJsonAsync<List<AppFeatureDefinitionModel>>(JsonOptions);
-                    return result ?? new List<AppFeatureDefinitionModel>();
-                }
-
-                _logger.LogWarning("Failed to get feature definitions for app {AppId}: {StatusCode}", appId, response.StatusCode);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting feature definitions for app {AppId}", appId);
-            }
-
-            return new List<AppFeatureDefinitionModel>();
+            var url = BuildUrl($"app-feature-definitions/{appId}?activeOnly=true");
+            var response = await _httpClient.GetAsync(url);
+            await EnsureSuccessAsync(response, $"GetFeatureDefinitions({appId})");
+            var result = await response.Content.ReadFromJsonAsync<List<AppFeatureDefinitionModel>>(JsonOptions);
+            return result ?? new List<AppFeatureDefinitionModel>();
         }
 
         public async Task<Dictionary<string, bool>> GetCompanyFeaturesAsync(string appId, string companyId)
         {
-            try
-            {
-                var url = BuildUrl($"companies/{companyId}/features");
-                var response = await _httpClient.GetAsync(url);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var result = await response.Content.ReadFromJsonAsync<Dictionary<string, bool>>(JsonOptions);
-                    return result ?? new Dictionary<string, bool>();
-                }
-
-                _logger.LogWarning("Failed to get company features for {CompanyId}: {StatusCode}", companyId, response.StatusCode);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting company features for {CompanyId}", companyId);
-            }
-
-            return new Dictionary<string, bool>();
+            var url = BuildUrl($"companies/{companyId}/features");
+            var response = await _httpClient.GetAsync(url);
+            await EnsureSuccessAsync(response, $"GetCompanyFeatures({companyId})");
+            var result = await response.Content.ReadFromJsonAsync<Dictionary<string, bool>>(JsonOptions);
+            return result ?? new Dictionary<string, bool>();
         }
 
         #endregion
@@ -570,25 +442,286 @@ namespace WildwoodComponents.Blazor.Services
 
         public async Task<List<AppTierAddOnModel>> GetAllAddOnsAsync(string appId)
         {
+            var url = BuildUrl($"app-tier-addons/{appId}");
+            var response = await _httpClient.GetAsync(url);
+            await EnsureSuccessAsync(response, $"GetAllAddOns({appId})");
+            var result = await response.Content.ReadFromJsonAsync<List<AppTierAddOnModel>>(JsonOptions);
+            return result ?? new List<AppTierAddOnModel>();
+        }
+
+        #endregion
+
+        #region Admin User-Scoped Queries
+
+        public async Task<UserTierSubscriptionModel?> GetUserSubscriptionAsync(string appId, string userId)
+        {
+            var url = BuildUrl($"app-tiers/{appId}/subscriptions/{userId}");
+            var response = await _httpClient.GetAsync(url);
+            if ((int)response.StatusCode == 404)
+                return null;
+            await EnsureSuccessAsync(response, $"GetUserSubscription({userId})");
+            return await response.Content.ReadFromJsonAsync<UserTierSubscriptionModel>(JsonOptions);
+        }
+
+        public async Task<Dictionary<string, bool>> GetUserFeaturesAdminAsync(string appId, string userId)
+        {
+            var url = BuildUrl($"app-tiers/{appId}/admin/user-features/{userId}");
+            var response = await _httpClient.GetAsync(url);
+            await EnsureSuccessAsync(response, $"GetUserFeaturesAdmin({userId})");
+            var result = await response.Content.ReadFromJsonAsync<Dictionary<string, bool>>(JsonOptions);
+            return result ?? new Dictionary<string, bool>();
+        }
+
+        public async Task<List<AppTierLimitStatusModel>> GetUserLimitStatusesAsync(string appId, string userId)
+        {
+            var url = BuildUrl($"app-tiers/{appId}/admin/user-limits/{userId}");
+            var response = await _httpClient.GetAsync(url);
+            await EnsureSuccessAsync(response, $"GetUserLimitStatuses({userId})");
+            var result = await response.Content.ReadFromJsonAsync<List<AppTierLimitStatusModel>>(JsonOptions);
+            return result ?? new List<AppTierLimitStatusModel>();
+        }
+
+        public async Task<List<UserAddOnSubscriptionModel>> GetUserAddOnsAsync(string appId, string userId)
+        {
+            var url = BuildUrl($"app-tier-addons/{appId}/admin/user-addons/{userId}");
+            var response = await _httpClient.GetAsync(url);
+            await EnsureSuccessAsync(response, $"GetUserAddOns({userId})");
+            var result = await response.Content.ReadFromJsonAsync<List<UserAddOnSubscriptionModel>>(JsonOptions);
+            return result ?? new List<UserAddOnSubscriptionModel>();
+        }
+
+        public async Task<bool> CancelUserSubscriptionAsync(string appId, string userId)
+        {
             try
             {
-                var url = BuildUrl($"app-tier-addons/{appId}");
-                var response = await _httpClient.GetAsync(url);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var result = await response.Content.ReadFromJsonAsync<List<AppTierAddOnModel>>(JsonOptions);
-                    return result ?? new List<AppTierAddOnModel>();
-                }
-
-                _logger.LogWarning("Failed to get all add-ons for app {AppId}: {StatusCode}", appId, response.StatusCode);
+                var url = BuildUrl($"app-tiers/{appId}/cancel/{userId}");
+                var response = await _httpClient.PostAsync(url, null);
+                return response.IsSuccessStatusCode;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting all add-ons for app {AppId}", appId);
+                _logger.LogError(ex, "Error cancelling subscription for user {UserId} in app {AppId}", userId, appId);
+                return false;
             }
+        }
 
-            return new List<AppTierAddOnModel>();
+        #endregion
+
+        #region Admin User-Scoped Write Actions
+
+        public async Task<AppTierChangeResultModel> SubscribeUserToTierAsync(string appId, string userId, string tierId, string? pricingId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/subscribe");
+                var body = new
+                {
+                    UserId = userId,
+                    AppId = appId,
+                    AppTierId = tierId,
+                    AppTierPricingId = pricingId
+                };
+
+                var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(url, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<AppTierChangeResultModel>(JsonOptions);
+                    return result ?? new AppTierChangeResultModel { Success = false, ErrorMessage = "Empty response" };
+                }
+
+                var errorBody = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Failed to subscribe user {UserId} to tier: {StatusCode} - {Body}", userId, response.StatusCode, errorBody);
+                return new AppTierChangeResultModel { Success = false, ErrorMessage = errorBody };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error subscribing user {UserId} to tier {TierId} for app {AppId}", userId, tierId, appId);
+                return new AppTierChangeResultModel { Success = false, ErrorMessage = ex.Message };
+            }
+        }
+
+        public async Task<AppTierChangeResultModel> ChangeUserTierAsync(string appId, string userId, string newTierId, string? newPricingId, bool immediate)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/change-tier");
+                var body = new
+                {
+                    UserId = userId,
+                    AppId = appId,
+                    NewAppTierId = newTierId,
+                    NewAppTierPricingId = newPricingId,
+                    Immediate = immediate
+                };
+
+                var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(url, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<AppTierChangeResultModel>(JsonOptions);
+                    return result ?? new AppTierChangeResultModel { Success = false, ErrorMessage = "Empty response" };
+                }
+
+                var errorBody = await response.Content.ReadAsStringAsync();
+                return new AppTierChangeResultModel { Success = false, ErrorMessage = errorBody };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error changing tier for user {UserId} in app {AppId}", userId, appId);
+                return new AppTierChangeResultModel { Success = false, ErrorMessage = ex.Message };
+            }
+        }
+
+        public async Task<bool> SubscribeUserToAddOnAsync(string appId, string userId, string addOnId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tier-addons/{appId}/admin/subscribe-user/{userId}");
+                var body = new { AppTierAddOnId = addOnId };
+                var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(url, content);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error subscribing user {UserId} to add-on {AddOnId} for app {AppId}", userId, addOnId, appId);
+                return false;
+            }
+        }
+
+        public async Task<bool> CancelUserAddOnAsync(string appId, string subscriptionId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tier-addons/{appId}/admin/cancel-user-addon/{subscriptionId}");
+                var response = await _httpClient.PostAsync(url, null);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error cancelling user add-on subscription {SubscriptionId} for app {AppId}", subscriptionId, appId);
+                return false;
+            }
+        }
+
+        public async Task<bool> ResetUserUsageAsync(string appId, string userId, string limitCode)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/admin/usage-limits/user/{userId}/{limitCode}/reset");
+                var response = await _httpClient.PostAsync(url, null);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resetting usage for user {UserId} limit {LimitCode} in app {AppId}", userId, limitCode, appId);
+                return false;
+            }
+        }
+
+        public async Task<bool> UpdateUserUsageLimitAsync(string appId, string userId, string limitCode, int newMaxValue)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/admin/usage-limits/user/{userId}/{limitCode}");
+                var content = JsonContent.Create(new { MaxValue = newMaxValue });
+                var response = await _httpClient.PutAsync(url, content);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating usage limit for user {UserId} limit {LimitCode} in app {AppId}", userId, limitCode, appId);
+                return false;
+            }
+        }
+
+        #endregion
+
+        #region Settings
+
+        public async Task<string> GetTrackingModeAsync(string appId)
+        {
+            var url = BuildUrl($"app-tiers/{appId}/settings/tracking-mode");
+            var response = await _httpClient.GetAsync(url);
+            await EnsureSuccessAsync(response, $"GetTrackingMode({appId})");
+            var result = await response.Content.ReadFromJsonAsync<TrackingModeResponse>(JsonOptions);
+            return result?.Mode ?? "User";
+        }
+
+        private class TrackingModeResponse
+        {
+            public string Mode { get; set; } = "User";
+        }
+
+        #endregion
+
+        #region Admin Usage Limit Overrides
+
+        public async Task<bool> UpdateUsageLimitAsync(string appId, string limitCode, int newMaxValue)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/admin/usage-limits/{limitCode}");
+                var body = new { MaxValue = newMaxValue };
+                var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PutAsync(url, content);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating usage limit {LimitCode} for app {AppId}", limitCode, appId);
+                return false;
+            }
+        }
+
+        public async Task<bool> ResetUsageAsync(string appId, string limitCode)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/admin/usage-limits/{limitCode}/reset");
+                var response = await _httpClient.PostAsync(url, null);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resetting usage {LimitCode} for app {AppId}", limitCode, appId);
+                return false;
+            }
+        }
+
+        public async Task<bool> UpdateCompanyUsageLimitAsync(string appId, string companyId, string limitCode, int newMaxValue)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/admin/usage-limits/company/{companyId}/{limitCode}");
+                var body = new { MaxValue = newMaxValue };
+                var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PutAsync(url, content);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating company {CompanyId} usage limit {LimitCode} for app {AppId}", companyId, limitCode, appId);
+                return false;
+            }
+        }
+
+        public async Task<bool> ResetCompanyUsageAsync(string appId, string companyId, string limitCode)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/admin/usage-limits/company/{companyId}/{limitCode}/reset");
+                var response = await _httpClient.PostAsync(url, null);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resetting company {CompanyId} usage {LimitCode} for app {AppId}", companyId, limitCode, appId);
+                return false;
+            }
         }
 
         #endregion
@@ -597,23 +730,11 @@ namespace WildwoodComponents.Blazor.Services
 
         public async Task<Dictionary<string, bool>> GetUserFeaturesAsync(string appId)
         {
-            try
-            {
-                var url = BuildUrl($"app-tiers/{appId}/user-features");
-                var response = await _httpClient.GetAsync(url);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var result = await response.Content.ReadFromJsonAsync<Dictionary<string, bool>>(JsonOptions);
-                    return result ?? new Dictionary<string, bool>();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting user features for app {AppId}", appId);
-            }
-
-            return new Dictionary<string, bool>();
+            var url = BuildUrl($"app-tiers/{appId}/user-features");
+            var response = await _httpClient.GetAsync(url);
+            await EnsureSuccessAsync(response, $"GetUserFeatures({appId})");
+            var result = await response.Content.ReadFromJsonAsync<Dictionary<string, bool>>(JsonOptions);
+            return result ?? new Dictionary<string, bool>();
         }
 
         public async Task<AppFeatureCheckResultModel?> CheckFeatureAsync(string appId, string featureCode)
@@ -674,6 +795,69 @@ namespace WildwoodComponents.Blazor.Services
             }
 
             return null;
+        }
+
+        #endregion
+
+        #region Feature Overrides
+
+        public async Task<bool> SetFeatureOverrideAsync(string appId, string? userId, string featureCode, bool isEnabled, string? reason = null, DateTime? expiresAt = null)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/admin/feature-overrides");
+                var body = new
+                {
+                    UserId = userId,
+                    FeatureCode = featureCode,
+                    IsEnabled = isEnabled,
+                    Reason = reason,
+                    ExpiresAt = expiresAt
+                };
+                var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(url, content);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting feature override {FeatureCode} for app {AppId}", featureCode, appId);
+                return false;
+            }
+        }
+
+        public async Task<bool> RemoveFeatureOverrideAsync(string appId, string? userId, string featureCode)
+        {
+            try
+            {
+                var userQuery = !string.IsNullOrEmpty(userId) ? $"?userId={userId}" : "";
+                var url = BuildUrl($"app-tiers/{appId}/admin/feature-overrides/{featureCode}{userQuery}");
+                var response = await _httpClient.DeleteAsync(url);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error removing feature override {FeatureCode} for app {AppId}", featureCode, appId);
+                return false;
+            }
+        }
+
+        public async Task<List<AppFeatureOverrideModel>> GetFeatureOverridesAsync(string appId, string? userId = null)
+        {
+            try
+            {
+                var userQuery = !string.IsNullOrEmpty(userId) ? $"?userId={userId}" : "";
+                var url = BuildUrl($"app-tiers/{appId}/admin/feature-overrides{userQuery}");
+                var response = await _httpClient.GetAsync(url);
+                await EnsureSuccessAsync(response, "Getting feature overrides");
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<List<AppFeatureOverrideModel>>(json, JsonOptions)
+                    ?? new List<AppFeatureOverrideModel>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting feature overrides for app {AppId}", appId);
+                return new List<AppFeatureOverrideModel>();
+            }
         }
 
         #endregion

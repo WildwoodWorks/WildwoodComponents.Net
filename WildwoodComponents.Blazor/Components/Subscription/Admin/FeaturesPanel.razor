@@ -19,6 +19,14 @@ else if (_features.Count == 0)
 else
 {
     <div class="ww-features-panel">
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible fade show mb-2" role="alert" style="font-size: 0.85rem;">
+                <i class="fas fa-exclamation-circle me-1"></i>@ErrorMessage
+                <button type="button" class="btn-close btn-close-sm" @onclick="ClearError"></button>
+            </div>
+        }
+
         <div class="ww-features-summary">
             <span class="ww-features-summary-icon">
                 <i class="fas fa-check-circle"></i>
@@ -56,16 +64,83 @@ else
                                         <i class="@feature.IconClass me-1"></i>
                                     }
                                     @feature.DisplayName
+                                    @if (IsAdmin && HasOverride(feature.FeatureCode))
+                                    {
+                                        <span class="ww-feature-override-badge" title="@GetOverrideTooltip(feature.FeatureCode)">
+                                            <i class="fas fa-user-shield"></i>
+                                        </span>
+                                    }
                                 </div>
                                 @if (!string.IsNullOrEmpty(feature.Description))
                                 {
                                     <div class="ww-feature-card-desc">@feature.Description</div>
                                 }
                             </div>
-                            <span class="badge @(feature.IsEnabled ? "bg-success" : "bg-secondary")">
-                                @(feature.IsEnabled ? "Enabled" : "Locked")
-                            </span>
+                            @if (IsAdmin)
+                            {
+                                @if (IsFeatureProcessing(feature.FeatureCode))
+                                {
+                                    <span class="spinner-border spinner-border-sm"></span>
+                                }
+                                else if (IsConfirming(feature.FeatureCode))
+                                {
+                                    <span class="ww-feature-confirming-label">
+                                        <i class="fas fa-arrow-down"></i>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <button type="button"
+                                            class="ww-feature-toggle-btn @(feature.IsEnabled ? "ww-feature-toggle-on" : "ww-feature-toggle-off")"
+                                            @onclick="@(() => RequestToggle(feature))"
+                                            title="@(feature.IsEnabled ? "Click to disable" : "Click to enable")">
+                                        <span>@(feature.IsEnabled ? "Enabled" : "Locked")</span>
+                                    </button>
+                                }
+                            }
+                            else
+                            {
+                                <span class="badge @(feature.IsEnabled ? "bg-success" : "bg-secondary")">
+                                    @(feature.IsEnabled ? "Enabled" : "Locked")
+                                </span>
+                            }
                         </div>
+
+                        @* Confirmation row - rendered below the feature card *@
+                        @if (IsAdmin && IsConfirming(feature.FeatureCode))
+                        {
+                            <div class="ww-feature-confirm-row">
+                                <div class="ww-feature-confirm-message">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    @(feature.IsEnabled ? "Disable" : "Enable") <strong>@feature.DisplayName</strong>?
+                                </div>
+                                <div class="ww-feature-confirm-options">
+                                    <select class="ww-feature-confirm-select" @bind="_confirmExpiration">
+                                        <option value="">No expiration</option>
+                                        <option value="1h">Expires in 1 hour</option>
+                                        <option value="1d">Expires in 1 day</option>
+                                        <option value="7d">Expires in 7 days</option>
+                                        <option value="30d">Expires in 30 days</option>
+                                    </select>
+                                    <input type="text"
+                                           class="ww-feature-confirm-reason"
+                                           placeholder="Reason (optional)"
+                                           @bind="_confirmReason" />
+                                </div>
+                                <div class="ww-feature-confirm-actions">
+                                    <button type="button"
+                                            class="ww-feature-confirm-btn ww-feature-confirm-yes"
+                                            @onclick="@(() => ConfirmToggle(feature))">
+                                        <i class="fas fa-check me-1"></i>Confirm
+                                    </button>
+                                    <button type="button"
+                                            class="ww-feature-confirm-btn ww-feature-confirm-no"
+                                            @onclick="CancelToggle">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        }
                     }
                 </div>
             </div>

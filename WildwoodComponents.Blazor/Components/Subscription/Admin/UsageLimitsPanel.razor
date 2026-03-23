@@ -68,6 +68,23 @@ else
                         {
                             <span class="ww-usage-card-count">@limit.CurrentUsage.ToString("N0") used</span>
                         }
+                        else if (IsAdmin && IsEditingLimit(limit.LimitCode))
+                        {
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="ww-usage-card-count">@limit.CurrentUsage.ToString("N0") /</span>
+                                <input type="number" class="form-control form-control-sm" style="width: 100px;"
+                                       @bind="_editMaxValue" @bind:event="oninput"
+                                       min="0" disabled="@_isProcessing" />
+                                <button class="btn btn-sm btn-success" @onclick="@(() => SaveLimitMaxValue(limit.LimitCode))"
+                                        disabled="@_isProcessing" title="Save">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                                <button class="btn btn-sm btn-secondary" @onclick="CancelEditLimit"
+                                        disabled="@_isProcessing" title="Cancel">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        }
                         else
                         {
                             <span class="ww-usage-card-count">
@@ -80,6 +97,26 @@ else
                     @if (!string.IsNullOrEmpty(limit.StatusMessage))
                     {
                         <div class="ww-usage-card-message">@limit.StatusMessage</div>
+                    }
+
+                    @if (IsAdmin && !IsEditingLimit(limit.LimitCode))
+                    {
+                        <div class="ww-usage-card-actions mt-2">
+                            @if (!limit.IsUnlimited)
+                            {
+                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="@(() => StartEditLimit(limit))"
+                                        disabled="@_isProcessing" title="Edit max value">
+                                    <i class="fas fa-edit me-1"></i>Edit Limit
+                                </button>
+                            }
+                            @if (limit.CurrentUsage > 0)
+                            {
+                                <button class="btn btn-sm btn-outline-warning" @onclick="@(() => ResetUsage(limit.LimitCode))"
+                                        disabled="@_isProcessing" title="Reset current usage to zero">
+                                    <i class="fas fa-undo me-1"></i>Reset Usage
+                                </button>
+                            }
+                        </div>
                     }
                 </div>
             }

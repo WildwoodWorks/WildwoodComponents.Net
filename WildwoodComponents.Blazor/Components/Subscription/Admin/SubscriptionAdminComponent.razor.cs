@@ -16,6 +16,8 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
         [Parameter, EditorRequired] public string AppId { get; set; } = string.Empty;
         [Parameter] public string? CompanyId { get; set; }
+        /// <summary>When set, admin is viewing a specific user's subscription (User tracking mode).</summary>
+        [Parameter] public string? UserId { get; set; }
         [Parameter] public SubscriptionDisplayMode DisplayMode { get; set; } = SubscriptionDisplayMode.All;
         [Parameter] public bool IsAdmin { get; set; }
         [Parameter] public string Currency { get; set; } = "USD";
@@ -31,6 +33,8 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         private UserTierSubscriptionModel? _subscription;
         private string _activeTab = "subscription";
         private bool _isProcessing;
+        private bool _isCompanyMode;
+        private int _overrideCount;
 
         // References to child panels for refreshing
         private SubscriptionStatusPanel? _statusPanel;
@@ -38,6 +42,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         private FeaturesPanel? _featuresPanel;
         private AddOnsPanel? _addOnsPanel;
         private UsageLimitsPanel? _usagePanel;
+        private OverridesPanel? _overridesPanel;
 
         #endregion
 
@@ -55,16 +60,57 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 _activeTab = "plans";
             }
 
+            // Fetch the tracking mode setting to determine user vs company scoping
+            await LoadTrackingModeAsync();
             await LoadSubscriptionAsync();
+
+            if (IsAdmin)
+            {
+                await LoadOverrideCountAsync();
+            }
+        }
+
+        private async Task LoadTrackingModeAsync()
+        {
+            try
+            {
+                var mode = await AppTierService.GetTrackingModeAsync(AppId);
+                _isCompanyMode = string.Equals(mode, "Company", StringComparison.OrdinalIgnoreCase);
+            }
+            catch (Exception ex)
+            {
+                await HandleErrorAsync(ex, "Loading tracking mode");
+            }
+        }
+
+        private bool UseCompanyScope => _isCompanyMode && !string.IsNullOrEmpty(CompanyId);
+        private bool UseUserScope => !_isCompanyMode && !string.IsNullOrEmpty(UserId);
+
+        private async Task LoadOverrideCountAsync()
+        {
+            try
+            {
+                string? scopeUserId = UseUserScope ? UserId : null;
+                var overrides = await AppTierService.GetFeatureOverridesAsync(AppId, scopeUserId);
+                _overrideCount = overrides.Count;
+            }
+            catch
+            {
+                _overrideCount = 0;
+            }
         }
 
         private async Task LoadSubscriptionAsync()
         {
             try
             {
-                if (!string.IsNullOrEmpty(CompanyId))
+                if (UseCompanyScope)
                 {
-                    _subscription = await AppTierService.GetCompanySubscriptionAsync(AppId, CompanyId);
+                    _subscription = await AppTierService.GetCompanySubscriptionAsync(AppId, CompanyId!);
+                }
+                else if (UseUserScope)
+                {
+                    _subscription = await AppTierService.GetUserSubscriptionAsync(AppId, UserId!);
                 }
                 else
                 {
@@ -109,10 +155,15 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 if (args.IsChange)
                 {
                     // Change existing tier
-                    if (!string.IsNullOrEmpty(CompanyId))
+                    if (UseCompanyScope)
                     {
                         result = await AppTierService.ChangeCompanyTierAsync(
-                            AppId, CompanyId, args.TierId, args.PricingId, true);
+                            AppId, CompanyId!, args.TierId, args.PricingId, true);
+                    }
+                    else if (UseUserScope)
+                    {
+                        result = await AppTierService.ChangeUserTierAsync(
+                            AppId, UserId!, args.TierId, args.PricingId, true);
                     }
                     else
                     {
@@ -123,10 +174,15 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 else
                 {
                     // New subscription
-                    if (!string.IsNullOrEmpty(CompanyId))
+                    if (UseCompanyScope)
                     {
                         result = await AppTierService.SubscribeCompanyToTierAsync(
-                            AppId, CompanyId, args.TierId, args.PricingId);
+                            AppId, CompanyId!, args.TierId, args.PricingId);
+                    }
+                    else if (UseUserScope)
+                    {
+                        result = await AppTierService.SubscribeUserToTierAsync(
+                            AppId, UserId!, args.TierId, args.PricingId);
                     }
                     else
                     {
@@ -170,9 +226,13 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             try
             {
                 bool success;
-                if (!string.IsNullOrEmpty(CompanyId))
+                if (UseCompanyScope)
                 {
-                    success = await AppTierService.CancelCompanySubscriptionAsync(AppId, CompanyId);
+                    success = await AppTierService.CancelCompanySubscriptionAsync(AppId, CompanyId!);
+                }
+                else if (UseUserScope)
+                {
+                    success = await AppTierService.CancelUserSubscriptionAsync(AppId, UserId!);
                 }
                 else
                 {
@@ -220,6 +280,32 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             }
 
             await NotifySubscriptionChanged("", "addon_changed");
+        }
+
+        #endregion
+
+        #region Override Removed Handler
+
+        private async Task HandleOverrideRemoved()
+        {
+            // Refresh features panel to reflect reverted state
+            if (_featuresPanel != null)
+            {
+                await _featuresPanel.LoadFeaturesAsync();
+            }
+            await LoadOverrideCountAsync();
+            StateHasChanged();
+        }
+
+        private async Task HandleOverrideToggled()
+        {
+            // Refresh overrides panel when a feature toggle creates/updates an override
+            if (_overridesPanel != null)
+            {
+                await _overridesPanel.LoadDataAsync();
+            }
+            await LoadOverrideCountAsync();
+            StateHasChanged();
         }
 
         #endregion

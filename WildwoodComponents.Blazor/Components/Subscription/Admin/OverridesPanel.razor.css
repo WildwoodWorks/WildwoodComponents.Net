@@ -1,0 +1,136 @@
+/* Overrides Panel */
+.ww-overrides-empty {
+    font-size: 0.85rem;
+    color: var(--ww-text-muted, #6c757d);
+    padding: 1rem;
+    text-align: center;
+}
+
+.ww-overrides-header {
+    padding: 0.5rem 0;
+    margin-bottom: 0.5rem;
+}
+
+.ww-overrides-count {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ww-primary, #D4882C);
+}
+
+.ww-overrides-table-wrapper {
+    overflow-x: auto;
+}
+
+.ww-overrides-table {
+    width: 100%;
+    font-size: 0.8rem;
+    border-collapse: collapse;
+}
+
+.ww-overrides-table th {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ww-text-muted, #6c757d);
+    padding: 0.5rem 0.625rem;
+    border-bottom: 2px solid var(--ww-border-color, #dee2e6);
+    white-space: nowrap;
+}
+
+.ww-overrides-table td {
+    padding: 0.5rem 0.625rem;
+    border-bottom: 1px solid var(--ww-border-color, #dee2e6);
+    color: var(--ww-text-primary, #212529);
+    vertical-align: middle;
+}
+
+.ww-overrides-table tbody tr:hover {
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+.ww-override-feature code {
+    font-size: 0.75rem;
+    background: var(--ww-bg-secondary, #f8f9fa);
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-override-status {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.125rem 0.5rem;
+    border-radius: 1rem;
+}
+
+.ww-override-enabled {
+    background: rgba(40, 167, 69, 0.12);
+    color: var(--ww-success, #28a745);
+}
+
+.ww-override-disabled {
+    background: rgba(220, 53, 69, 0.12);
+    color: var(--ww-danger, #dc3545);
+}
+
+.ww-override-reason {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ww-override-none {
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-override-expires,
+.ww-override-created {
+    white-space: nowrap;
+    font-size: 0.75rem;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-override-actions {
+    text-align: right;
+    white-space: nowrap;
+    width: 60px;
+}
+
+.ww-override-remove-btn {
+    border: none;
+    background: transparent;
+    color: var(--ww-text-muted, #6c757d);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    transition: all 0.15s ease;
+    font-size: 0.8rem;
+}
+
+.ww-override-remove-btn:hover {
+    background: rgba(220, 53, 69, 0.12);
+    color: var(--ww-danger, #dc3545);
+}
+
+.ww-override-permanent-btn {
+    border: none;
+    background: transparent;
+    color: var(--ww-text-muted, #6c757d);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    transition: all 0.15s ease;
+    font-size: 0.8rem;
+    margin-right: 0.25rem;
+}
+
+.ww-override-permanent-btn:hover {
+    background: rgba(40, 167, 69, 0.12);
+    color: var(--ww-success, #28a745);
+}
+
+.ww-override-removing {
+    opacity: 0.5;
+}

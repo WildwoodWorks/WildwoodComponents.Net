@@ -13,11 +13,16 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
         [Parameter, EditorRequired] public string AppId { get; set; } = string.Empty;
         [Parameter] public string? CompanyId { get; set; }
+        [Parameter] public string? UserId { get; set; }
+        [Parameter] public bool IsCompanyMode { get; set; }
         [Parameter] public UserTierSubscriptionModel? Subscription { get; set; }
         [Parameter] public EventCallback OnCancelRequested { get; set; }
 
         private UserTierSubscriptionModel? _subscription;
         private bool _showCancelConfirm;
+
+        private bool UseCompanyScope => IsCompanyMode && !string.IsNullOrEmpty(CompanyId);
+        private bool UseUserScope => !IsCompanyMode && !string.IsNullOrEmpty(UserId);
 
         protected override async Task OnComponentInitializedAsync()
         {
@@ -45,9 +50,13 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             {
                 await SetLoadingAsync(true);
 
-                if (!string.IsNullOrEmpty(CompanyId))
+                if (UseCompanyScope)
                 {
-                    _subscription = await AppTierService.GetCompanySubscriptionAsync(AppId, CompanyId);
+                    _subscription = await AppTierService.GetCompanySubscriptionAsync(AppId, CompanyId!);
+                }
+                else if (UseUserScope)
+                {
+                    _subscription = await AppTierService.GetUserSubscriptionAsync(AppId, UserId!);
                 }
                 else
                 {

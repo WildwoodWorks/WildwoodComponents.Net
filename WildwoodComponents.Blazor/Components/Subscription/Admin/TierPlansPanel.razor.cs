@@ -14,6 +14,8 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
         [Parameter, EditorRequired] public string AppId { get; set; } = string.Empty;
         [Parameter] public string? CompanyId { get; set; }
+        [Parameter] public string? UserId { get; set; }
+        [Parameter] public bool IsCompanyMode { get; set; }
         [Parameter] public bool IsAdmin { get; set; }
         [Parameter] public string Currency { get; set; } = "USD";
         [Parameter] public bool ShowBillingToggle { get; set; } = true;
@@ -24,6 +26,9 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         private UserTierSubscriptionModel? _currentSubscription;
         private string _selectedBillingCycle = "monthly";
         private bool _isProcessing;
+
+        private bool UseCompanyScope => IsCompanyMode && !string.IsNullOrEmpty(CompanyId);
+        private bool UseUserScope => !IsCompanyMode && !string.IsNullOrEmpty(UserId);
 
         protected override async Task OnComponentInitializedAsync()
         {
@@ -38,9 +43,13 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 _tiers = await AppTierService.GetAvailableTiersAsync(AppId);
                 SortTiersByDisplayOrder(_tiers);
 
-                if (!string.IsNullOrEmpty(CompanyId))
+                if (UseCompanyScope)
                 {
-                    _currentSubscription = await AppTierService.GetCompanySubscriptionAsync(AppId, CompanyId);
+                    _currentSubscription = await AppTierService.GetCompanySubscriptionAsync(AppId, CompanyId!);
+                }
+                else if (UseUserScope)
+                {
+                    _currentSubscription = await AppTierService.GetUserSubscriptionAsync(AppId, UserId!);
                 }
                 else
                 {

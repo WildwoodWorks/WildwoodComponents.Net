@@ -14,6 +14,8 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
         [Parameter, EditorRequired] public string AppId { get; set; } = string.Empty;
         [Parameter] public string? CompanyId { get; set; }
+        [Parameter] public string? UserId { get; set; }
+        [Parameter] public bool IsCompanyMode { get; set; }
         [Parameter] public bool IsAdmin { get; set; }
         [Parameter] public string? CurrentTierId { get; set; }
         [Parameter] public EventCallback OnSubscriptionChanged { get; set; }
@@ -22,6 +24,9 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         private List<AppTierAddOnModel> _availableAddOns = new();
         private bool _isProcessing;
         private string? _processingAddOnId;
+
+        private bool UseCompanyScope => IsCompanyMode && !string.IsNullOrEmpty(CompanyId);
+        private bool UseUserScope => !IsCompanyMode && !string.IsNullOrEmpty(UserId);
 
         protected override async Task OnComponentInitializedAsync()
         {
@@ -35,9 +40,13 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 await SetLoadingAsync(true);
 
                 // Load active add-on subscriptions
-                if (!string.IsNullOrEmpty(CompanyId))
+                if (UseCompanyScope)
                 {
                     _activeSubscriptions = await AppTierService.GetCompanyAddOnSubscriptionsAsync(AppId, CompanyId);
+                }
+                else if (UseUserScope)
+                {
+                    _activeSubscriptions = await AppTierService.GetUserAddOnsAsync(AppId, UserId);
                 }
                 else
                 {
@@ -74,9 +83,13 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             try
             {
                 bool success;
-                if (!string.IsNullOrEmpty(CompanyId))
+                if (UseCompanyScope)
                 {
                     success = await AppTierService.SubscribeCompanyToAddOnAsync(AppId, CompanyId, addOnId);
+                }
+                else if (UseUserScope)
+                {
+                    success = await AppTierService.SubscribeUserToAddOnAsync(AppId, UserId, addOnId);
                 }
                 else
                 {
@@ -117,9 +130,13 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             try
             {
                 bool success;
-                if (!string.IsNullOrEmpty(CompanyId))
+                if (UseCompanyScope)
                 {
                     success = await AppTierService.CancelCompanyAddOnAsync(subscriptionId, immediate);
+                }
+                else if (UseUserScope)
+                {
+                    success = await AppTierService.CancelUserAddOnAsync(AppId, subscriptionId);
                 }
                 else
                 {

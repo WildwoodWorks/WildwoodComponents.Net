@@ -219,6 +219,26 @@ public class AppFeatureDefinitionModel
 
 #endregion
 
+#region Feature Override Models
+
+public class AppFeatureOverrideModel
+{
+    public string Id { get; set; } = string.Empty;
+    public string AppId { get; set; } = string.Empty;
+    public string CompanyId { get; set; } = string.Empty;
+    public string? UserId { get; set; }
+    public string FeatureCode { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; }
+    public string? Reason { get; set; }
+    public DateTime? ExpiresAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+    public string? UpdatedBy { get; set; }
+}
+
+#endregion
+
 #region Display Mode
 
 public enum SubscriptionDisplayMode

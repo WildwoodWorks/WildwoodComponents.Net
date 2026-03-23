@@ -1,0 +1,105 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Shared.Models
+@inherits BaseWildwoodComponent
+
+@if (IsLoading)
+{
+    <div class="text-center p-3">
+        <div class="spinner-border spinner-border-sm text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else if (_overrides.Count == 0)
+{
+    <div class="ww-overrides-empty">
+        <i class="fas fa-shield-halved me-2"></i>No active feature overrides.
+    </div>
+}
+else
+{
+    <div class="ww-overrides-panel">
+        <div class="ww-overrides-header">
+            <span class="ww-overrides-count">
+                <i class="fas fa-user-shield me-1"></i>@_overrides.Count active @(_overrides.Count == 1 ? "override" : "overrides")
+            </span>
+        </div>
+
+        <div class="ww-overrides-table-wrapper">
+            <table class="ww-overrides-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Status</th>
+                        <th>Reason</th>
+                        <th>Expires</th>
+                        <th>Created</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var ov in _overrides)
+                    {
+                        <tr class="@(IsProcessing(ov.FeatureCode) ? "ww-override-removing" : "")">
+                            <td class="ww-override-feature">
+                                <code>@ov.FeatureCode</code>
+                            </td>
+                            <td>
+                                <span class="ww-override-status @(ov.IsEnabled ? "ww-override-enabled" : "ww-override-disabled")">
+                                    @(ov.IsEnabled ? "Enabled" : "Disabled")
+                                </span>
+                            </td>
+                            <td class="ww-override-reason">
+                                @if (!string.IsNullOrEmpty(ov.Reason))
+                                {
+                                    @ov.Reason
+                                }
+                                else
+                                {
+                                    <span class="ww-override-none">-</span>
+                                }
+                            </td>
+                            <td class="ww-override-expires">
+                                @if (ov.ExpiresAt.HasValue)
+                                {
+                                    @FormatDate(ov.ExpiresAt)
+                                }
+                                else
+                                {
+                                    <span class="ww-override-none">Never</span>
+                                }
+                            </td>
+                            <td class="ww-override-created">
+                                @FormatDate(ov.CreatedAt)
+                            </td>
+                            <td class="ww-override-actions">
+                                @if (IsProcessing(ov.FeatureCode))
+                                {
+                                    <span class="spinner-border spinner-border-sm"></span>
+                                }
+                                else
+                                {
+                                    @if (ov.ExpiresAt.HasValue)
+                                    {
+                                        <button type="button"
+                                                class="ww-override-permanent-btn"
+                                                title="Make permanent (remove expiration)"
+                                                @onclick="@(() => MakePermanent(ov))">
+                                            <i class="fas fa-infinity"></i>
+                                        </button>
+                                    }
+                                    <button type="button"
+                                            class="ww-override-remove-btn"
+                                            title="Remove override (revert to tier-based)"
+                                            @onclick="@(() => RemoveOverride(ov))">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
