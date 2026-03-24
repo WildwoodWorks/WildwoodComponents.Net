@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace WildwoodComponents.Shared.Models;
 
 #region App Tier Models
@@ -208,6 +210,7 @@ public class AppTierLimitStatusModel
 
 public class AppFeatureDefinitionModel
 {
+    [JsonPropertyName("code")]
     public string FeatureCode { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;

@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Logging;
 using WildwoodComponents.Blazor.Components.Base;
 using WildwoodComponents.Blazor.Models;
 using WildwoodComponents.Blazor.Services;
@@ -79,6 +80,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             }
             catch (Exception ex)
             {
+                Logger?.LogError(ex, "[SubscriptionAdmin] Failed to load tracking mode for AppId={AppId}", AppId);
                 await HandleErrorAsync(ex, "Loading tracking mode");
             }
         }

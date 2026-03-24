@@ -2,6 +2,14 @@
 @using WildwoodComponents.Shared.Models
 @inherits BaseWildwoodComponent
 
+@if (!string.IsNullOrEmpty(ErrorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show mb-2" role="alert" style="font-size: 0.85rem;">
+        <i class="fas fa-exclamation-circle me-1"></i>@ErrorMessage
+        <button type="button" class="btn-close btn-close-sm" @onclick="ClearError"></button>
+    </div>
+}
+
 @if (IsLoading)
 {
     <div class="ww-features-loading text-center p-4">
@@ -19,13 +27,6 @@ else if (_features.Count == 0)
 else
 {
     <div class="ww-features-panel">
-        @if (!string.IsNullOrEmpty(ErrorMessage))
-        {
-            <div class="alert alert-danger alert-dismissible fade show mb-2" role="alert" style="font-size: 0.85rem;">
-                <i class="fas fa-exclamation-circle me-1"></i>@ErrorMessage
-                <button type="button" class="btn-close btn-close-sm" @onclick="ClearError"></button>
-            </div>
-        }
 
         <div class="ww-features-summary">
             <span class="ww-features-summary-icon">

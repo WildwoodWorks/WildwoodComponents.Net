@@ -20,7 +20,6 @@ namespace WildwoodComponents.Blazor.Services
         {
             PropertyNameCaseInsensitive = true
         };
-
         public AppTierComponentService(HttpClient httpClient, ILogger<AppTierComponentService> logger)
         {
             _httpClient = httpClient;
@@ -148,10 +147,9 @@ namespace WildwoodComponents.Blazor.Services
         {
             try
             {
-                var url = BuildUrl($"app-tiers/{appId}/subscribe");
+                var url = BuildUrl($"app-tiers/{appId}/my-subscription");
                 var body = new
                 {
-                    AppId = appId,
                     AppTierId = tierId,
                     AppTierPricingId = pricingId,
                     PaymentTransactionId = paymentTransactionId
@@ -167,12 +165,11 @@ namespace WildwoodComponents.Blazor.Services
                 }
 
                 var errorBody = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("Failed to subscribe to tier: {StatusCode} - {Body}", response.StatusCode, errorBody);
                 return new AppTierChangeResultModel { Success = false, ErrorMessage = errorBody };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error subscribing to tier {TierId} for app {AppId}", tierId, appId);
+                _logger.LogError(ex, "[AppTierService] Error subscribing to tier {TierId} for app {AppId}", tierId, appId);
                 return new AppTierChangeResultModel { Success = false, ErrorMessage = ex.Message };
             }
         }
@@ -181,10 +178,9 @@ namespace WildwoodComponents.Blazor.Services
         {
             try
             {
-                var url = BuildUrl($"app-tiers/{appId}/change-tier");
+                var url = BuildUrl($"app-tiers/{appId}/my-subscription/change");
                 var body = new
                 {
-                    AppId = appId,
                     NewAppTierId = newTierId,
                     NewAppTierPricingId = newPricingId,
                     Immediate = immediate
@@ -213,7 +209,7 @@ namespace WildwoodComponents.Blazor.Services
         {
             try
             {
-                var url = BuildUrl($"app-tiers/{appId}/cancel-subscription");
+                var url = BuildUrl($"app-tiers/{appId}/my-subscription/cancel");
                 var response = await _httpClient.PostAsync(url, null);
                 return response.IsSuccessStatusCode;
             }
@@ -351,7 +347,7 @@ namespace WildwoodComponents.Blazor.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error subscribing company {CompanyId} to tier {TierId}", companyId, tierId);
+                _logger.LogError(ex, "[AppTierService] Error subscribing company {CompanyId} to tier {TierId}", companyId, tierId);
                 return new AppTierChangeResultModel { Success = false, ErrorMessage = ex.Message };
             }
         }
@@ -532,12 +528,11 @@ namespace WildwoodComponents.Blazor.Services
                 }
 
                 var errorBody = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("Failed to subscribe user {UserId} to tier: {StatusCode} - {Body}", userId, response.StatusCode, errorBody);
                 return new AppTierChangeResultModel { Success = false, ErrorMessage = errorBody };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error subscribing user {UserId} to tier {TierId} for app {AppId}", userId, tierId, appId);
+                _logger.LogError(ex, "[AppTierService] Error subscribing user {UserId} to tier {TierId} for app {AppId}", userId, tierId, appId);
                 return new AppTierChangeResultModel { Success = false, ErrorMessage = ex.Message };
             }
         }
@@ -803,26 +798,19 @@ namespace WildwoodComponents.Blazor.Services
 
         public async Task<bool> SetFeatureOverrideAsync(string appId, string? userId, string featureCode, bool isEnabled, string? reason = null, DateTime? expiresAt = null)
         {
-            try
+            var url = BuildUrl($"app-tiers/{appId}/admin/feature-overrides");
+            var body = new
             {
-                var url = BuildUrl($"app-tiers/{appId}/admin/feature-overrides");
-                var body = new
-                {
-                    UserId = userId,
-                    FeatureCode = featureCode,
-                    IsEnabled = isEnabled,
-                    Reason = reason,
-                    ExpiresAt = expiresAt
-                };
-                var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-                var response = await _httpClient.PostAsync(url, content);
-                return response.IsSuccessStatusCode;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error setting feature override {FeatureCode} for app {AppId}", featureCode, appId);
-                return false;
-            }
+                UserId = userId,
+                FeatureCode = featureCode,
+                IsEnabled = isEnabled,
+                Reason = reason,
+                ExpiresAt = expiresAt
+            };
+            var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync(url, content);
+            await EnsureSuccessAsync(response, $"SetFeatureOverride({appId}, {featureCode})");
+            return true;
         }
 
         public async Task<bool> RemoveFeatureOverrideAsync(string appId, string? userId, string featureCode)
