@@ -1,0 +1,209 @@
+@using WildwoodComponents.Shared.Models
+@model WildwoodComponents.Razor.Models.SubscriptionAdminViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var showSingle = Model.DisplayMode != SubscriptionDisplayMode.All;
+    var initialTab = showSingle ? Model.DisplayMode.ToString().ToLower() : (Model.ShowStatusAboveTabs ? "plans" : "subscription");
+    bool ShouldShowTab(string tab) => Model.DisplayMode == SubscriptionDisplayMode.All || string.Equals(Model.DisplayMode.ToString(), tab, StringComparison.OrdinalIgnoreCase);
+}
+
+<div class="ww-subscription-admin-component"
+     id="ww-sub-admin-@cid"
+     data-component-id="@cid"
+     data-app-id="@Model.AppId"
+     data-proxy-url="@Model.ProxyBaseUrl"
+     data-company-id="@(Model.CompanyId ?? "")"
+     data-user-id="@(Model.UserId ?? "")"
+     data-is-admin="@Model.IsAdmin.ToString().ToLower()"
+     data-is-company-mode="@Model.IsCompanyMode.ToString().ToLower()"
+     data-currency="@Model.Currency"
+     data-active-tab="@initialTab">
+
+    @* Message area *@
+    <div class="ww-sub-admin-message alert" style="display:none;" id="ww-sub-admin-msg-@cid"></div>
+
+    @* Loading overlay *@
+    <div class="ww-sub-admin-loading" style="display:none;" id="ww-sub-admin-loading-@cid">
+        <div class="d-flex align-items-center justify-content-center p-4">
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            <span class="ww-sub-admin-loading-msg">Processing...</span>
+        </div>
+    </div>
+
+    @* Status above tabs (optional) *@
+    @if (Model.ShowStatusAboveTabs && ShouldShowTab("subscription"))
+    {
+        <div class="ww-sub-admin-status-above mb-3" id="ww-sub-admin-status-above-@cid">
+            @await Component.InvokeAsync("SubscriptionStatusPanel", new {
+                componentId = cid + "-status",
+                appId = Model.AppId,
+                proxyBaseUrl = Model.ProxyBaseUrl,
+                isAdmin = Model.IsAdmin,
+                subscription = Model.Subscription
+            })
+        </div>
+    }
+
+    @if (!showSingle)
+    {
+        @* Tab navigation *@
+        <ul class="nav nav-tabs ww-sub-admin-tabs mb-3" id="ww-sub-admin-tabs-@cid" role="tablist">
+            @if (!Model.ShowStatusAboveTabs && ShouldShowTab("subscription"))
+            {
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link ww-sub-admin-tab @(initialTab == "subscription" ? "active" : "")"
+                            data-tab="subscription" type="button" role="tab">
+                        <i class="bi bi-credit-card me-1"></i> Subscription
+                    </button>
+                </li>
+            }
+            @if (ShouldShowTab("plans"))
+            {
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link ww-sub-admin-tab @(initialTab == "plans" ? "active" : "")"
+                            data-tab="plans" type="button" role="tab">
+                        <i class="bi bi-grid me-1"></i> Plans
+                    </button>
+                </li>
+            }
+            @if (ShouldShowTab("features"))
+            {
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link ww-sub-admin-tab @(initialTab == "features" ? "active" : "")"
+                            data-tab="features" type="button" role="tab">
+                        <i class="bi bi-toggles me-1"></i> Features
+                    </button>
+                </li>
+            }
+            @if (Model.IsAdmin && ShouldShowTab("features"))
+            {
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link ww-sub-admin-tab @(initialTab == "overrides" ? "active" : "")"
+                            data-tab="overrides" type="button" role="tab">
+                        <i class="bi bi-shield-exclamation me-1"></i> Overrides
+                        @if (Model.OverrideCount > 0)
+                        {
+                            <span class="badge bg-warning text-dark ms-1 ww-override-count">@Model.OverrideCount</span>
+                        }
+                    </button>
+                </li>
+            }
+            @if (ShouldShowTab("addons"))
+            {
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link ww-sub-admin-tab @(initialTab == "addons" ? "active" : "")"
+                            data-tab="addons" type="button" role="tab">
+                        <i class="bi bi-puzzle me-1"></i> Add-Ons
+                    </button>
+                </li>
+            }
+            @if (ShouldShowTab("usage"))
+            {
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link ww-sub-admin-tab @(initialTab == "usage" ? "active" : "")"
+                            data-tab="usage" type="button" role="tab">
+                        <i class="bi bi-bar-chart me-1"></i> Usage
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+
+    @* Tab panels *@
+    <div class="ww-sub-admin-panels" id="ww-sub-admin-panels-@cid">
+        @if (!Model.ShowStatusAboveTabs && ShouldShowTab("subscription"))
+        {
+            <div class="ww-sub-admin-panel @(initialTab == "subscription" ? "" : "d-none")" data-panel="subscription"
+                 id="ww-sub-admin-panel-subscription-@cid">
+                @await Component.InvokeAsync("SubscriptionStatusPanel", new {
+                    componentId = cid + "-status",
+                    appId = Model.AppId,
+                    proxyBaseUrl = Model.ProxyBaseUrl,
+                    isAdmin = Model.IsAdmin,
+                    subscription = Model.Subscription
+                })
+            </div>
+        }
+
+        @if (ShouldShowTab("plans"))
+        {
+            <div class="ww-sub-admin-panel @(initialTab == "plans" ? "" : "d-none")" data-panel="plans"
+                 id="ww-sub-admin-panel-plans-@cid">
+                @await Component.InvokeAsync("TierPlansPanel", new {
+                    componentId = cid + "-plans",
+                    appId = Model.AppId,
+                    proxyBaseUrl = Model.ProxyBaseUrl,
+                    currency = Model.Currency,
+                    showBillingToggle = Model.ShowBillingToggle,
+                    isAdmin = Model.IsAdmin,
+                    subscription = Model.Subscription
+                })
+            </div>
+        }
+
+        @if (ShouldShowTab("features"))
+        {
+            <div class="ww-sub-admin-panel @(initialTab == "features" ? "" : "d-none")" data-panel="features"
+                 id="ww-sub-admin-panel-features-@cid">
+                @await Component.InvokeAsync("FeaturesPanel", new {
+                    componentId = cid + "-features",
+                    appId = Model.AppId,
+                    proxyBaseUrl = Model.ProxyBaseUrl,
+                    isAdmin = Model.IsAdmin,
+                    isCompanyMode = Model.IsCompanyMode,
+                    companyId = Model.CompanyId,
+                    userId = Model.UserId
+                })
+            </div>
+        }
+
+        @if (Model.IsAdmin && ShouldShowTab("features"))
+        {
+            <div class="ww-sub-admin-panel @(initialTab == "overrides" ? "" : "d-none")" data-panel="overrides"
+                 id="ww-sub-admin-panel-overrides-@cid">
+                @await Component.InvokeAsync("OverridesPanel", new {
+                    componentId = cid + "-overrides",
+                    appId = Model.AppId,
+                    proxyBaseUrl = Model.ProxyBaseUrl,
+                    isCompanyMode = Model.IsCompanyMode,
+                    userId = Model.UserId
+                })
+            </div>
+        }
+
+        @if (ShouldShowTab("addons"))
+        {
+            <div class="ww-sub-admin-panel @(initialTab == "addons" ? "" : "d-none")" data-panel="addons"
+                 id="ww-sub-admin-panel-addons-@cid">
+                @await Component.InvokeAsync("AddOnsPanel", new {
+                    componentId = cid + "-addons",
+                    appId = Model.AppId,
+                    proxyBaseUrl = Model.ProxyBaseUrl,
+                    isAdmin = Model.IsAdmin,
+                    currency = Model.Currency,
+                    isCompanyMode = Model.IsCompanyMode,
+                    companyId = Model.CompanyId,
+                    userId = Model.UserId,
+                    subscription = Model.Subscription
+                })
+            </div>
+        }
+
+        @if (ShouldShowTab("usage"))
+        {
+            <div class="ww-sub-admin-panel @(initialTab == "usage" ? "" : "d-none")" data-panel="usage"
+                 id="ww-sub-admin-panel-usage-@cid">
+                @await Component.InvokeAsync("UsageLimitsPanel", new {
+                    componentId = cid + "-usage",
+                    appId = Model.AppId,
+                    proxyBaseUrl = Model.ProxyBaseUrl,
+                    isAdmin = Model.IsAdmin,
+                    isCompanyMode = Model.IsCompanyMode,
+                    companyId = Model.CompanyId,
+                    userId = Model.UserId
+                })
+            </div>
+        }
+    </div>
+</div>

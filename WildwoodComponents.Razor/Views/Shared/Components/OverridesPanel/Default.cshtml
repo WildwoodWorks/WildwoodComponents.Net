@@ -1,0 +1,83 @@
+@model WildwoodComponents.Razor.Models.OverridesPanelViewModel
+
+@{
+    var cid = Model.ComponentId;
+}
+
+<div class="ww-overrides-panel" id="ww-overrides-@cid" data-component-id="@cid">
+    @if (!Model.Overrides.Any())
+    {
+        <div class="text-center text-muted p-4">
+            <i class="bi bi-shield-check me-1"></i> No active feature overrides.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm table-hover ww-overrides-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Status</th>
+                        <th>Reason</th>
+                        <th>Expires</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var ovr in Model.Overrides)
+                    {
+                        <tr class="ww-override-row" data-feature-code="@ovr.FeatureCode">
+                            <td class="fw-semibold">@ovr.FeatureCode</td>
+                            <td>
+                                @if (ovr.IsEnabled)
+                                {
+                                    <span class="badge bg-success">Enabled</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-danger">Disabled</span>
+                                }
+                            </td>
+                            <td class="text-muted small">@(ovr.Reason ?? "—")</td>
+                            <td class="small">
+                                @if (ovr.ExpiresAt.HasValue)
+                                {
+                                    <span class="@(ovr.ExpiresAt.Value < DateTime.UtcNow ? "text-danger" : "")">
+                                        @ovr.ExpiresAt.Value.ToString("MMM d, yyyy h:mm tt")
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Permanent</span>
+                                }
+                            </td>
+                            <td class="small text-muted">@ovr.CreatedAt.ToString("MMM d, yyyy")</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-outline-danger ww-remove-override-btn"
+                                            data-feature-code="@ovr.FeatureCode"
+                                            data-action="remove-override"
+                                            title="Remove override (revert to tier-based)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    @if (ovr.ExpiresAt.HasValue)
+                                    {
+                                        <button type="button" class="btn btn-outline-secondary ww-permanent-override-btn"
+                                                data-feature-code="@ovr.FeatureCode"
+                                                data-is-enabled="@ovr.IsEnabled.ToString().ToLower()"
+                                                data-action="make-permanent"
+                                                title="Make permanent (remove expiration)">
+                                            <i class="bi bi-infinity"></i>
+                                        </button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

@@ -1,0 +1,116 @@
+@model WildwoodComponents.Razor.Models.FeaturesPanelViewModel
+
+@{
+    var cid = Model.ComponentId;
+}
+
+<div class="ww-features-panel" id="ww-features-@cid" data-component-id="@cid">
+    @if (!Model.FeatureGroups.Any())
+    {
+        <div class="text-center text-muted p-4">
+            <i class="bi bi-info-circle me-1"></i> No features configured.
+        </div>
+    }
+    else
+    {
+        @foreach (var group in Model.FeatureGroups)
+        {
+            <div class="ww-feature-group mb-4">
+                <h6 class="text-muted border-bottom pb-2 mb-3">
+                    <i class="bi bi-folder me-1"></i> @group.Category
+                </h6>
+
+                <div class="list-group">
+                    @foreach (var feature in group.Features)
+                    {
+                        <div class="list-group-item ww-feature-item d-flex justify-content-between align-items-center"
+                             data-feature-code="@feature.FeatureCode">
+                            <div>
+                                <div class="d-flex align-items-center">
+                                    @if (!string.IsNullOrEmpty(feature.IconClass))
+                                    {
+                                        <i class="@feature.IconClass me-2"></i>
+                                    }
+                                    <span class="fw-semibold">@feature.DisplayName</span>
+
+                                    @if (feature.IsEnabled)
+                                    {
+                                        <span class="badge bg-success ms-2"><i class="bi bi-check"></i> Enabled</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary ms-2"><i class="bi bi-lock"></i> Locked</span>
+                                    }
+
+                                    @if (feature.HasOverride && feature.Override != null)
+                                    {
+                                        <span class="badge bg-warning text-dark ms-1" title="Admin override@(!string.IsNullOrEmpty(feature.Override.Reason) ? $": {feature.Override.Reason}" : "")@(feature.Override.ExpiresAt.HasValue ? $" (expires {feature.Override.ExpiresAt.Value:MMM d, yyyy})" : "")">
+                                            <i class="bi bi-shield-exclamation"></i> Override
+                                        </span>
+                                    }
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(feature.Description))
+                                {
+                                    <div class="text-muted small mt-1">@feature.Description</div>
+                                }
+                            </div>
+
+                            @if (Model.IsAdmin)
+                            {
+                                <div class="d-flex align-items-center gap-2">
+                                    <button type="button"
+                                            class="btn btn-sm @(feature.IsEnabled ? "btn-outline-danger" : "btn-outline-success") ww-toggle-feature-btn"
+                                            data-feature-code="@feature.FeatureCode"
+                                            data-current-state="@feature.IsEnabled.ToString().ToLower()"
+                                            data-action="toggle-feature">
+                                        @(feature.IsEnabled ? "Disable" : "Enable")
+                                    </button>
+                                </div>
+                            }
+                        </div>
+
+                        @* Inline confirmation (hidden by default) *@
+                        @if (Model.IsAdmin)
+                        {
+                            <div class="list-group-item ww-feature-confirm bg-light" style="display:none;"
+                                 data-confirm-for="@feature.FeatureCode" id="ww-feature-confirm-@cid-@feature.FeatureCode">
+                                <div class="small">
+                                    <strong>@(feature.IsEnabled ? "Disable" : "Enable") @feature.DisplayName?</strong>
+                                    <div class="row g-2 mt-1">
+                                        <div class="col-auto">
+                                            <select class="form-select form-select-sm ww-override-expiration">
+                                                <option value="">No expiration</option>
+                                                <option value="1h">1 Hour</option>
+                                                <option value="24h">24 Hours</option>
+                                                <option value="7d">7 Days</option>
+                                                <option value="30d">30 Days</option>
+                                                <option value="90d">90 Days</option>
+                                            </select>
+                                        </div>
+                                        <div class="col">
+                                            <input type="text" class="form-control form-control-sm ww-override-reason"
+                                                   placeholder="Reason (optional)" maxlength="200" />
+                                        </div>
+                                        <div class="col-auto">
+                                            <button type="button" class="btn btn-sm btn-primary ww-confirm-toggle-btn"
+                                                    data-feature-code="@feature.FeatureCode"
+                                                    data-new-state="@((!feature.IsEnabled).ToString().ToLower())"
+                                                    data-action="confirm-toggle">
+                                                Confirm
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-secondary ww-cancel-toggle-btn"
+                                                    data-feature-code="@feature.FeatureCode" data-action="cancel-toggle">
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>

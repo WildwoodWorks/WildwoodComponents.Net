@@ -1,0 +1,121 @@
+@model WildwoodComponents.Razor.Models.UsageLimitsPanelViewModel
+
+@{
+    var cid = Model.ComponentId;
+
+    string ProgressBarClass(WildwoodComponents.Shared.Models.AppTierLimitStatusModel limit)
+    {
+        if (limit.IsUnlimited) return "bg-success";
+        if (limit.IsHardBlocked || limit.IsExceeded) return "bg-danger";
+        if (limit.IsAtWarningThreshold) return "bg-warning";
+        return "bg-success";
+    }
+
+    string BadgeClass(WildwoodComponents.Shared.Models.AppTierLimitStatusModel limit)
+    {
+        if (limit.IsUnlimited) return "bg-success";
+        if (limit.IsHardBlocked) return "bg-danger";
+        if (limit.IsExceeded) return "bg-danger";
+        if (limit.IsAtWarningThreshold) return "bg-warning";
+        return "bg-success";
+    }
+
+    string BadgeText(WildwoodComponents.Shared.Models.AppTierLimitStatusModel limit)
+    {
+        if (limit.IsUnlimited) return "Unlimited";
+        if (limit.IsHardBlocked) return "Blocked";
+        if (limit.IsExceeded) return "Exceeded";
+        if (limit.IsAtWarningThreshold) return "Warning";
+        return "OK";
+    }
+}
+
+<div class="ww-usage-limits-panel" id="ww-usage-limits-@cid" data-component-id="@cid">
+    @if (!Model.LimitStatuses.Any())
+    {
+        <div class="text-center text-muted p-4">
+            <i class="bi bi-info-circle me-1"></i> No usage limits configured.
+        </div>
+    }
+    else
+    {
+        <div class="row g-3">
+            @foreach (var limit in Model.LimitStatuses)
+            {
+                var pctCapped = Math.Min(limit.UsagePercent, 100);
+                <div class="col-md-6">
+                    <div class="card ww-usage-card" data-limit-code="@limit.LimitCode">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">@limit.DisplayName</h6>
+                                <span class="badge @BadgeClass(limit)">@BadgeText(limit)</span>
+                            </div>
+
+                            @* Usage bar *@
+                            <div class="ww-usage-values small text-muted mb-1">
+                                @if (limit.IsUnlimited)
+                                {
+                                    <span>@limit.CurrentUsage.ToString("N0") @limit.Unit (unlimited)</span>
+                                }
+                                else
+                                {
+                                    <span>@limit.CurrentUsage.ToString("N0") / @limit.MaxValue.ToString("N0") @limit.Unit (@limit.UsagePercent.ToString("F0")%)</span>
+                                }
+                            </div>
+
+                            <div class="progress ww-usage-progress" style="height: 8px;">
+                                <div class="progress-bar @ProgressBarClass(limit)"
+                                     role="progressbar"
+                                     style="width: @(limit.IsUnlimited ? 30 : pctCapped)%"
+                                     aria-valuenow="@limit.CurrentUsage"
+                                     aria-valuemin="0"
+                                     aria-valuemax="@limit.MaxValue">
+                                </div>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(limit.StatusMessage))
+                            {
+                                <div class="small mt-1 @(limit.IsExceeded || limit.IsHardBlocked ? "text-danger" : limit.IsAtWarningThreshold ? "text-warning" : "text-muted")">
+                                    @limit.StatusMessage
+                                </div>
+                            }
+
+                            @* Admin actions *@
+                            @if (Model.IsAdmin)
+                            {
+                                <div class="mt-2 d-flex gap-2 align-items-center">
+                                    @* Edit limit *@
+                                    <div class="ww-edit-limit-view" style="display:none;" data-edit-for="@limit.LimitCode">
+                                        <div class="input-group input-group-sm" style="max-width: 200px;">
+                                            <input type="number" class="form-control ww-limit-input" value="@limit.MaxValue"
+                                                   min="-1" data-limit-code="@limit.LimitCode" />
+                                            <button type="button" class="btn btn-outline-success ww-save-limit-btn"
+                                                    data-limit-code="@limit.LimitCode" data-action="save-limit" title="Save">
+                                                <i class="bi bi-check"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary ww-cancel-edit-btn"
+                                                    data-limit-code="@limit.LimitCode" data-action="cancel-edit" title="Cancel">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="ww-limit-actions" data-actions-for="@limit.LimitCode">
+                                        <button type="button" class="btn btn-outline-primary btn-sm ww-edit-limit-btn"
+                                                data-limit-code="@limit.LimitCode" data-action="edit-limit" title="Edit limit">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-warning btn-sm ww-reset-usage-btn"
+                                                data-limit-code="@limit.LimitCode" data-action="reset-usage" title="Reset usage">
+                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>

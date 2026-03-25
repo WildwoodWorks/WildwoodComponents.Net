@@ -1,0 +1,124 @@
+/* WildwoodComponents.Razor - Subscription Admin Styles */
+
+.ww-subscription-admin-component {
+    --ww-admin-primary: var(--bs-primary, #0d6efd);
+    --ww-admin-success: var(--bs-success, #198754);
+    --ww-admin-danger: var(--bs-danger, #dc3545);
+    --ww-admin-warning: var(--bs-warning, #ffc107);
+    --ww-admin-info: var(--bs-info, #0dcaf0);
+}
+
+/* Loading overlay */
+.ww-sub-admin-loading {
+    position: relative;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.85);
+    border-radius: 0.375rem;
+}
+
+/* Tab styling */
+.ww-sub-admin-tabs .nav-link {
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.ww-sub-admin-tabs .nav-link .badge {
+    font-size: 0.65rem;
+    vertical-align: middle;
+}
+
+/* Status panel */
+.ww-sub-status-panel .card {
+    transition: box-shadow 0.2s ease;
+}
+
+.ww-sub-status-panel .card:hover {
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.08);
+}
+
+.ww-cancel-confirmation {
+    border-color: var(--ww-admin-danger);
+}
+
+/* Tier plans panel */
+.ww-admin-plan-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: default;
+}
+
+.ww-admin-plan-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+}
+
+.ww-admin-plan-card.border-primary {
+    border-width: 2px;
+}
+
+.ww-admin-price-option {
+    line-height: 1.2;
+}
+
+/* Features panel */
+.ww-feature-item {
+    transition: background-color 0.15s ease;
+}
+
+.ww-feature-item:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.ww-feature-confirm {
+    border-top: 0;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+/* Overrides panel */
+.ww-overrides-table th {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6c757d;
+    font-weight: 600;
+}
+
+.ww-override-row:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Add-ons panel */
+.ww-active-addon-card {
+    border-width: 2px;
+}
+
+.ww-available-addon-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ww-available-addon-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.1);
+}
+
+/* Usage limits panel */
+.ww-usage-card {
+    transition: box-shadow 0.2s ease;
+}
+
+.ww-usage-card:hover {
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.08);
+}
+
+.ww-usage-progress {
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.ww-usage-progress .progress-bar {
+    transition: width 0.3s ease;
+}
+
+.ww-edit-limit-view .input-group {
+    max-width: 220px;
+}

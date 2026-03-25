@@ -1,0 +1,99 @@
+@model WildwoodComponents.Razor.Models.SubscriptionStatusPanelViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var sub = Model.Subscription;
+}
+
+<div class="ww-sub-status-panel" id="ww-sub-status-@cid" data-component-id="@cid">
+    @if (sub == null)
+    {
+        <div class="card">
+            <div class="card-body text-center text-muted">
+                <i class="bi bi-info-circle me-1"></i> No active subscription.
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h5 class="card-title mb-1">
+                            @sub.TierName
+                            <span class="badge @Model.StatusBadgeClass ms-2">@sub.Status</span>
+                        </h5>
+                        @if (!string.IsNullOrEmpty(sub.TierDescription))
+                        {
+                            <p class="text-muted mb-0 small">@sub.TierDescription</p>
+                        }
+                    </div>
+                    @if (Model.IsAdmin && sub.IsActive)
+                    {
+                        <button type="button" class="btn btn-outline-danger btn-sm ww-cancel-sub-btn"
+                                data-action="cancel-subscription">
+                            <i class="bi bi-x-circle me-1"></i> Cancel
+                        </button>
+                    }
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-sm-6 col-md-3">
+                        <div class="small text-muted">Start Date</div>
+                        <div class="fw-semibold">@sub.StartDate.ToString("MMM d, yyyy")</div>
+                    </div>
+                    @if (sub.CurrentPeriodEnd.HasValue)
+                    {
+                        <div class="col-sm-6 col-md-3">
+                            <div class="small text-muted">Period End</div>
+                            <div class="fw-semibold">@sub.CurrentPeriodEnd.Value.ToString("MMM d, yyyy")</div>
+                        </div>
+                    }
+                    @if (sub.TrialEndDate.HasValue)
+                    {
+                        <div class="col-sm-6 col-md-3">
+                            <div class="small text-muted">Trial Ends</div>
+                            <div class="fw-semibold">@sub.TrialEndDate.Value.ToString("MMM d, yyyy")</div>
+                        </div>
+                    }
+                    @if (sub.GracePeriodEndDate.HasValue)
+                    {
+                        <div class="col-sm-6 col-md-3">
+                            <div class="small text-muted">Grace Period Ends</div>
+                            <div class="fw-semibold text-warning">@sub.GracePeriodEndDate.Value.ToString("MMM d, yyyy")</div>
+                        </div>
+                    }
+                </div>
+
+                @if (!string.IsNullOrEmpty(sub.PendingTierId))
+                {
+                    <div class="alert alert-info mt-3 mb-0 small">
+                        <i class="bi bi-arrow-right-circle me-1"></i>
+                        Pending change to <strong>@sub.PendingTierName</strong>
+                        @if (sub.PendingChangeDate.HasValue)
+                        {
+                            <span> on @sub.PendingChangeDate.Value.ToString("MMM d, yyyy")</span>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* Cancel confirmation (hidden by default) *@
+        <div class="ww-cancel-confirmation card mt-2" style="display:none;" id="ww-cancel-confirm-@cid">
+            <div class="card-body">
+                <h6 class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Cancel Subscription</h6>
+                <p class="small text-muted">Are you sure you want to cancel this subscription? This action cannot be undone.</p>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-danger btn-sm ww-confirm-cancel-btn" data-action="confirm-cancel">
+                        Yes, Cancel Subscription
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm ww-keep-sub-btn" data-action="keep-subscription">
+                        Keep Subscription
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>

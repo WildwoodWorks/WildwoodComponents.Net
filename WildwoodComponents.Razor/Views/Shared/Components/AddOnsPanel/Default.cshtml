@@ -1,0 +1,144 @@
+@model WildwoodComponents.Razor.Models.AddOnsPanelViewModel
+
+@{
+    var cid = Model.ComponentId;
+    string FormatPrice(decimal price) => price.ToString("C2", System.Globalization.CultureInfo.GetCultureInfo(Model.Currency == "EUR" ? "de-DE" : "en-US"));
+}
+
+<div class="ww-addons-panel" id="ww-addons-@cid" data-component-id="@cid">
+    @* Active Add-Ons *@
+    @if (Model.ActiveAddOns.Any())
+    {
+        <h6 class="text-muted mb-3"><i class="bi bi-check-circle me-1"></i> Active Add-Ons</h6>
+        <div class="row g-3 mb-4">
+            @foreach (var addon in Model.ActiveAddOns)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 border-success ww-active-addon-card" data-subscription-id="@addon.Id" data-addon-id="@addon.AppTierAddOnId">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <h6 class="card-title mb-1">@addon.AddOnName</h6>
+                                @if (addon.IsBundled)
+                                {
+                                    <span class="badge bg-info">Bundled</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">Active</span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrEmpty(addon.AddOnDescription))
+                            {
+                                <p class="text-muted small mb-2">@addon.AddOnDescription</p>
+                            }
+                            <div class="small text-muted mb-2">
+                                Since @addon.StartDate.ToString("MMM d, yyyy")
+                                @if (addon.TrialEndDate.HasValue && addon.TrialEndDate > DateTime.UtcNow)
+                                {
+                                    <span class="badge bg-info ms-1">Trial until @addon.TrialEndDate.Value.ToString("MMM d")</span>
+                                }
+                            </div>
+                            @if (!addon.IsBundled)
+                            {
+                                <button type="button" class="btn btn-outline-danger btn-sm ww-cancel-addon-btn"
+                                        data-subscription-id="@addon.Id"
+                                        data-addon-name="@addon.AddOnName"
+                                        data-action="cancel-addon">
+                                    <i class="bi bi-x-circle me-1"></i> Cancel
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @* Available Add-Ons *@
+    <h6 class="text-muted mb-3"><i class="bi bi-puzzle me-1"></i> Available Add-Ons</h6>
+    @if (!Model.AvailableAddOns.Any())
+    {
+        <div class="text-center text-muted p-3">
+            No additional add-ons available.
+        </div>
+    }
+    else
+    {
+        <div class="row g-3">
+            @foreach (var addon in Model.AvailableAddOns)
+            {
+                var isSubscribed = Model.ActiveAddOns.Any(a => a.AppTierAddOnId == addon.Id);
+                var isBundled = !string.IsNullOrEmpty(Model.CurrentTierId) && addon.BundledInTierIds.Contains(Model.CurrentTierId);
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 ww-available-addon-card @(isSubscribed ? "border-success" : "")" data-addon-id="@addon.Id">
+                        <div class="card-body d-flex flex-column">
+                            <div class="d-flex align-items-center mb-2">
+                                @if (!string.IsNullOrEmpty(addon.IconClass))
+                                {
+                                    <i class="@addon.IconClass me-2 fs-5"></i>
+                                }
+                                <h6 class="card-title mb-0">@addon.Name</h6>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(addon.Description))
+                            {
+                                <p class="text-muted small mb-2">@addon.Description</p>
+                            }
+
+                            @* Features *@
+                            @if (addon.Features.Any())
+                            {
+                                <ul class="list-unstyled small mb-2">
+                                    @foreach (var feature in addon.Features)
+                                    {
+                                        <li><i class="bi bi-check text-success me-1"></i> @feature.DisplayName</li>
+                                    }
+                                </ul>
+                            }
+
+                            @* Pricing *@
+                            @if (addon.PricingOptions.Any())
+                            {
+                                <div class="mb-2">
+                                    @foreach (var pricing in addon.PricingOptions.Take(1))
+                                    {
+                                        <span class="fw-bold">@FormatPrice(pricing.Price)</span>
+                                        <span class="text-muted small">/@pricing.BillingFrequency</span>
+                                    }
+                                </div>
+                            }
+
+                            @if (addon.TrialDays.HasValue && addon.TrialDays > 0)
+                            {
+                                <div class="small text-info mb-2">
+                                    <i class="bi bi-clock me-1"></i> @(addon.TrialDays)-day free trial
+                                </div>
+                            }
+
+                            <div class="mt-auto">
+                                @if (isSubscribed)
+                                {
+                                    <span class="text-success small"><i class="bi bi-check-circle me-1"></i> Subscribed</span>
+                                }
+                                else if (isBundled)
+                                {
+                                    <span class="text-info small"><i class="bi bi-box me-1"></i> Included in plan</span>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-primary btn-sm ww-subscribe-addon-btn"
+                                            data-addon-id="@addon.Id"
+                                            data-addon-name="@addon.Name"
+                                            data-action="subscribe-addon">
+                                        <i class="bi bi-plus-circle me-1"></i> Subscribe
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
