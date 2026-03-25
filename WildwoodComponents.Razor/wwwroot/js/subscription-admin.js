@@ -256,6 +256,28 @@
                     priceOptions[i].classList.add('d-none');
                 }
             }
+
+            // Fallback: if a tier card has no visible price for this cycle, show its default or first option
+            var planCards = root.querySelectorAll('.ww-admin-plan-card');
+            for (var j = 0; j < planCards.length; j++) {
+                var options = planCards[j].querySelectorAll('.ww-admin-price-option');
+                var anyVisible = false;
+                for (var k = 0; k < options.length; k++) {
+                    if (!options[k].classList.contains('d-none')) { anyVisible = true; break; }
+                }
+                if (!anyVisible && options.length > 0) {
+                    // Show default option first, or first option as fallback
+                    var shown = false;
+                    for (var k = 0; k < options.length; k++) {
+                        if (options[k].dataset.isDefault === 'true') {
+                            options[k].classList.remove('d-none');
+                            shown = true;
+                            break;
+                        }
+                    }
+                    if (!shown) options[0].classList.remove('d-none');
+                }
+            }
         });
 
         // ===== FEATURES: TOGGLE =====

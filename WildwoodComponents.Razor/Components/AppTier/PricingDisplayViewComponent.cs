@@ -35,6 +35,7 @@ public class PricingDisplayViewComponent : ViewComponent
     /// <param name="showLimits">Whether to show tier limits (default: true)</param>
     /// <param name="currency">Currency code for price display (default: USD)</param>
     /// <param name="enterpriseContactUrl">URL for enterprise contact link</param>
+    /// <param name="selectTierUrl">URL for tier selection CTA (renders as link). If null, dispatches CustomEvent instead.</param>
     /// <param name="preSelectedTierId">Pre-selected tier to highlight</param>
     /// <param name="preloadedTiers">Pre-loaded tiers (skip API call)</param>
     public async Task<IViewComponentResult> InvokeAsync(
@@ -47,6 +48,7 @@ public class PricingDisplayViewComponent : ViewComponent
         bool showLimits = true,
         string currency = "USD",
         string? enterpriseContactUrl = null,
+        string? selectTierUrl = null,
         string? preSelectedTierId = null,
         List<AppTierModel>? preloadedTiers = null)
     {
@@ -82,6 +84,7 @@ public class PricingDisplayViewComponent : ViewComponent
             ShowLimits = showLimits,
             Currency = currency,
             EnterpriseContactUrl = enterpriseContactUrl,
+            SelectTierUrl = selectTierUrl,
             PreSelectedTierId = preSelectedTierId,
             Tiers = tiers,
             HasMonthlyAndAnnual = HasBothBillingCycles(tiers)

@@ -49,6 +49,7 @@ public class PricingDisplayViewModel
     public bool ShowLimits { get; set; } = true;
     public string Currency { get; set; } = "USD";
     public string? EnterpriseContactUrl { get; set; }
+    public string? SelectTierUrl { get; set; }
     public string? PreSelectedTierId { get; set; }
     public List<AppTierModel> Tiers { get; set; } = new();
     public bool HasMonthlyAndAnnual { get; set; }

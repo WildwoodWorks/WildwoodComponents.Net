@@ -180,6 +180,26 @@
                                 Contact Sales
                             </a>
                         }
+                        else if (tier.ShowSubscribeButton)
+                        {
+                            @if (!string.IsNullOrEmpty(Model.SelectTierUrl))
+                            {
+                                <a href="@Model.SelectTierUrl?tierId=@tier.Id"
+                                   class="btn @(tier.IsDefault || isPreSelected ? "btn-primary" : "btn-outline-primary") w-100">
+                                    @(tier.IsFreeTier ? "Get Started" : "Select Plan")
+                                </a>
+                            }
+                            else
+                            {
+                                <button type="button"
+                                        class="btn @(tier.IsDefault || isPreSelected ? "btn-primary" : "btn-outline-primary") w-100 ww-select-tier-btn"
+                                        data-tier-id="@tier.Id"
+                                        data-tier-name="@tier.Name"
+                                        data-is-free="@tier.IsFreeTier.ToString().ToLower()">
+                                    @(tier.IsFreeTier ? "Get Started" : "Select Plan")
+                                </button>
+                            }
+                        }
                     </div>
                 </div>
             </div>
@@ -229,37 +249,4 @@
         </div>
     }
 </div>
-
-<style>
-    .ww-pricing-display-component {
-        --ww-pricing-bg: var(--ww-bg-primary, #ffffff);
-        --ww-pricing-border: var(--ww-border-color, #dee2e6);
-        --ww-pricing-highlight: var(--ww-primary, #0d6efd);
-    }
-
-    .ww-pricing-card {
-        background: var(--ww-pricing-bg);
-        border-color: var(--ww-pricing-border);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .ww-pricing-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-    }
-
-    .ww-pricing-card.ww-highlighted {
-        border-width: 2px;
-        border-color: var(--ww-pricing-highlight);
-    }
-
-    .ww-pricing-comparison .ww-feature-col {
-        min-width: 200px;
-    }
-
-    .ww-pricing-comparison th,
-    .ww-pricing-comparison td {
-        vertical-align: middle;
-    }
-</style>
 
