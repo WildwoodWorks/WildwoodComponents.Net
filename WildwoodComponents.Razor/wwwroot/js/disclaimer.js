@@ -14,7 +14,7 @@
 
     function initDisclaimer(root) {
         var cid = root.dataset.componentId;
-        var proxyUrl = root.dataset.proxyUrl;
+        var proxyUrl = (root.dataset.proxyUrl || '').replace(/\/+$/, '');
 
         var acceptBtn = root.querySelector('.ww-disclaimer-accept-all-btn');
         var cancelBtn = root.querySelector('.ww-disclaimer-cancel-btn');
@@ -74,6 +74,12 @@
             if (acceptances.length === 0) return;
 
             setLoading(true);
+
+            if (!proxyUrl) {
+                showMessage('Configuration error: missing proxy URL.', 'danger');
+                setLoading(false);
+                return;
+            }
 
             fetch(proxyUrl + '/accept', {
                 method: 'POST',

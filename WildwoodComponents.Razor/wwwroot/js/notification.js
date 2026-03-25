@@ -47,12 +47,16 @@
             if (idx === -1) return;
 
             var item = items[idx];
+            if (item._dismissing) return;
+            item._dismissing = true;
             if (item.timer) clearTimeout(item.timer);
             item.el.classList.add('ww-notif-removing');
 
             setTimeout(function () {
                 if (item.el.parentNode) item.el.parentNode.removeChild(item.el);
-                items.splice(idx, 1);
+                // Re-find index since array may have shifted
+                var curIdx = items.indexOf(item);
+                if (curIdx !== -1) items.splice(curIdx, 1);
                 updateDismissAll();
             }, 300);
         }
@@ -202,12 +206,16 @@
             if (idx === -1) return;
 
             var item = items[idx];
+            if (item._dismissing) return;
+            item._dismissing = true;
             if (item.timer) clearTimeout(item.timer);
             item.el.classList.add('ww-toast-removing');
 
             setTimeout(function () {
                 if (item.el.parentNode) item.el.parentNode.removeChild(item.el);
-                items.splice(idx, 1);
+                // Re-find index since array may have shifted
+                var curIdx = items.indexOf(item);
+                if (curIdx !== -1) items.splice(curIdx, 1);
                 updateDismissAll();
             }, 300);
         }

@@ -16,7 +16,7 @@
 
     function initSubscription(root) {
         var cid = root.dataset.componentId;
-        var proxyBase = root.dataset.proxyBase;
+        var proxyBase = (root.dataset.proxyBase || '').replace(/\/+$/, '');
         var currency = root.dataset.currency || 'USD';
         var annualDiscount = parseInt(root.dataset.annualDiscount || '0', 10);
 
@@ -111,7 +111,7 @@
 
     function initSubscriptionManager(root) {
         var cid = root.dataset.componentId;
-        var proxyBase = root.dataset.proxyBase;
+        var proxyBase = (root.dataset.proxyBase || '').replace(/\/+$/, '');
 
         var messageEl = root.querySelector('.ww-sub-manager-message');
         var loadingEl = root.querySelector('.ww-sub-manager-loading');

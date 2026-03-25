@@ -32,6 +32,9 @@
         var cardName = root.querySelector('.ww-pf-card-name');
         var submitBtn = root.querySelector('.ww-pf-submit-btn');
 
+        var loadingTimer = null;
+        var loadingTimeoutMs = parseInt(root.dataset.loadingTimeout || '30000', 10);
+
         // ===== VIEW MANAGEMENT =====
 
         function showView(view) {
@@ -136,6 +139,12 @@
 
                 showView('loading');
 
+                // Safety timeout for stuck loading state
+                if (loadingTimer) clearTimeout(loadingTimer);
+                loadingTimer = setTimeout(function () {
+                    showError('Payment processing timed out. Please try again.');
+                }, loadingTimeoutMs);
+
                 var exp = cardExpiry.value.split('/');
                 var payload = {
                     amount: amount,
@@ -161,12 +170,19 @@
                     };
                 }
 
-                fetch(proxyBase + '/process', {
+                fetch(proxyBase.replace(/\/+$/, '') + '/process', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 })
-                    .then(function (r) { return r.json(); })
+                    .then(function (r) {
+                        if (!r.ok) {
+                            return r.json().catch(function () { return {}; }).then(function (result) {
+                                throw new Error(result.errorMessage || result.error || 'Payment failed (HTTP ' + r.status + ')');
+                            });
+                        }
+                        return r.json();
+                    })
                     .then(function (result) {
                         if (result.success || result.transactionId) {
                             var txnId = root.querySelector('.ww-pf-txn-id code');
@@ -185,6 +201,9 @@
                     })
                     .catch(function (err) {
                         showError('Payment error: ' + err.message);
+                    })
+                    .finally(function () {
+                        if (loadingTimer) { clearTimeout(loadingTimer); loadingTimer = null; }
                     });
             });
         }

@@ -9,12 +9,15 @@
 
     var roots = document.querySelectorAll('.ww-2fa-settings-component');
     for (var r = 0; r < roots.length; r++) {
-        init2FA(roots[r]);
+        if (!roots[r]._ww2faInit) {
+            roots[r]._ww2faInit = true;
+            init2FA(roots[r]);
+        }
     }
 
     function init2FA(root) {
         var cid = root.dataset.componentId;
-        var proxyUrl = root.dataset.proxyUrl;
+        var proxyUrl = (root.dataset.proxyUrl || '').replace(/\/+$/, '');
         var messageEl = document.getElementById('ww-2fa-message-' + cid);
 
         // ===== HELPERS =====

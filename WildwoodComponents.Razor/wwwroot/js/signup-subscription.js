@@ -14,9 +14,9 @@
     function initSignupSubscription(root) {
         var cid = root.dataset.componentId;
         var appId = root.dataset.appId;
-        var authProxy = root.dataset.authProxy;
-        var subProxy = root.dataset.subProxy;
-        var paymentProxy = root.dataset.paymentProxy;
+        var authProxy = (root.dataset.authProxy || '').replace(/\/+$/, '');
+        var subProxy = (root.dataset.subProxy || '').replace(/\/+$/, '');
+        var paymentProxy = (root.dataset.paymentProxy || '').replace(/\/+$/, '');
         var returnUrl = root.dataset.returnUrl;
         var allowRegistration = root.dataset.allowRegistration === 'true';
         var currency = root.dataset.currency || 'USD';
@@ -153,7 +153,14 @@
                         appId: appId
                     })
                 })
-                    .then(function (r) { return r.json(); })
+                    .then(function (r) {
+                        if (!r.ok) {
+                            return r.json().catch(function () { return {}; }).then(function (result) {
+                                throw new Error(result.message || result.error || 'Registration failed (HTTP ' + r.status + ')');
+                            });
+                        }
+                        return r.json();
+                    })
                     .then(function (result) {
                         setLoading(false);
                         if (result.jwtToken || result.success) {
