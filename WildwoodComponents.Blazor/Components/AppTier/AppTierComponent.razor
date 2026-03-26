@@ -97,6 +97,10 @@
                                         <span class="ww-tier-price-interval">/@(pricing.BillingFrequency?.ToLower() ?? "month")</span>
                                     }
                                 </div>
+                                @if (pricing != null && pricing.HasTrial)
+                                {
+                                    <div class="ww-tier-trial-badge">@pricing.TrialDays-day free trial</div>
+                                }
                             }
                         </div>
 
@@ -186,6 +190,10 @@
                                     @if (isPreSelected)
                                     {
                                         <text>Continue with This Plan</text>
+                                    }
+                                    else if (pricing != null && pricing.HasTrial)
+                                    {
+                                        <text>Start @pricing.TrialDays-Day Free Trial</text>
                                     }
                                     else if (tier.IsFreeTier && _currentSubscription != null && _currentSubscription.IsActive)
                                     {
@@ -507,7 +515,14 @@
                 <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
             </div>
             <h3>Welcome to @_selectedTier?.Name!</h3>
-            <p class="text-muted">Your subscription is now active.</p>
+            @if (_currentSubscription?.TrialEndDate.HasValue == true)
+            {
+                <p class="text-muted">Your free trial has started!</p>
+            }
+            else
+            {
+                <p class="text-muted">Your subscription is now active.</p>
+            }
 
             @if (_currentSubscription?.TrialEndDate.HasValue == true)
             {

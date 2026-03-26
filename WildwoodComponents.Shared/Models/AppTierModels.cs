@@ -38,6 +38,11 @@ public class AppTierPricingModel
     public string PricingModelName { get; set; } = string.Empty;
     public decimal Price { get; set; }
     public string BillingFrequency { get; set; } = string.Empty;
+    public int? TrialDays { get; set; }
+    public bool HasTrial
+    {
+        get { return TrialDays.HasValue && TrialDays.Value > 0; }
+    }
 
     public string BillingFrequencyLabel
     {

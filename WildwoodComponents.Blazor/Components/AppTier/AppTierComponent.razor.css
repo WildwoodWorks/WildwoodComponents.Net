@@ -3,6 +3,13 @@
     margin: 0 auto;
 }
 
+.ww-tier-trial-badge {
+    color: var(--ww-success, #198754);
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-top: 0.25rem;
+}
+
 /* Add-on Section */
 .ww-addon-section {
     margin-top: 2.5rem;

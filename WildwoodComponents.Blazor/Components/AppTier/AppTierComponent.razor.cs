@@ -134,6 +134,10 @@ namespace WildwoodComponents.Blazor.Components.AppTier
             {
                 _ = SubscribeToFreeTier();
             }
+            else if (_selectedPricing != null && _selectedPricing.HasTrial)
+            {
+                _ = SubscribeToTrialTier();
+            }
             else
             {
                 // Paid tier - go to payment step
@@ -167,6 +171,39 @@ namespace WildwoodComponents.Blazor.Components.AppTier
             catch (Exception ex)
             {
                 await HandleErrorAsync(ex, "Subscribing to free tier");
+            }
+            finally
+            {
+                _isProcessing = false;
+                StateHasChanged();
+            }
+        }
+
+        private async Task SubscribeToTrialTier()
+        {
+            if (_selectedTier == null || _selectedPricing == null) return;
+
+            _isProcessing = true;
+            StateHasChanged();
+
+            try
+            {
+                var result = await AppTierService.SubscribeToTierAsync(AppId, _selectedTier.Id, _selectedPricing.Id, null);
+
+                if (result.Success)
+                {
+                    _currentSubscription = result.Subscription;
+                    _currentStep = AppTierComponentStep.Success;
+                    await NotifySubscriptionChanged(_selectedTier, "subscribed");
+                }
+                else
+                {
+                    await HandleErrorAsync(new Exception(result.ErrorMessage), "Starting trial subscription");
+                }
+            }
+            catch (Exception ex)
+            {
+                await HandleErrorAsync(ex, "Starting trial subscription");
             }
             finally
             {
@@ -260,6 +297,10 @@ namespace WildwoodComponents.Blazor.Components.AppTier
                 if (_selectedTier.IsFreeTier)
                 {
                     await SubscribeToFreeTier();
+                }
+                else if (_selectedPricing != null && _selectedPricing.HasTrial)
+                {
+                    await SubscribeToTrialTier();
                 }
                 else
                 {
