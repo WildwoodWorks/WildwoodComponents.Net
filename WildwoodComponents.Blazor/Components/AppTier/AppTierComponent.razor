@@ -229,12 +229,18 @@
                                     <h6 class="mb-1">Current Subscription</h6>
                                     <p class="mb-0">
                                         <strong>@_currentSubscription.TierName</strong>
-                                        <span class="badge bg-success ms-2">@_currentSubscription.Status</span>
+                                        <span class="badge @(_currentSubscription.Status == "Trialing" ? "bg-info" : "bg-success") ms-2">@_currentSubscription.Status</span>
                                     </p>
                                     @if (_currentSubscription.CurrentPeriodEnd.HasValue)
                                     {
                                         <small class="text-muted">
                                             Renews: @_currentSubscription.CurrentPeriodEnd.Value.ToString("MMM dd, yyyy")
+                                        </small>
+                                    }
+                                    @if (_currentSubscription.Status == "Trialing" && _currentSubscription.TrialEndDate.HasValue)
+                                    {
+                                        <small class="text-muted">
+                                            Trial ends: @_currentSubscription.TrialEndDate.Value.ToString("MMM dd, yyyy")
                                         </small>
                                     }
                                     @if (!string.IsNullOrEmpty(_currentSubscription.PendingTierName))
