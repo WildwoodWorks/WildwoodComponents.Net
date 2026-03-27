@@ -1,0 +1,243 @@
+@page "/test/theme"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Services
+@inject IComponentThemeService ThemeService
+@inject ComponentLifecycleTracker LifecycleTracker
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="Theme System Test" ComponentName="IComponentThemeService" IconClass="fas fa-palette"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">Primary Color</label>
+            <input type="color" class="form-control form-control-sm form-control-color" @bind="primaryColor" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Secondary Color</label>
+            <input type="color" class="form-control form-control-sm form-control-color" @bind="secondaryColor" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Success Color</label>
+            <input type="color" class="form-control form-control-sm form-control-color" @bind="successColor" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Danger Color</label>
+            <input type="color" class="form-control form-control-sm form-control-color" @bind="dangerColor" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Font Family</label>
+            <select class="form-select form-select-sm" @bind="fontFamily">
+                <option value="system-ui, -apple-system, sans-serif">System Default</option>
+                <option value="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif">Segoe UI</option>
+                <option value="Georgia, 'Times New Roman', serif">Georgia (Serif)</option>
+                <option value="'Courier New', Courier, monospace">Courier (Monospace)</option>
+            </select>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Border Radius</label>
+            <select class="form-select form-select-sm" @bind="borderRadius">
+                <option value="0">None (0)</option>
+                <option value="0.25rem">Small (0.25rem)</option>
+                <option value="0.375rem">Default (0.375rem)</option>
+                <option value="0.75rem">Large (0.75rem)</option>
+                <option value="1rem">Extra Large (1rem)</option>
+            </select>
+        </div>
+    </Settings>
+    <Component>
+        <div class="mb-4">
+            <h5 class="mb-3">Quick Theme Presets</h5>
+            <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-sm btn-outline-primary" @onclick="@(() => ApplyPreset("default"))">Default</button>
+                <button class="btn btn-sm btn-outline-success" @onclick="@(() => ApplyPreset("forest-green"))">Forest Green</button>
+                <button class="btn btn-sm btn-outline-info" @onclick="@(() => ApplyPreset("ocean-breeze"))">Ocean Breeze</button>
+                <button class="btn btn-sm btn-outline-warning" @onclick="@(() => ApplyPreset("sunset-glow"))">Sunset Glow</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="@(() => ApplyPreset("midnight-dark"))">Midnight Dark</button>
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <h5 class="mb-3">Current CSS Variables</h5>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Variable</th>
+                            <th>Value</th>
+                            <th>Preview</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>--ww-primary</code></td>
+                            <td>@primaryColor</td>
+                            <td><span class="d-inline-block rounded" style="width:24px;height:24px;background:@primaryColor"></span></td>
+                        </tr>
+                        <tr>
+                            <td><code>--ww-secondary</code></td>
+                            <td>@secondaryColor</td>
+                            <td><span class="d-inline-block rounded" style="width:24px;height:24px;background:@secondaryColor"></span></td>
+                        </tr>
+                        <tr>
+                            <td><code>--ww-success</code></td>
+                            <td>@successColor</td>
+                            <td><span class="d-inline-block rounded" style="width:24px;height:24px;background:@successColor"></span></td>
+                        </tr>
+                        <tr>
+                            <td><code>--ww-danger</code></td>
+                            <td>@dangerColor</td>
+                            <td><span class="d-inline-block rounded" style="width:24px;height:24px;background:@dangerColor"></span></td>
+                        </tr>
+                        <tr>
+                            <td><code>--ww-font-family</code></td>
+                            <td>@fontFamily</td>
+                            <td><span style="font-family:@fontFamily">Sample Text</span></td>
+                        </tr>
+                        <tr>
+                            <td><code>--ww-border-radius</code></td>
+                            <td>@borderRadius</td>
+                            <td><span class="d-inline-block border border-primary" style="width:40px;height:24px;border-radius:@borderRadius"></span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <h5 class="mb-3">Component Preview</h5>
+            <div class="card" style="max-width: 400px; border-radius: @borderRadius; font-family: @fontFamily;">
+                <div class="card-header" style="background: @primaryColor; color: white; border-radius: @borderRadius @borderRadius 0 0;">
+                    Sample Component
+                </div>
+                <div class="card-body">
+                    <p style="font-family: @fontFamily;">This card demonstrates how the current theme settings affect component appearance.</p>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm" style="background: @primaryColor; color: white; border-radius: @borderRadius;">Primary</button>
+                        <button class="btn btn-sm" style="background: @secondaryColor; color: white; border-radius: @borderRadius;">Secondary</button>
+                        <button class="btn btn-sm" style="background: @successColor; color: white; border-radius: @borderRadius;">Success</button>
+                        <button class="btn btn-sm" style="background: @dangerColor; color: white; border-radius: @borderRadius;">Danger</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string primaryColor = "#007bff";
+    private string secondaryColor = "#6c757d";
+    private string successColor = "#28a745";
+    private string dangerColor = "#dc3545";
+    private string fontFamily = "system-ui, -apple-system, sans-serif";
+    private string borderRadius = "0.375rem";
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        LifecycleTracker.TrackInitialized("ThemeTest");
+
+        var currentTheme = await ThemeService.GetCurrentThemeAsync();
+        if (currentTheme != null)
+        {
+            primaryColor = currentTheme.PrimaryColor;
+            secondaryColor = currentTheme.SecondaryColor;
+            successColor = currentTheme.SuccessColor;
+            dangerColor = currentTheme.DangerColor;
+            fontFamily = currentTheme.FontFamily;
+            borderRadius = currentTheme.BorderRadius;
+        }
+
+        AddEvent("Theme system initialized, loaded current theme");
+    }
+
+    private async Task ApplyPreset(string preset)
+    {
+        switch (preset)
+        {
+            case "default":
+                primaryColor = "#007bff"; secondaryColor = "#6c757d";
+                successColor = "#28a745"; dangerColor = "#dc3545";
+                fontFamily = "system-ui, -apple-system, sans-serif"; borderRadius = "0.375rem";
+                break;
+            case "forest-green":
+                primaryColor = "#2d6a4f"; secondaryColor = "#52796f";
+                successColor = "#40916c"; dangerColor = "#bc4749";
+                fontFamily = "Georgia, 'Times New Roman', serif"; borderRadius = "0.5rem";
+                break;
+            case "ocean-breeze":
+                primaryColor = "#0077b6"; secondaryColor = "#48cae4";
+                successColor = "#06d6a0"; dangerColor = "#ef476f";
+                fontFamily = "system-ui, -apple-system, sans-serif"; borderRadius = "0.75rem";
+                break;
+            case "sunset-glow":
+                primaryColor = "#e76f51"; secondaryColor = "#f4a261";
+                successColor = "#2a9d8f"; dangerColor = "#e63946";
+                fontFamily = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"; borderRadius = "0.25rem";
+                break;
+            case "midnight-dark":
+                primaryColor = "#6c63ff"; secondaryColor = "#a29bfe";
+                successColor = "#00cec9"; dangerColor = "#ff7675";
+                fontFamily = "system-ui, -apple-system, sans-serif"; borderRadius = "0.5rem";
+                break;
+        }
+
+        await ApplyThemeAsync();
+        AddEvent($"Applied preset: {preset}");
+    }
+
+    private async Task ApplyThemeAsync()
+    {
+        var theme = new ComponentTheme
+        {
+            PrimaryColor = primaryColor,
+            SecondaryColor = secondaryColor,
+            SuccessColor = successColor,
+            DangerColor = dangerColor,
+            FontFamily = fontFamily,
+            BorderRadius = borderRadius
+        };
+
+        await ThemeService.SetThemeAsync(theme);
+        LifecycleTracker.TrackCallback("ThemeTest", "SetThemeAsync", $"Primary={primaryColor}");
+        AddEvent($"Theme applied - Primary: {primaryColor}, Secondary: {secondaryColor}");
+    }
+
+    private async void ApplySettings()
+    {
+        await ApplyThemeAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async void ResetSettings()
+    {
+        primaryColor = "#007bff";
+        secondaryColor = "#6c757d";
+        successColor = "#28a745";
+        dangerColor = "#dc3545";
+        fontFamily = "system-ui, -apple-system, sans-serif";
+        borderRadius = "0.375rem";
+
+        await ThemeService.ResetThemeAsync();
+        events.Clear();
+        AddEvent("Theme reset to defaults");
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}

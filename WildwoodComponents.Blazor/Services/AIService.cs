@@ -54,19 +54,7 @@ namespace WildwoodComponents.Blazor.Services
         Task<(string AudioBase64, string ContentType)?> SynthesizeSpeechAsync(string text, string voice, double speed = 1.0, string? configurationId = null);
     }
 
-    /// <summary>
-    /// TTS Voice model for client-side use.
-    /// </summary>
-    public class TTSVoice
-    {
-        public string Id { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-        public string Gender { get; set; } = string.Empty;
-        public string Language { get; set; } = string.Empty;
-        public string? Description { get; set; }
-        public bool IsDefault { get; set; }
-        public string Provider { get; set; } = string.Empty;
-    }
+    // TTSVoice now lives in WildwoodComponents.Shared.Models
 
     /// <summary>
     /// AI Service implementation for chat, configuration, and session management.

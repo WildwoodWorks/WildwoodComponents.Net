@@ -130,7 +130,7 @@
                 IsVisible = true,
                 IsDismissible = true
             };
-            await NotificationService.ShowAsync(notification);
+            NotificationService.Show(notification);
             AddEvent($"Sent notification via service: [{testType}] {testTitle}");
         }
     }

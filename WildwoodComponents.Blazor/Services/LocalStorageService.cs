@@ -102,7 +102,7 @@ namespace WildwoodComponents.Blazor.Services
             }
             catch (System.Text.Json.JsonException ex)
             {
-                _logger.LogWarning(ex, "Failed to deserialize localStorage item {Key}, clearing invalid data", key);
+                _logger.LogWarning(ex, "Failed to deserialize localStorage item {Key} (type: {Type}), clearing invalid data. Raw value preserved in log.", key, typeof(T).Name);
                 await RemoveItemAsync(key);
                 return default;
             }

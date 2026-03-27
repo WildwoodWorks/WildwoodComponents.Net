@@ -44,10 +44,7 @@ namespace WildwoodComponents.Blazor.Services
             _httpClient.DefaultRequestHeaders.Authorization = 
                 new AuthenticationHeaderValue("Bearer", token);
             
-            // Debug logging
-            var tokenPreview = token?.Length > 20 ? token.Substring(0, 20) + "..." : token ?? "(null)";
-            Console.WriteLine($"[PaymentProviderService] SetAuthToken called - Token: {tokenPreview}, Length: {token?.Length ?? 0}");
-            Console.WriteLine($"[PaymentProviderService] Authorization header set: {_httpClient.DefaultRequestHeaders.Authorization}");
+            _logger.LogDebug("SetAuthToken called - Length: {Length}", token?.Length ?? 0);
         }
 
         /// <summary>
@@ -58,23 +55,19 @@ namespace WildwoodComponents.Blazor.Services
         {
             if (string.IsNullOrEmpty(apiKey))
             {
-                Console.WriteLine("[PaymentProviderService] SetApiKey called with null/empty key");
+                _logger.LogWarning("SetApiKey called with null/empty key");
                 return;
             }
 
-            // Remove existing header if present
             _httpClient.DefaultRequestHeaders.Remove("X-API-Key");
             _httpClient.DefaultRequestHeaders.Add("X-API-Key", apiKey);
-            
-            var keyPreview = apiKey.Length > 8 ? apiKey.Substring(0, 8) + "..." : apiKey;
-            Console.WriteLine($"[PaymentProviderService] SetApiKey called - Key: {keyPreview}");
+            _logger.LogDebug("API key set");
         }
 
         public void SetApiBaseUrl(string apiBaseUrl)
         {
             _apiBaseUrl = apiBaseUrl ?? string.Empty;
-            Console.WriteLine($"[PaymentProviderService] SetApiBaseUrl: {apiBaseUrl}");
-            _logger.LogInformation("?? PaymentProviderService: API base URL set to: {ApiBaseUrl}", _apiBaseUrl);
+            _logger.LogInformation("API base URL set to: {ApiBaseUrl}", _apiBaseUrl);
         }
 
         public async Task<AppPaymentConfigurationDto?> GetAppPaymentConfigurationAsync(string appId)
@@ -82,42 +75,36 @@ namespace WildwoodComponents.Blazor.Services
             try
             {
                 var url = $"{_apiBaseUrl}/payment/configuration/{appId}";
-                Console.WriteLine($"[PaymentProviderService] GetAppPaymentConfigurationAsync - URL: {url}");
+                _logger.LogDebug("[PaymentProviderService] GetAppPaymentConfigurationAsync - URL: {url}");
                 
                 var response = await _httpClient.GetAsync(url);
                 
-                Console.WriteLine($"[PaymentProviderService] GetAppPaymentConfigurationAsync - Response: {response.StatusCode}");
+                _logger.LogDebug("[PaymentProviderService] GetAppPaymentConfigurationAsync - Response: {response.StatusCode}");
 
                 if (response.IsSuccessStatusCode)
                 {
                     var content = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"[PaymentProviderService] GetAppPaymentConfigurationAsync - Raw JSON: {content.Substring(0, Math.Min(1000, content.Length))}...");
+                    _logger.LogDebug("[PaymentProviderService] GetAppPaymentConfigurationAsync - Raw JSON: {content.Substring(0, Math.Min(1000, content.Length))}...");
                     
                     var config = await response.Content.ReadFromJsonAsync<AppPaymentConfigurationDto>(JsonOptions);
                     
                     if (config != null)
                     {
-                        Console.WriteLine($"[PaymentProviderService] Loaded {config.Providers.Count} providers for app {appId}");
-                        foreach (var provider in config.Providers)
-                        {
-                            Console.WriteLine($"[PaymentProviderService]   - Provider: {provider.Name} (Type: {provider.ProviderType})");
-                            Console.WriteLine($"[PaymentProviderService]     ClientId: {(string.IsNullOrEmpty(provider.ClientId) ? "EMPTY" : provider.ClientId.Substring(0, Math.Min(20, provider.ClientId.Length)) + "...")}" );
-                            Console.WriteLine($"[PaymentProviderService]     PublishableKey: {(string.IsNullOrEmpty(provider.PublishableKey) ? "EMPTY" : "present")}");
-                        }
+                        _logger.LogDebug("Loaded {ProviderCount} providers for app {AppId}", config.Providers.Count, appId);
                     }
                     
                     return config;
                 }
 
                 var errorContent = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"[PaymentProviderService] GetAppPaymentConfigurationAsync - Error: {errorContent}");
+                _logger.LogDebug("[PaymentProviderService] GetAppPaymentConfigurationAsync - Error: {errorContent}");
                 _logger.LogWarning("Failed to get payment configuration for app {AppId}: {StatusCode}",
                     appId, response.StatusCode);
                 return null;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[PaymentProviderService] GetAppPaymentConfigurationAsync - Exception: {ex.Message}");
+                _logger.LogDebug("[PaymentProviderService] GetAppPaymentConfigurationAsync - Exception: {ex.Message}");
                 _logger.LogError(ex, "Error getting payment configuration for app {AppId}", appId);
                 return null;
             }
@@ -132,7 +119,7 @@ namespace WildwoodComponents.Blazor.Services
                 
                 if (config == null)
                 {
-                    Console.WriteLine($"[PaymentProviderService] GetAvailableProvidersAsync - No config returned for appId: {appId}");
+                    _logger.LogDebug("[PaymentProviderService] GetAvailableProvidersAsync - No config returned for appId: {appId}");
                     return new PlatformFilteredProvidersDto
                     {
                         AppId = appId,
@@ -145,16 +132,16 @@ namespace WildwoodComponents.Blazor.Services
                 var requiresAppStore = _platformService.RequiresAppStorePayment;
                 var requiredProviderType = _platformService.RequiredAppStoreProviderType;
 
-                Console.WriteLine($"[PaymentProviderService] GetAvailableProvidersAsync - Platform: {_platformService.CurrentPlatform}, Flags: {platformFlags}, RequiresAppStore: {requiresAppStore}");
-                Console.WriteLine($"[PaymentProviderService] GetAvailableProvidersAsync - Received {config.Providers.Count} providers from API (BEFORE client-side filtering)");
+                _logger.LogDebug("[PaymentProviderService] GetAvailableProvidersAsync - Platform: {_platformService.CurrentPlatform}, Flags: {platformFlags}, RequiresAppStore: {requiresAppStore}");
+                _logger.LogDebug("[PaymentProviderService] GetAvailableProvidersAsync - Received {config.Providers.Count} providers from API (BEFORE client-side filtering)");
 
                 // Log all providers from API before filtering
                 if (config.Providers.Count > 0)
                 {
-                    Console.WriteLine($"[PaymentProviderService] === PROVIDERS FROM API (before filtering) ===");
+                    _logger.LogDebug("[PaymentProviderService] === PROVIDERS FROM API (before filtering) ===");
                     foreach (var p in config.Providers)
                     {
-                        Console.WriteLine($"[PaymentProviderService]   {p.Name}: Type={p.ProviderType}, Enabled={p.IsEnabled}, AllowedPlatforms={p.AllowedPlatforms}, HasKey={!string.IsNullOrEmpty(p.PublishableKey) || !string.IsNullOrEmpty(p.ClientId)}");
+                        _logger.LogDebug("[PaymentProviderService]   {p.Name}: Type={p.ProviderType}, Enabled={p.IsEnabled}, AllowedPlatforms={p.AllowedPlatforms}, HasKey={!string.IsNullOrEmpty(p.PublishableKey) || !string.IsNullOrEmpty(p.ClientId)}");
                     }
                 }
 
@@ -165,23 +152,23 @@ namespace WildwoodComponents.Blazor.Services
                 // Filter providers based on platform
                 foreach (var provider in config.Providers)
                 {
-                    Console.WriteLine($"[PaymentProviderService] Checking provider: {provider.Name} (Type: {provider.ProviderType})");
-                    Console.WriteLine($"[PaymentProviderService]   IsEnabled: {provider.IsEnabled}, AllowedPlatforms: {provider.AllowedPlatforms} (need flag {platformFlags})");
+                    _logger.LogDebug("[PaymentProviderService] Checking provider: {provider.Name} (Type: {provider.ProviderType})");
+                    _logger.LogDebug("[PaymentProviderService]   IsEnabled: {provider.IsEnabled}, AllowedPlatforms: {provider.AllowedPlatforms} (need flag {platformFlags})");
                     
                     if (!provider.IsEnabled)
                     {
-                        Console.WriteLine($"[PaymentProviderService]   SKIPPED: Not enabled");
+                        _logger.LogDebug("[PaymentProviderService]   SKIPPED: Not enabled");
                         continue;
                     }
 
                     // Check platform compatibility
                     var platformMatch = (provider.AllowedPlatforms & platformFlags) != 0;
-                    Console.WriteLine($"[PaymentProviderService]   Platform check: ({provider.AllowedPlatforms} & {platformFlags}) = {provider.AllowedPlatforms & platformFlags}, match: {platformMatch}");
+                    _logger.LogDebug("[PaymentProviderService]   Platform check: ({provider.AllowedPlatforms} & {platformFlags}) = {provider.AllowedPlatforms & platformFlags}, match: {platformMatch}");
                     
                     if (!platformMatch)
                     {
-                        Console.WriteLine($"[PaymentProviderService]   SKIPPED: Platform {_platformService.CurrentPlatform} (flag {platformFlags}) not in AllowedPlatforms {provider.AllowedPlatforms}");
-                        Console.WriteLine($"[PaymentProviderService]   FIX: Update AllowedPlatforms to include Web (1). Current value: {provider.AllowedPlatforms}. To include Web, set to: {provider.AllowedPlatforms | 1}");
+                        _logger.LogDebug("[PaymentProviderService]   SKIPPED: Platform {_platformService.CurrentPlatform} (flag {platformFlags}) not in AllowedPlatforms {provider.AllowedPlatforms}");
+                        _logger.LogDebug("[PaymentProviderService]   FIX: Update AllowedPlatforms to include Web (1). Current value: {provider.AllowedPlatforms}. To include Web, set to: {provider.AllowedPlatforms | 1}");
                         continue;
                     }
 
@@ -195,28 +182,28 @@ namespace WildwoodComponents.Blazor.Services
                             filteredProviders.Add(provider);
                             requiredProviderId = provider.Id;
                             defaultProvider = provider;
-                            Console.WriteLine($"[PaymentProviderService]   SELECTED: Required app store provider");
+                            _logger.LogDebug("[PaymentProviderService]   SELECTED: Required app store provider");
                             break;
                         }
-                        Console.WriteLine($"[PaymentProviderService]   SKIPPED: App store exclusive but not required type");
+                        _logger.LogDebug("[PaymentProviderService]   SKIPPED: App store exclusive but not required type");
                         continue;
                     }
 
                     // Skip app store providers on non-required platforms
                     if (IsAppStoreProvider((PaymentProviderType)provider.ProviderType) && !requiresAppStore)
                     {
-                        Console.WriteLine($"[PaymentProviderService]   SKIPPED: App store provider on non-app-store platform");
+                        _logger.LogDebug("[PaymentProviderService]   SKIPPED: App store provider on non-app-store platform");
                         continue;
                     }
 
                     // Check if this provider is available on current platform
                     if (!_platformService.IsProviderAvailable(provider.ProviderType))
                     {
-                        Console.WriteLine($"[PaymentProviderService]   SKIPPED: Provider not available on platform (IsProviderAvailable returned false)");
+                        _logger.LogDebug("[PaymentProviderService]   SKIPPED: Provider not available on platform (IsProviderAvailable returned false)");
                         continue;
                     }
 
-                    Console.WriteLine($"[PaymentProviderService]   ADDED: Provider passed all checks");
+                    _logger.LogDebug("[PaymentProviderService]   ADDED: Provider passed all checks");
                     filteredProviders.Add(provider);
 
                     if (provider.IsDefault && defaultProvider == null)
@@ -230,8 +217,8 @@ namespace WildwoodComponents.Blazor.Services
                 if (defaultProvider == null && filteredProviders.Count > 0)
                     defaultProvider = filteredProviders[0];
 
-                Console.WriteLine($"[PaymentProviderService] GetAvailableProvidersAsync - Final count: {filteredProviders.Count} providers AFTER client-side filtering");
-                Console.WriteLine($"[PaymentProviderService] === SUMMARY: API returned {config.Providers.Count} providers, {filteredProviders.Count} passed client-side filtering ===");
+                _logger.LogDebug("[PaymentProviderService] GetAvailableProvidersAsync - Final count: {filteredProviders.Count} providers AFTER client-side filtering");
+                _logger.LogDebug("[PaymentProviderService] === SUMMARY: API returned {config.Providers.Count} providers, {filteredProviders.Count} passed client-side filtering ===");
 
                 return new PlatformFilteredProvidersDto
                 {
@@ -245,7 +232,7 @@ namespace WildwoodComponents.Blazor.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[PaymentProviderService] GetAvailableProvidersAsync - Exception: {ex.Message}");
+                _logger.LogDebug("[PaymentProviderService] GetAvailableProvidersAsync - Exception: {ex.Message}");
                 _logger.LogError(ex, "Error getting available providers for app {AppId}", appId);
                 return new PlatformFilteredProvidersDto
                 {
@@ -261,26 +248,26 @@ namespace WildwoodComponents.Blazor.Services
             try
             {
                 var url = $"{_apiBaseUrl}/payment/initiate";
-                Console.WriteLine($"[PaymentProviderService] InitiatePaymentAsync - URL: {url}");
-                Console.WriteLine($"[PaymentProviderService] InitiatePaymentAsync - ProviderId: {request.ProviderId}, Amount: {request.Amount}");
-                Console.WriteLine($"[PaymentProviderService] InitiatePaymentAsync - Auth header: {_httpClient.DefaultRequestHeaders.Authorization}");
+                _logger.LogDebug("[PaymentProviderService] InitiatePaymentAsync - URL: {url}");
+                _logger.LogDebug("[PaymentProviderService] InitiatePaymentAsync - ProviderId: {request.ProviderId}, Amount: {request.Amount}");
+                _logger.LogDebug("[PaymentProviderService] InitiatePaymentAsync - Auth header: {_httpClient.DefaultRequestHeaders.Authorization}");
                 
                 _logger.LogInformation("Initiating payment for provider {ProviderId}, amount {Amount} {Currency}",
                     request.ProviderId, request.Amount, request.Currency);
 
                 var json = JsonSerializer.Serialize(request, JsonOptions);
-                Console.WriteLine($"[PaymentProviderService] InitiatePaymentAsync - Request JSON: {json.Substring(0, Math.Min(500, json.Length))}...");
+                _logger.LogDebug("[PaymentProviderService] InitiatePaymentAsync - Request JSON: {json.Substring(0, Math.Min(500, json.Length))}...");
                 
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
                 var response = await _httpClient.PostAsync(url, content);
                 
-                Console.WriteLine($"[PaymentProviderService] InitiatePaymentAsync - Response: {response.StatusCode}");
+                _logger.LogDebug("[PaymentProviderService] InitiatePaymentAsync - Response: {response.StatusCode}");
 
                 if (response.IsSuccessStatusCode)
                 {
                     var result = await response.Content.ReadFromJsonAsync<InitiatePaymentResponse>(JsonOptions);
-                    Console.WriteLine($"[PaymentProviderService] InitiatePaymentAsync - Success! PaymentIntentId: {result?.PaymentIntentId}");
+                    _logger.LogDebug("[PaymentProviderService] InitiatePaymentAsync - Success! PaymentIntentId: {result?.PaymentIntentId}");
                     return result ?? new InitiatePaymentResponse
                     {
                         Success = false,
@@ -289,7 +276,7 @@ namespace WildwoodComponents.Blazor.Services
                 }
 
                 var errorContent = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"[PaymentProviderService] InitiatePaymentAsync - Error response: {errorContent}");
+                _logger.LogDebug("[PaymentProviderService] InitiatePaymentAsync - Error response: {errorContent}");
                 _logger.LogWarning("Payment initiation failed: {StatusCode} - {Error}",
                     response.StatusCode, errorContent);
 
@@ -302,7 +289,7 @@ namespace WildwoodComponents.Blazor.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[PaymentProviderService] InitiatePaymentAsync - Exception: {ex.Message}");
+                _logger.LogDebug("[PaymentProviderService] InitiatePaymentAsync - Exception: {ex.Message}");
                 _logger.LogError(ex, "Error initiating payment");
                 return new InitiatePaymentResponse
                 {
@@ -543,7 +530,7 @@ namespace WildwoodComponents.Blazor.Services
         {
             try
             {
-                Console.WriteLine($"[PaymentProviderService] LinkTransactionToUserAsync - ExternalId: {externalTransactionId}, UserId: {userId}");
+                _logger.LogDebug("[PaymentProviderService] LinkTransactionToUserAsync - ExternalId: {externalTransactionId}, UserId: {userId}");
                 _logger.LogInformation("Linking transaction {ExternalTransactionId} to user {UserId}", 
                     externalTransactionId, userId);
 
@@ -562,21 +549,21 @@ namespace WildwoodComponents.Blazor.Services
 
                 if (response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"[PaymentProviderService] LinkTransactionToUserAsync - Success");
+                    _logger.LogDebug("[PaymentProviderService] LinkTransactionToUserAsync - Success");
                     _logger.LogInformation("Successfully linked transaction {ExternalTransactionId} to user {UserId}",
                         externalTransactionId, userId);
                     return true;
                 }
 
                 var errorContent = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"[PaymentProviderService] LinkTransactionToUserAsync - Failed: {response.StatusCode} - {errorContent}");
+                _logger.LogDebug("[PaymentProviderService] LinkTransactionToUserAsync - Failed: {response.StatusCode} - {errorContent}");
                 _logger.LogWarning("Failed to link transaction {ExternalTransactionId} to user {UserId}: {StatusCode} - {Error}",
                     externalTransactionId, userId, response.StatusCode, errorContent);
                 return false;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[PaymentProviderService] LinkTransactionToUserAsync - Exception: {ex.Message}");
+                _logger.LogDebug("[PaymentProviderService] LinkTransactionToUserAsync - Exception: {ex.Message}");
                 _logger.LogError(ex, "Error linking transaction {ExternalTransactionId} to user {UserId}",
                     externalTransactionId, userId);
                 return false;

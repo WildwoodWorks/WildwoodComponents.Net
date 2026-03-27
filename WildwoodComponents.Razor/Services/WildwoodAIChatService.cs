@@ -1,7 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using WildwoodComponents.Razor.Models;
+using WildwoodComponents.Shared.Models;
 
 namespace WildwoodComponents.Razor.Services;
 
@@ -23,7 +23,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         _logger = logger;
     }
 
-    public async Task<List<AIConfigurationDto>> GetConfigurationsAsync(string? configurationType = null)
+    public async Task<List<AIConfiguration>> GetConfigurationsAsync(string? configurationType = null)
     {
         try
         {
@@ -36,7 +36,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<AIConfigurationDto>>(content, JsonOptions) ?? new();
+                return JsonSerializer.Deserialize<List<AIConfiguration>>(content, JsonOptions) ?? new();
             }
         }
         catch (Exception ex)
@@ -46,7 +46,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         return new();
     }
 
-    public async Task<AIConfigurationDto?> GetConfigurationAsync(string configurationId)
+    public async Task<AIConfiguration?> GetConfigurationAsync(string configurationId)
     {
         try
         {
@@ -55,7 +55,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<AIConfigurationDto>(content, JsonOptions);
+                return JsonSerializer.Deserialize<AIConfiguration>(content, JsonOptions);
             }
         }
         catch (Exception ex)
@@ -65,7 +65,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         return null;
     }
 
-    public async Task<AIChatResponseDto> SendMessageAsync(AIChatRequestDto request)
+    public async Task<AIChatResponse> SendMessageAsync(AIChatRequest request)
     {
         try
         {
@@ -75,51 +75,68 @@ public class WildwoodAIChatService : IWildwoodAIChatService
 
             if (response.IsSuccessStatusCode)
             {
-                return JsonSerializer.Deserialize<AIChatResponseDto>(content, JsonOptions)
-                    ?? new AIChatResponseDto { IsError = true, ErrorMessage = "Failed to parse response" };
+                return JsonSerializer.Deserialize<AIChatResponse>(content, JsonOptions)
+                    ?? new AIChatResponse { IsError = true, ErrorMessage = "Failed to parse response" };
             }
 
-            return new AIChatResponseDto { IsError = true, ErrorMessage = $"API error: {response.StatusCode}" };
+            return new AIChatResponse { IsError = true, ErrorMessage = $"API error: {response.StatusCode}" };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to send AI chat message");
-            return new AIChatResponseDto { IsError = true, ErrorMessage = "Failed to send message" };
+            return new AIChatResponse { IsError = true, ErrorMessage = "Failed to send message" };
         }
     }
 
-    public async Task<AIChatResponseDto> SendMessageWithFileAsync(AIChatRequestDto request, byte[] fileBytes, string fileName)
+    public async Task<AIChatResponse> SendMessageWithFileAsync(AIChatRequest request, byte[] fileBytes, string fileName)
     {
         try
         {
             // Convert file to base64 and include in the request
-            request.FileBase64 = Convert.ToBase64String(fileBytes);
-            request.FileName = fileName;
-
-            // Detect media type from extension
-            var ext = Path.GetExtension(fileName)?.ToLowerInvariant();
-            request.FileMediaType = ext switch
+            // Note: AIChatRequest from Shared doesn't have file fields,
+            // so we use a local wrapper for the HTTP call
+            var payload = new
             {
-                ".png" => "image/png",
-                ".jpg" or ".jpeg" => "image/jpeg",
-                ".gif" => "image/gif",
-                ".webp" => "image/webp",
-                ".pdf" => "application/pdf",
-                ".txt" => "text/plain",
-                ".csv" => "text/csv",
-                _ => "application/octet-stream"
+                request.ConfigurationId,
+                request.SessionId,
+                request.Message,
+                request.SaveToSession,
+                request.MacroValues,
+                FileBase64 = Convert.ToBase64String(fileBytes),
+                FileName = fileName,
+                FileMediaType = Path.GetExtension(fileName)?.ToLowerInvariant() switch
+                {
+                    ".png" => "image/png",
+                    ".jpg" or ".jpeg" => "image/jpeg",
+                    ".gif" => "image/gif",
+                    ".webp" => "image/webp",
+                    ".pdf" => "application/pdf",
+                    ".txt" => "text/plain",
+                    ".csv" => "text/csv",
+                    _ => "application/octet-stream"
+                }
             };
 
-            return await SendMessageAsync(request);
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
+            using var response = await _httpClient.PostAsJsonAsync("api/ai/chat", payload);
+            var content = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                return JsonSerializer.Deserialize<AIChatResponse>(content, JsonOptions)
+                    ?? new AIChatResponse { IsError = true, ErrorMessage = "Failed to parse response" };
+            }
+
+            return new AIChatResponse { IsError = true, ErrorMessage = $"API error: {response.StatusCode}" };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to send AI chat message with file");
-            return new AIChatResponseDto { IsError = true, ErrorMessage = "Failed to send message with file" };
+            return new AIChatResponse { IsError = true, ErrorMessage = "Failed to send message with file" };
         }
     }
 
-    public async Task<AISessionDto?> CreateSessionAsync(string configurationId, string? sessionName = null)
+    public async Task<AISession?> CreateSessionAsync(string configurationId, string? sessionName = null)
     {
         try
         {
@@ -129,7 +146,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<AISessionDto>(content, JsonOptions);
+                return JsonSerializer.Deserialize<AISession>(content, JsonOptions);
             }
         }
         catch (Exception ex)
@@ -139,7 +156,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         return null;
     }
 
-    public async Task<AISessionDto?> GetSessionAsync(string sessionId)
+    public async Task<AISession?> GetSessionAsync(string sessionId)
     {
         try
         {
@@ -148,7 +165,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<AISessionDto>(content, JsonOptions);
+                return JsonSerializer.Deserialize<AISession>(content, JsonOptions);
             }
         }
         catch (Exception ex)
@@ -158,7 +175,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         return null;
     }
 
-    public async Task<List<AISessionSummaryDto>> GetSessionsAsync(string? configurationId = null)
+    public async Task<List<AISessionSummary>> GetSessionsAsync(string? configurationId = null)
     {
         try
         {
@@ -171,7 +188,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<AISessionSummaryDto>>(content, JsonOptions) ?? new();
+                return JsonSerializer.Deserialize<List<AISessionSummary>>(content, JsonOptions) ?? new();
             }
         }
         catch (Exception ex)
@@ -226,7 +243,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         }
     }
 
-    public async Task<List<TTSVoiceDto>> GetTTSVoicesAsync(string? configurationId = null)
+    public async Task<List<TTSVoice>> GetTTSVoicesAsync(string? configurationId = null)
     {
         try
         {
@@ -239,7 +256,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<TTSVoiceDto>>(content, JsonOptions) ?? new();
+                return JsonSerializer.Deserialize<List<TTSVoice>>(content, JsonOptions) ?? new();
             }
         }
         catch (Exception ex)

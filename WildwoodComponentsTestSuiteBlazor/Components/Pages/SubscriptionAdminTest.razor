@@ -1,0 +1,135 @@
+@page "/test/subscription-admin"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Subscription.Admin
+@using WildwoodComponents.Blazor.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="SubscriptionAdminComponent Test" ComponentName="SubscriptionAdminComponent" IconClass="fas fa-user-shield"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">AppId</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">UserId (optional)</label>
+            <input class="form-control form-control-sm" @bind="userId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">CompanyId (optional)</label>
+            <input class="form-control form-control-sm" @bind="companyId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Display Mode</label>
+            <select class="form-select form-select-sm" @bind="displayMode">
+                <option value="@SubscriptionDisplayMode.All">All (Tabs)</option>
+                <option value="@SubscriptionDisplayMode.Subscription">Subscription</option>
+                <option value="@SubscriptionDisplayMode.Plans">Plans</option>
+                <option value="@SubscriptionDisplayMode.Features">Features</option>
+                <option value="@SubscriptionDisplayMode.AddOns">Add-Ons</option>
+                <option value="@SubscriptionDisplayMode.Usage">Usage</option>
+            </select>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Currency</label>
+            <select class="form-select form-select-sm" @bind="currency">
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+            </select>
+        </div>
+        <hr class="my-2" />
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="isAdmin" id="chkSubAdminIsAdmin" />
+            <label class="form-check-label small" for="chkSubAdminIsAdmin">Is Admin</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="showBillingToggle" id="chkSubAdminBilling" />
+            <label class="form-check-label small" for="chkSubAdminBilling">Show Billing Toggle</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="showStatusAboveTabs" id="chkSubAdminStatusAbove" />
+            <label class="form-check-label small" for="chkSubAdminStatusAbove">Show Status Above Tabs</label>
+        </div>
+    </Settings>
+    <Component>
+        <SubscriptionAdminComponent AppId="@appId"
+                                     UserId="@userId"
+                                     CompanyId="@companyId"
+                                     DisplayMode="@displayMode"
+                                     IsAdmin="@isAdmin"
+                                     Currency="@currency"
+                                     ShowBillingToggle="@showBillingToggle"
+                                     ShowStatusAboveTabs="@showStatusAboveTabs"
+                                     OnSubscriptionChanged="HandleSubscriptionChanged" />
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string appId = "";
+    private string? userId;
+    private string? companyId;
+    private SubscriptionDisplayMode displayMode = SubscriptionDisplayMode.All;
+    private bool isAdmin = true;
+    private string currency = "USD";
+    private bool showBillingToggle = true;
+    private bool showStatusAboveTabs = true;
+    private List<EventEntry> events = new();
+
+    protected override void OnInitialized()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        LifecycleTracker.TrackInitialized("SubscriptionAdminComponent");
+        AddEvent("SubscriptionAdminComponent initialized");
+    }
+
+    private void HandleSubscriptionChanged(AppTierSubscriptionChangedEventArgs args)
+    {
+        var msg = $"Subscription {args.Action}: {args.TierName} (ID: {args.SubscriptionId})";
+        AddEvent(msg);
+        LifecycleTracker.TrackCallback("SubscriptionAdminComponent", "OnSubscriptionChanged", msg);
+        StateHasChanged();
+    }
+
+    private void ApplySettings()
+    {
+        AddEvent($"Settings applied - AppId: {appId}, Admin: {isAdmin}, Mode: {displayMode}");
+        StateHasChanged();
+    }
+
+    private void ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        userId = null;
+        companyId = null;
+        displayMode = SubscriptionDisplayMode.All;
+        isAdmin = true;
+        currency = "USD";
+        showBillingToggle = true;
+        showStatusAboveTabs = true;
+        events.Clear();
+        AddEvent("Settings reset to defaults");
+        StateHasChanged();
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}

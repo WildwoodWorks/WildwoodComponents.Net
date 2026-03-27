@@ -72,7 +72,7 @@
                             <p class="small text-muted">Start a new conversation</p>
                         </div>
                     }
-                    @foreach (var thread in threads.OrderByDescending(t => t.LastActivity ?? t.CreatedAt))
+                    @foreach (var thread in threads.OrderByDescending(t => t.LastActivity != default ? t.LastActivity : t.CreatedAt))
                     {
                         var participantNames = string.Join(", ", thread.Participants.Select(p => p.UserName ?? "Unknown"));
                         var displayName = !string.IsNullOrEmpty(thread.Subject) ? thread.Subject : participantNames;
@@ -96,7 +96,7 @@
                                 </div>
                                 <div class="text-end flex-shrink-0">
                                     <div class="ww-thread-time text-muted small">
-                                        @SecureMessagingViewModel.FormatTime(thread.LastActivity ?? thread.CreatedAt)
+                                        @SecureMessagingViewModel.FormatTime(thread.LastActivity != default ? thread.LastActivity : thread.CreatedAt)
                                     </div>
                                     @if (hasUnread)
                                     {
@@ -108,8 +108,8 @@
                             <div class="ww-thread-participants mt-1">
                                 @foreach (var participant in thread.Participants.Take(3))
                                 {
-                                    <span class="ww-participant-dot @(participant.IsOnline ? "ww-online" : "")"
-                                          title="@(participant.UserName ?? "User")"></span>
+                                    <span class="ww-participant-dot @(participant.IsActive ? "ww-online" : "")"
+                                          title="@participant.UserName"></span>
                                 }
                                 @if (thread.Participants.Count > 3)
                                 {

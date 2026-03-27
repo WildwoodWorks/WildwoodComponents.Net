@@ -24,6 +24,11 @@ public class AuthenticationViewModel
 
 // ──────────────────────────────────────────────
 // Client-facing request DTOs (used by proxy controllers)
+// NOTE: These types (LoginRequest, RegisterRequest, ForgotPasswordRequest,
+// ResetPasswordRequest, TwoFactorVerifyRequest) are intentionally separate from
+// the Shared project's WildwoodAuthModels.cs types. The Razor versions are
+// simplified for server-side proxy use (e.g., no AppId, different field sets),
+// while the Shared versions map to WildwoodAPI's full endpoint contracts.
 // ──────────────────────────────────────────────
 
 /// <summary>

@@ -12,7 +12,7 @@ public static class SessionConstants
     public const string SessionExpiry = "ww_session_expiry";
 
     /// <summary>Key for storing serialized AuthenticationResponse in local storage.</summary>
-    public const string AuthData = "ww_auth_data";
+    public const string AuthData = "ww_session_auth";
 
     // --- Server-side session keys (used by WildwoodAdmin / Razor Pages apps) ---
 

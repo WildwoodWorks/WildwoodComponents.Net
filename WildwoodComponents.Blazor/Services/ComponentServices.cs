@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 using WildwoodComponents.Blazor.Models;
+using WildwoodComponents.Shared.Models;
 
 namespace WildwoodComponents.Blazor.Services
 {
@@ -159,12 +160,12 @@ namespace WildwoodComponents.Blazor.Services
 /// </summary>
 public static class ComponentThemeExtensions
 {
-    public static string GetThemeClass(this WildwoodComponents.Blazor.Models.ComponentTheme theme)
+    public static string GetThemeClass(this WildwoodComponents.Shared.Models.ComponentTheme theme)
     {
         return "wildwood-theme-custom";
     }
 
-    public static string GetCssVariables(this WildwoodComponents.Blazor.Models.ComponentTheme theme)
+    public static string GetCssVariables(this WildwoodComponents.Shared.Models.ComponentTheme theme)
     {
         return $@"
             --wildwood-primary-color: {theme.PrimaryColor};

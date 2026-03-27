@@ -30,7 +30,7 @@
                         {
                             <p class="text-muted small text-center">No sessions yet</p>
                         }
-                        @foreach (var session in sessions.OrderByDescending(s => s.LastAccessedAt ?? s.CreatedAt))
+                        @foreach (var session in sessions.OrderByDescending(s => s.LastAccessedAt != default ? s.LastAccessedAt : s.CreatedAt))
                         {
                             <div class="ww-session-item p-2 rounded mb-1 @(session.IsActive ? "" : "text-muted")"
                                  data-session-id="@session.Id"

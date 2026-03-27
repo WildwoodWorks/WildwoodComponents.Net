@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Blazor.Models;
+using WildwoodComponents.Shared.Models;
 
 namespace WildwoodComponents.Blazor.Services
 {
@@ -34,16 +35,21 @@ namespace WildwoodComponents.Blazor.Services
         void SetAuthToken(string token);
         void SetApiBaseUrl(string apiBaseUrl);
 
-#pragma warning disable CS0067 // Event is declared but never used
+        /// <summary>Raised when a real-time message is received (requires SignalR integration).</summary>
         event EventHandler<SecureMessage>? OnMessageReceived;
+        /// <summary>Raised when a user starts or stops typing (requires SignalR integration).</summary>
         event EventHandler<TypingIndicator>? OnTypingChanged;
+        /// <summary>Raised when a user's online status changes (requires SignalR integration).</summary>
         event EventHandler<OnlineStatus>? OnUserStatusChanged;
+        /// <summary>Raised when a thread is updated (requires SignalR integration).</summary>
         event EventHandler<string>? OnThreadUpdated;
-#pragma warning restore CS0067
     }
 
     /// <summary>
     /// Secure Messaging Service implementation for thread and message management.
+    /// Real-time events (OnMessageReceived, OnTypingChanged, OnUserStatusChanged, OnThreadUpdated)
+    /// are raised when a SignalR connection pushes updates. Without SignalR, use polling via
+    /// GetTypingIndicatorsAsync / GetOnlineStatusesAsync.
     /// </summary>
     public class SecureMessagingService : ISecureMessagingService
     {
@@ -54,12 +60,23 @@ namespace WildwoodComponents.Blazor.Services
         private string _apiBaseUrl = string.Empty; // Must be configured via SetApiBaseUrl - no hardcoded default
         private readonly Dictionary<string, MessageDraft> _drafts = new();
 
-#pragma warning disable CS0067 // Event is declared but never used
+        /// <inheritdoc/>
         public event EventHandler<SecureMessage>? OnMessageReceived;
+        /// <inheritdoc/>
         public event EventHandler<TypingIndicator>? OnTypingChanged;
+        /// <inheritdoc/>
         public event EventHandler<OnlineStatus>? OnUserStatusChanged;
+        /// <inheritdoc/>
         public event EventHandler<string>? OnThreadUpdated;
-#pragma warning restore CS0067
+
+        /// <summary>Raises OnMessageReceived for external callers (e.g., SignalR hub).</summary>
+        public void RaiseMessageReceived(SecureMessage message) => OnMessageReceived?.Invoke(this, message);
+        /// <summary>Raises OnTypingChanged for external callers (e.g., SignalR hub).</summary>
+        public void RaiseTypingChanged(TypingIndicator indicator) => OnTypingChanged?.Invoke(this, indicator);
+        /// <summary>Raises OnUserStatusChanged for external callers (e.g., SignalR hub).</summary>
+        public void RaiseUserStatusChanged(OnlineStatus status) => OnUserStatusChanged?.Invoke(this, status);
+        /// <summary>Raises OnThreadUpdated for external callers (e.g., SignalR hub).</summary>
+        public void RaiseThreadUpdated(string threadId) => OnThreadUpdated?.Invoke(this, threadId);
 
         public SecureMessagingService(HttpClient httpClient, ILocalStorageService localStorage, ILogger<SecureMessagingService> logger)
         {

@@ -1,7 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using WildwoodComponents.Razor.Models;
+using WildwoodComponents.Shared.Models;
 
 namespace WildwoodComponents.Razor.Services;
 
@@ -23,7 +23,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         _logger = logger;
     }
 
-    public async Task<List<MessageThreadDto>> GetThreadsAsync(string companyAppId)
+    public async Task<List<MessageThread>> GetThreadsAsync(string companyAppId)
     {
         try
         {
@@ -32,14 +32,14 @@ public class WildwoodMessagingService : IWildwoodMessagingService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<MessageThreadDto>>(content, JsonOptions) ?? new();
+                return JsonSerializer.Deserialize<List<MessageThread>>(content, JsonOptions) ?? new();
             }
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to get threads"); }
         return new();
     }
 
-    public async Task<MessageThreadDto?> GetThreadAsync(string threadId)
+    public async Task<MessageThread?> GetThreadAsync(string threadId)
     {
         try
         {
@@ -48,14 +48,14 @@ public class WildwoodMessagingService : IWildwoodMessagingService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<MessageThreadDto>(content, JsonOptions);
+                return JsonSerializer.Deserialize<MessageThread>(content, JsonOptions);
             }
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to get thread {ThreadId}", threadId); }
         return null;
     }
 
-    public async Task<MessageThreadDto?> CreateThreadAsync(string companyAppId, string subject, List<string> participantIds, string threadType = "Direct")
+    public async Task<MessageThread?> CreateThreadAsync(string companyAppId, string subject, List<string> participantIds, string threadType = "Direct")
     {
         try
         {
@@ -65,14 +65,14 @@ public class WildwoodMessagingService : IWildwoodMessagingService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<MessageThreadDto>(content, JsonOptions);
+                return JsonSerializer.Deserialize<MessageThread>(content, JsonOptions);
             }
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to create thread"); }
         return null;
     }
 
-    public async Task<List<SecureMessageDto>> GetMessagesAsync(string threadId, int page = 1, int pageSize = 50)
+    public async Task<List<SecureMessage>> GetMessagesAsync(string threadId, int page = 1, int pageSize = 50)
     {
         try
         {
@@ -81,14 +81,14 @@ public class WildwoodMessagingService : IWildwoodMessagingService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<SecureMessageDto>>(content, JsonOptions) ?? new();
+                return JsonSerializer.Deserialize<List<SecureMessage>>(content, JsonOptions) ?? new();
             }
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to get messages for thread {ThreadId}", threadId); }
         return new();
     }
 
-    public async Task<SecureMessageDto?> SendMessageAsync(string threadId, string content, string messageType = "Text", string? replyToMessageId = null)
+    public async Task<SecureMessage?> SendMessageAsync(string threadId, string content, string messageType = "Text", string? replyToMessageId = null)
     {
         try
         {
@@ -98,14 +98,14 @@ public class WildwoodMessagingService : IWildwoodMessagingService
             if (response.IsSuccessStatusCode)
             {
                 var responseContent = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<SecureMessageDto>(responseContent, JsonOptions);
+                return JsonSerializer.Deserialize<SecureMessage>(responseContent, JsonOptions);
             }
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to send message"); }
         return null;
     }
 
-    public async Task<SecureMessageDto?> EditMessageAsync(string messageId, string newContent)
+    public async Task<SecureMessage?> EditMessageAsync(string messageId, string newContent)
     {
         try
         {
@@ -115,7 +115,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<SecureMessageDto>(content, JsonOptions);
+                return JsonSerializer.Deserialize<SecureMessage>(content, JsonOptions);
             }
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to edit message {MessageId}", messageId); }
@@ -167,7 +167,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         catch (Exception ex) { _logger.LogError(ex, "Failed to mark thread as read"); return false; }
     }
 
-    public async Task<List<CompanyAppUserDto>> GetUsersAsync(string companyAppId)
+    public async Task<List<CompanyAppUser>> GetUsersAsync(string companyAppId)
     {
         try
         {
@@ -176,14 +176,14 @@ public class WildwoodMessagingService : IWildwoodMessagingService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<CompanyAppUserDto>>(content, JsonOptions) ?? new();
+                return JsonSerializer.Deserialize<List<CompanyAppUser>>(content, JsonOptions) ?? new();
             }
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to get users"); }
         return new();
     }
 
-    public async Task<List<CompanyAppUserDto>> SearchUsersAsync(string companyAppId, string searchTerm)
+    public async Task<List<CompanyAppUser>> SearchUsersAsync(string companyAppId, string searchTerm)
     {
         try
         {
@@ -192,7 +192,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<CompanyAppUserDto>>(content, JsonOptions) ?? new();
+                return JsonSerializer.Deserialize<List<CompanyAppUser>>(content, JsonOptions) ?? new();
             }
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to search users"); }
@@ -232,7 +232,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         catch (Exception ex) { _logger.LogError(ex, "Failed to stop typing for thread {ThreadId}", threadId); return false; }
     }
 
-    public async Task<List<TypingIndicatorDto>> GetTypingIndicatorsAsync(string threadId)
+    public async Task<List<TypingIndicator>> GetTypingIndicatorsAsync(string threadId)
     {
         try
         {
@@ -241,7 +241,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<TypingIndicatorDto>>(content, JsonOptions) ?? new();
+                return JsonSerializer.Deserialize<List<TypingIndicator>>(content, JsonOptions) ?? new();
             }
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to get typing indicators for thread {ThreadId}", threadId); }
@@ -290,7 +290,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         }
     }
 
-    public async Task<List<MessageSearchResultDto>> SearchMessagesAsync(string companyAppId, string searchTerm, string? threadId = null)
+    public async Task<List<MessageSearchResult>> SearchMessagesAsync(string companyAppId, string searchTerm, string? threadId = null)
     {
         try
         {
@@ -303,7 +303,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<MessageSearchResultDto>>(content, JsonOptions) ?? new();
+                return JsonSerializer.Deserialize<List<MessageSearchResult>>(content, JsonOptions) ?? new();
             }
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to search messages in app {CompanyAppId}", companyAppId); }
@@ -322,7 +322,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         catch (Exception ex) { _logger.LogError(ex, "Failed to update online status for app {CompanyAppId}", companyAppId); return false; }
     }
 
-    public async Task<List<OnlineStatusDto>> GetOnlineStatusesAsync(string companyAppId)
+    public async Task<List<OnlineStatus>> GetOnlineStatusesAsync(string companyAppId)
     {
         try
         {
@@ -331,7 +331,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<List<OnlineStatusDto>>(content, JsonOptions) ?? new();
+                return JsonSerializer.Deserialize<List<OnlineStatus>>(content, JsonOptions) ?? new();
             }
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to get online statuses for app {CompanyAppId}", companyAppId); }

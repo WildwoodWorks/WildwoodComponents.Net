@@ -61,6 +61,7 @@ namespace WildwoodComponents.Blazor.Services
                 if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
                     response.StatusCode == System.Net.HttpStatusCode.Forbidden)
                 {
+                    _logger.LogWarning("Flow API authentication failed: {StatusCode} {Path}", response.StatusCode, request.RequestUri);
                     AuthenticationFailed?.Invoke(this, EventArgs.Empty);
                     return null;
                 }

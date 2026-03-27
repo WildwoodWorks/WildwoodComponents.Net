@@ -1,4 +1,5 @@
 using WildwoodComponents.Blazor.Models;
+using WildwoodComponents.Shared.Models;
 
 namespace WildwoodComponents.Blazor.Services
 {
@@ -10,12 +11,12 @@ namespace WildwoodComponents.Blazor.Services
         event EventHandler<ToastNotification>? OnNotificationAdded;
         event EventHandler<string>? OnNotificationRemoved;
         event EventHandler<ToastNotification>? OnNotificationUpdated;
-        
-        Task ShowAsync(string title, string message, NotificationType type = NotificationType.Info);
-        Task ShowAsync(ToastNotification notification);
-        Task DismissAsync(string notificationId);
-        Task DismissAllAsync();
-        Task UpdateAsync(string notificationId, ToastNotification notification);
+
+        void Show(string title, string message, NotificationType type = NotificationType.Info);
+        void Show(ToastNotification notification);
+        void Dismiss(string notificationId);
+        void DismissAll();
+        void Update(string notificationId, ToastNotification notification);
     }
 
     /// <summary>
@@ -23,11 +24,13 @@ namespace WildwoodComponents.Blazor.Services
     /// </summary>
     public class NotificationService : INotificationService
     {
+        private readonly List<ToastNotification> _notifications = new();
+
         public event EventHandler<ToastNotification>? OnNotificationAdded;
         public event EventHandler<string>? OnNotificationRemoved;
         public event EventHandler<ToastNotification>? OnNotificationUpdated;
 
-        public async Task ShowAsync(string title, string message, NotificationType type = NotificationType.Info)
+        public void Show(string title, string message, NotificationType type = NotificationType.Info)
         {
             var notification = new ToastNotification
             {
@@ -39,31 +42,39 @@ namespace WildwoodComponents.Blazor.Services
                 IsDismissible = true
             };
 
-            await ShowAsync(notification);
+            Show(notification);
         }
 
-        public async Task ShowAsync(ToastNotification notification)
+        public void Show(ToastNotification notification)
         {
+            _notifications.Add(notification);
             OnNotificationAdded?.Invoke(this, notification);
-            await Task.CompletedTask;
         }
 
-        public async Task DismissAsync(string notificationId)
+        public void Dismiss(string notificationId)
         {
+            _notifications.RemoveAll(n => n.Id == notificationId);
             OnNotificationRemoved?.Invoke(this, notificationId);
-            await Task.CompletedTask;
         }
 
-        public async Task DismissAllAsync()
+        public void DismissAll()
         {
-            // Implementation for dismissing all notifications
-            await Task.CompletedTask;
+            var ids = _notifications.Select(n => n.Id).ToList();
+            _notifications.Clear();
+            foreach (var id in ids)
+            {
+                OnNotificationRemoved?.Invoke(this, id);
+            }
         }
 
-        public async Task UpdateAsync(string notificationId, ToastNotification notification)
+        public void Update(string notificationId, ToastNotification notification)
         {
+            var index = _notifications.FindIndex(n => n.Id == notificationId);
+            if (index >= 0)
+            {
+                _notifications[index] = notification;
+            }
             OnNotificationUpdated?.Invoke(this, notification);
-            await Task.CompletedTask;
         }
     }
 }

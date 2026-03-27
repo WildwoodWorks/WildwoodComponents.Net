@@ -87,13 +87,13 @@
     </li>
 
     <!-- Payment -->
-    <li class="@GetParentActiveClass(new[] { "/test/payment", "/test/payment-form", "/test/subscription", "/test/subscription-manager" })">
+    <li class="@GetParentActiveClass(new[] { "/test/payment", "/test/payment-form", "/test/subscription", "/test/subscription-manager", "/test/subscription-admin" })">
         <a href="#paymentSubmenu" data-bs-toggle="collapse"
-           aria-expanded="@IsParentExpanded(new[] { "/test/payment", "/test/payment-form", "/test/subscription", "/test/subscription-manager" })"
+           aria-expanded="@IsParentExpanded(new[] { "/test/payment", "/test/payment-form", "/test/subscription", "/test/subscription-manager", "/test/subscription-admin" })"
            class="dropdown-toggle">
             <i class="fas fa-credit-card me-2"></i><span>Payment</span>
         </a>
-        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/payment", "/test/payment-form", "/test/subscription", "/test/subscription-manager" })" id="paymentSubmenu">
+        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/payment", "/test/payment-form", "/test/subscription", "/test/subscription-manager", "/test/subscription-admin" })" id="paymentSubmenu">
             <li class="@GetActiveClass("/test/payment")">
                 <a href="/test/payment"><span>PaymentComponent</span></a>
             </li>
@@ -105,6 +105,9 @@
             </li>
             <li class="@GetActiveClass("/test/subscription-manager")">
                 <a href="/test/subscription-manager"><span>SubscriptionManager</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/subscription-admin")">
+                <a href="/test/subscription-admin"><span>SubscriptionAdmin</span></a>
             </li>
         </ul>
     </li>
@@ -128,6 +131,23 @@
             </li>
             <li class="@GetActiveClass("/test/signup-subscription")">
                 <a href="/test/signup-subscription"><span>SignupWithSubscription</span></a>
+            </li>
+        </ul>
+    </li>
+
+    <!-- Other -->
+    <li class="@GetParentActiveClass(new[] { "/test/disclaimer", "/test/theme" })">
+        <a href="#otherSubmenu" data-bs-toggle="collapse"
+           aria-expanded="@IsParentExpanded(new[] { "/test/disclaimer", "/test/theme" })"
+           class="dropdown-toggle">
+            <i class="fas fa-cog me-2"></i><span>Other</span>
+        </a>
+        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/disclaimer", "/test/theme" })" id="otherSubmenu">
+            <li class="@GetActiveClass("/test/disclaimer")">
+                <a href="/test/disclaimer"><span>Disclaimer</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/theme")">
+                <a href="/test/theme"><span>Theme</span></a>
             </li>
         </ul>
     </li>

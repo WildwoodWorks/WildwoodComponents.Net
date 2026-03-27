@@ -389,6 +389,16 @@ namespace WildwoodComponents.Blazor.Services
 
         private AppDistributionSource DetectIOSDistributionSource()
         {
+            // iOS apps distributed outside the App Store have no receipt file.
+            // On real devices the presence of the embedded receipt is a reliable indicator.
+            try
+            {
+                var receiptPath = Path.Combine(AppContext.BaseDirectory, "StoreKit", "receipt");
+                if (File.Exists(receiptPath))
+                    return AppDistributionSource.AppleAppStore;
+            }
+            catch { /* sandbox may block file access */ }
+
 #if DEBUG
             return AppDistributionSource.Development;
 #else
@@ -398,6 +408,14 @@ namespace WildwoodComponents.Blazor.Services
 
         private AppDistributionSource DetectMacOSDistributionSource()
         {
+            try
+            {
+                var receiptPath = Path.Combine(AppContext.BaseDirectory, "..", "Resources", "receipt");
+                if (File.Exists(receiptPath))
+                    return AppDistributionSource.MacAppStore;
+            }
+            catch { /* sandbox may block file access */ }
+
 #if DEBUG
             return AppDistributionSource.Development;
 #else
@@ -407,6 +425,18 @@ namespace WildwoodComponents.Blazor.Services
 
         private AppDistributionSource DetectAndroidDistributionSource()
         {
+            // Check the installer package name when available (set by app stores).
+            try
+            {
+                var installer = Environment.GetEnvironmentVariable("INSTALLER_PACKAGE_NAME");
+                if (!string.IsNullOrEmpty(installer))
+                {
+                    if (installer.Contains("vending") || installer.Contains("google"))
+                        return AppDistributionSource.GooglePlayStore;
+                }
+            }
+            catch { /* env var may not be available */ }
+
 #if DEBUG
             return AppDistributionSource.Development;
 #else
@@ -416,6 +446,15 @@ namespace WildwoodComponents.Blazor.Services
 
         private AppDistributionSource DetectWindowsDistributionSource()
         {
+            // MSIX-packaged apps from the Microsoft Store have a package identity.
+            try
+            {
+                var packageId = Environment.GetEnvironmentVariable("PACKAGE_FAMILY_NAME");
+                if (!string.IsNullOrEmpty(packageId))
+                    return AppDistributionSource.MicrosoftStore;
+            }
+            catch { /* env var may not be available */ }
+
 #if DEBUG
             return AppDistributionSource.Development;
 #else

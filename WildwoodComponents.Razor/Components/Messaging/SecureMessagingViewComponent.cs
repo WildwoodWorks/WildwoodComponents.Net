@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Razor.Models;
 using WildwoodComponents.Razor.Services;
+using WildwoodComponents.Shared.Models;
 
 namespace WildwoodComponents.Razor.Components.Messaging;
 
@@ -43,7 +44,7 @@ public class SecureMessagingViewComponent : ViewComponent
         bool enableTypingIndicators = true)
     {
         var threads = await _messagingService.GetThreadsAsync(companyAppId);
-        List<CompanyAppUserDto> users = new();
+        List<CompanyAppUser> users = new();
         try
         {
             users = await _messagingService.GetUsersAsync(companyAppId);

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 using WildwoodComponents.Blazor.Services;
 using WildwoodComponents.Blazor.Models;
+using WildwoodComponents.Shared.Models;
 
 namespace WildwoodComponents.Blazor.Components.Base
 {
@@ -318,8 +319,19 @@ namespace WildwoodComponents.Blazor.Components.Base
         
         private async void OnThemeChanged(object? sender, ComponentTheme theme)
         {
-            CurrentTheme = theme;
-            await InvokeAsync(StateHasChanged);
+            try
+            {
+                CurrentTheme = theme;
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (ObjectDisposedException)
+            {
+                // Component was disposed before the callback completed — safe to ignore.
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[BaseWildwoodComponent] Error in OnThemeChanged: {ex.Message}");
+            }
         }
         
         #endregion

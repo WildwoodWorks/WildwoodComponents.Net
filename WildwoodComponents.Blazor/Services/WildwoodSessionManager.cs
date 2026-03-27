@@ -197,7 +197,7 @@ public class WildwoodSessionManager : IWildwoodSessionManager
                 }
 
                 // Set the token on the AI service so API calls work
-                _aiService.SetAuthToken(storedAuth.JwtToken);
+                _aiService?.SetAuthToken(storedAuth.JwtToken);
 
                 // If auto-refresh is enabled, proactively refresh the token
                 // in case it expired while the app was closed, and start the refresh timer
@@ -249,7 +249,7 @@ public class WildwoodSessionManager : IWildwoodSessionManager
             await _localStorage.SetItemAsync(SessionConstants.SessionExpiry, _sessionExpiry.Value.ToString("O"));
 
             // Set token on AI service
-            _aiService.SetAuthToken(authResponse.JwtToken);
+            _aiService?.SetAuthToken(authResponse.JwtToken);
 
             _logger.LogInformation("User logged in: {Email} (session expires: {Expiry})",
                 authResponse.Email, _sessionExpiry);

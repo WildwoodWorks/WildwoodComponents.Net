@@ -51,7 +51,7 @@ namespace WildwoodComponents.Blazor.Services
             if (!response.IsSuccessStatusCode)
             {
                 var body = string.Empty;
-                try { body = await response.Content.ReadAsStringAsync(); } catch { }
+                try { body = await response.Content.ReadAsStringAsync(); } catch (Exception ex) { _logger.LogDebug(ex, "Failed to read error response body"); }
                 var message = $"{operation} failed: HTTP {(int)response.StatusCode} {response.StatusCode}";
                 if (!string.IsNullOrEmpty(body))
                     message += $" - {body}";

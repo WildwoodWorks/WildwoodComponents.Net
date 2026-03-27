@@ -154,7 +154,7 @@ public partial class AIChatComponent
         catch (Exception ex)
         {
             Logger?.LogError(ex, "Error loading AI sessions for configuration {ConfigurationId}", CurrentConfigurationId);
-            Sessions = new List<Models.AISessionSummary>();
+            Sessions = new List<AISessionSummary>();
         }
     }
 

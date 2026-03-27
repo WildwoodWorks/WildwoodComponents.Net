@@ -1,0 +1,122 @@
+@page "/test/disclaimer"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Disclaimer
+@using WildwoodComponents.Blazor.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="DisclaimerComponent Test" ComponentName="DisclaimerComponent" IconClass="fas fa-file-contract"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">AppId</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">UserId (optional)</label>
+            <input class="form-control form-control-sm" @bind="userId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Mode</label>
+            <select class="form-select form-select-sm" @bind="mode">
+                <option value="login">Login</option>
+                <option value="registration">Registration</option>
+            </select>
+        </div>
+        <hr class="my-2" />
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="showCancelButton" id="chkDisclaimerCancel" />
+            <label class="form-check-label small" for="chkDisclaimerCancel">Show Cancel Button</label>
+        </div>
+    </Settings>
+    <Component>
+        <div style="max-width: 800px; margin: 0 auto;">
+            <DisclaimerComponent AppId="@appId"
+                                 UserId="@userId"
+                                 Mode="@mode"
+                                 ShowCancelButton="@showCancelButton"
+                                 OnDisclaimersAccepted="HandleDisclaimersAccepted"
+                                 OnDisclaimersCancelled="HandleDisclaimersCancelled"
+                                 OnError="HandleError" />
+        </div>
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string appId = "";
+    private string? userId;
+    private string mode = "login";
+    private bool showCancelButton = true;
+    private List<EventEntry> events = new();
+
+    protected override void OnInitialized()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        LifecycleTracker.TrackInitialized("DisclaimerComponent");
+        AddEvent("DisclaimerComponent initialized");
+    }
+
+    private void HandleDisclaimersAccepted(List<DisclaimerAcceptanceResult> acceptances)
+    {
+        var msg = $"Disclaimers accepted: {acceptances.Count} disclaimer(s)";
+        foreach (var a in acceptances)
+        {
+            msg += $"\n  - DisclaimerId: {a.CompanyDisclaimerId}, VersionId: {a.CompanyDisclaimerVersionId}";
+        }
+        AddEvent(msg);
+        LifecycleTracker.TrackCallback("DisclaimerComponent", "OnDisclaimersAccepted", msg);
+        StateHasChanged();
+    }
+
+    private void HandleDisclaimersCancelled()
+    {
+        AddEvent("Disclaimers cancelled by user");
+        LifecycleTracker.TrackCallback("DisclaimerComponent", "OnDisclaimersCancelled");
+        StateHasChanged();
+    }
+
+    private void HandleError(string error)
+    {
+        var msg = $"Error: {error}";
+        AddEvent(msg);
+        LifecycleTracker.TrackError("DisclaimerComponent", error);
+        StateHasChanged();
+    }
+
+    private void ApplySettings()
+    {
+        AddEvent($"Settings applied - AppId: {appId}, UserId: {userId ?? "(none)"}, Mode: {mode}");
+        StateHasChanged();
+    }
+
+    private void ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        userId = null;
+        mode = "login";
+        showCancelButton = true;
+        events.Clear();
+        AddEvent("Settings reset to defaults");
+        StateHasChanged();
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}

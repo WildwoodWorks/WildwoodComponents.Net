@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Razor.Models;
 using WildwoodComponents.Razor.Services;
+using WildwoodComponents.Shared.Models;
 
 namespace WildwoodComponents.Razor.Components.AIChat;
 
@@ -32,8 +33,8 @@ public class AIChatViewComponent : ViewComponent
         bool enableFileUpload = false,
         string? placeholderText = null)
     {
-        var configurations = new List<AIConfigurationDto>();
-        var sessions = new List<AISessionSummaryDto>();
+        var configurations = new List<AIConfiguration>();
+        var sessions = new List<AISessionSummary>();
 
         try
         {
