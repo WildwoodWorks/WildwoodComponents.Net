@@ -33,6 +33,8 @@ namespace WildwoodComponents.Blazor.Models
 
         public string? DeviceInfo { get; set; }
 
+        public string? AppVersion { get; set; }
+
         /// <summary>
         /// Trusted device token for bypassing 2FA on remembered devices
         /// </summary>

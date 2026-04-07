@@ -8,6 +8,7 @@
 @inject IAuthenticationService AuthService
 @inject ICaptchaService CaptchaService
 @inject IJSRuntime JS
+@inject WildwoodComponents.Blazor.Extensions.WildwoodComponentsOptions WildwoodOptions
 
 <div class="@GetRootCssClasses()">
     <div class="auth-card">
@@ -576,6 +577,7 @@
         {
             _model.AppId = AppId;
         }
+        _model.AppVersion = WildwoodOptions?.AppVersion ?? "1.0.0";
 
         // Load authentication configuration first if not provided
         if (_authConfig == null && !string.IsNullOrEmpty(AppId))
@@ -992,7 +994,7 @@
         _successMessage = "";
         
         // Initialize login model with AppId
-        _model = new LoginRequest { AppId = AppId };
+        _model = new LoginRequest { AppId = AppId, AppVersion = WildwoodOptions?.AppVersion ?? "1.0.0" };
         
         StateHasChanged();
     }

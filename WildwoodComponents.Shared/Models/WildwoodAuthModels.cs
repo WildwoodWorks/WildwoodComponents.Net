@@ -14,6 +14,9 @@ public class WildwoodLoginRequest
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public string AppId { get; set; } = string.Empty;
+    public string? AppVersion { get; set; }
+    public string? Platform { get; set; }
+    public string? DeviceInfo { get; set; }
     public string? TrustedDeviceToken { get; set; }
 }
 
@@ -86,8 +89,11 @@ public class WildwoodAuthenticateResponse
     public string RefreshToken { get; set; } = string.Empty;
     public bool RequiresTwoFactor { get; set; }
     public bool RequiresPasswordReset { get; set; }
+    public bool RequiresDisclaimerAcceptance { get; set; }
     public string? TwoFactorSessionId { get; set; }
     public List<TwoFactorMethodInfo>? AvailableTwoFactorMethods { get; set; }
+    public string? DefaultTwoFactorMethod { get; set; }
+    public int? TwoFactorSessionExpiresIn { get; set; }
 }
 
 /// <summary>

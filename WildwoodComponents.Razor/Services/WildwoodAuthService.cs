@@ -16,6 +16,7 @@ public class WildwoodAuthService : IWildwoodAuthService
     private readonly IWildwoodSessionManager _sessionManager;
     private readonly ILogger<WildwoodAuthService> _logger;
     private readonly string _appId;
+    private readonly string _appVersion;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -26,12 +27,14 @@ public class WildwoodAuthService : IWildwoodAuthService
         HttpClient httpClient,
         IWildwoodSessionManager sessionManager,
         ILogger<WildwoodAuthService> logger,
-        string appId)
+        string appId,
+        string appVersion = "1.0.0")
     {
         _httpClient = httpClient;
         _sessionManager = sessionManager;
         _logger = logger;
         _appId = appId;
+        _appVersion = appVersion;
     }
 
     public async Task<AuthResult> LoginAsync(LoginRequest request)
@@ -42,7 +45,10 @@ public class WildwoodAuthService : IWildwoodAuthService
             {
                 Username = request.Username,
                 Password = request.Password,
-                AppId = _appId
+                AppId = _appId,
+                AppVersion = _appVersion,
+                Platform = "web",
+                DeviceInfo = "server"
             };
 
             using var response = await _httpClient.PostAsJsonAsync("auth/login", apiRequest);

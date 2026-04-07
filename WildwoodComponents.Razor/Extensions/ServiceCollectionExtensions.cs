@@ -49,6 +49,10 @@ public static class ServiceCollectionExtensions
 
             if (int.TryParse(section["RequestTimeoutSeconds"], out var timeoutSeconds))
                 options.RequestTimeoutSeconds = timeoutSeconds;
+
+            var appVersion = section["AppVersion"];
+            if (!string.IsNullOrEmpty(appVersion))
+                options.AppVersion = appVersion;
         });
     }
 
@@ -118,7 +122,7 @@ public static class ServiceCollectionExtensions
             var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
             var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
             var logger = sp.GetRequiredService<ILogger<WildwoodAuthService>>();
-            return new WildwoodAuthService(httpClient, sessionManager, logger, options.AppId ?? string.Empty);
+            return new WildwoodAuthService(httpClient, sessionManager, logger, options.AppId ?? string.Empty, options.AppVersion);
         });
 
         // AI Proxy service
@@ -242,4 +246,10 @@ public class WildwoodComponentsRazorOptions
     /// Timeout for HTTP requests in seconds
     /// </summary>
     public int RequestTimeoutSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// Application version string sent with auth requests.
+    /// Default: "1.0.0"
+    /// </summary>
+    public string AppVersion { get; set; } = "1.0.0";
 }

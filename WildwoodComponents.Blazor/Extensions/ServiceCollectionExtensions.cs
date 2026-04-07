@@ -94,6 +94,12 @@ namespace WildwoodComponents.Blazor.Extensions
                 {
                     options.EnableAntiforgeryValidation = enableAntiforgery;
                 }
+
+                var appVersion = section["AppVersion"];
+                if (!string.IsNullOrEmpty(appVersion))
+                {
+                    options.AppVersion = appVersion;
+                }
             });
         }
 
@@ -804,5 +810,11 @@ namespace WildwoodComponents.Blazor.Extensions
         /// Default: true.
         /// </summary>
         public bool EnableAntiforgeryValidation { get; set; } = true;
+
+        /// <summary>
+        /// Application version string sent with auth requests.
+        /// Default: "1.0.0"
+        /// </summary>
+        public string AppVersion { get; set; } = "1.0.0";
     }
 }

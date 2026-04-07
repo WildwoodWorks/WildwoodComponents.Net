@@ -136,6 +136,7 @@ public class AuthResponse
     public bool RequiresTwoFactor { get; set; }
     public bool RequiresEmailConfirmation { get; set; }
     public bool RequiresPasswordReset { get; set; }
+    public bool RequiresDisclaimerAcceptance { get; set; }
 
     /// <summary>
     /// Session ID for 2FA flow — must be passed to VerifyTwoFactorAsync
@@ -146,6 +147,18 @@ public class AuthResponse
     /// Available 2FA methods when RequiresTwoFactor is true
     /// </summary>
     public List<TwoFactorMethodInfo>? AvailableTwoFactorMethods { get; set; }
+
+    /// <summary>
+    /// User's preferred/default 2FA method type.
+    /// Only populated when RequiresTwoFactor is true.
+    /// </summary>
+    public string? DefaultTwoFactorMethod { get; set; }
+
+    /// <summary>
+    /// Seconds until the 2FA session expires.
+    /// Only populated when RequiresTwoFactor is true.
+    /// </summary>
+    public int? TwoFactorSessionExpiresIn { get; set; }
 
     /// <summary>
     /// Creates an AuthResponse from WildwoodAPI's response format
@@ -162,8 +175,11 @@ public class AuthResponse
             DisplayName = string.IsNullOrWhiteSpace(displayName) ? ww.Email : displayName,
             RequiresTwoFactor = ww.RequiresTwoFactor,
             RequiresPasswordReset = ww.RequiresPasswordReset,
+            RequiresDisclaimerAcceptance = ww.RequiresDisclaimerAcceptance,
             TwoFactorSessionId = ww.TwoFactorSessionId,
-            AvailableTwoFactorMethods = ww.AvailableTwoFactorMethods
+            AvailableTwoFactorMethods = ww.AvailableTwoFactorMethods,
+            DefaultTwoFactorMethod = ww.DefaultTwoFactorMethod,
+            TwoFactorSessionExpiresIn = ww.TwoFactorSessionExpiresIn
         };
     }
 }
@@ -224,6 +240,7 @@ public class ApiResult
 public class ApiErrorResponse
 {
     public string? Message { get; set; }
+    public string? ErrorCode { get; set; }
     public bool RequiresTwoFactor { get; set; }
     public Dictionary<string, string[]>? Errors { get; set; }
 }

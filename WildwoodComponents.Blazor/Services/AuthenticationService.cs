@@ -153,7 +153,7 @@ namespace WildwoodComponents.Blazor.Services
                     ProviderName = request.ProviderName,
                     ProviderToken = request.ProviderToken,
                     TrustedDeviceToken = request.TrustedDeviceToken, // For 2FA trusted device bypass
-                    AppVersion = "1.0.0" // Default app version
+                    AppVersion = request.AppVersion ?? "1.0.0"
                 };
                 
                 var response = await _httpClient.PostAsJsonAsync("api/auth/login", loginDto);
@@ -741,11 +741,19 @@ namespace WildwoodComponents.Blazor.Services
         {
             try
             {
-                await _httpClient.PostAsync("api/auth/logout", null);
+                var refreshToken = await _localStorage.GetItemAsync<string>("refreshToken");
+                if (!string.IsNullOrEmpty(refreshToken))
+                {
+                    var content = new StringContent(
+                        JsonSerializer.Serialize(new { RefreshToken = refreshToken }),
+                        System.Text.Encoding.UTF8,
+                        "application/json");
+                    await _httpClient.PostAsync("api/auth/revoke-token", content);
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during logout");
+                _logger.LogWarning(ex, "Revoke token API call failed, clearing local tokens anyway");
             }
             finally
             {
@@ -1379,6 +1387,7 @@ namespace WildwoodComponents.Blazor.Services
     {
         public string? Message { get; set; }
         public string? Detail { get; set; }
+        public string? ErrorCode { get; set; }
     }
 
     public class LicenseValidationResult
