@@ -50,7 +50,13 @@
                 <div class="ww-disclaimer-item card mb-3" id="@disclaimerElId"
                      data-disclaimer-id="@disclaimer.DisclaimerId"
                      data-version-id="@disclaimer.VersionId"
-                     data-is-required="@disclaimer.IsRequired.ToString().ToLower()">
+                     data-is-required="@disclaimer.IsRequired.ToString().ToLower()"
+                     data-title="@disclaimer.Title"
+                     data-version="@disclaimer.VersionNumber"
+                     data-type="@(disclaimer.DisclaimerType ?? "")"
+                     data-prev-version="@(disclaimer.PreviouslyAcceptedVersion?.ToString() ?? "")"
+                     data-change-notes="@(disclaimer.ChangeNotes ?? "")"
+                     data-content-format="@(disclaimer.ContentFormat ?? "")">
 
                     <div class="card-header d-flex align-items-center justify-content-between">
                         <div>
@@ -105,6 +111,11 @@
                             }
                         </div>
 
+                        <button type="button" class="btn btn-outline-primary btn-sm ww-disclaimer-expand-btn mb-3"
+                                data-disclaimer-id="@disclaimer.DisclaimerId">
+                            Read Full Document
+                        </button>
+
                         <div class="form-check">
                             <input type="checkbox"
                                    class="form-check-input ww-disclaimer-checkbox"
@@ -147,6 +158,24 @@
             </div>
         </div>
     }
+
+    @* Read Full Document Modal *@
+    <div class="ww-disclaimer-modal-overlay" id="ww-disclaimer-modal-overlay-@cid" style="display:none;">
+        <div class="ww-disclaimer-modal">
+            <div class="ww-disclaimer-modal-header">
+                <h5 class="ww-disclaimer-modal-title"></h5>
+                <button type="button" class="btn-close ww-disclaimer-modal-close-btn" aria-label="Close"></button>
+            </div>
+            <div class="ww-disclaimer-modal-body">
+                <div class="ww-disclaimer-modal-meta"></div>
+                <div class="ww-disclaimer-modal-change-notes" style="display:none;"></div>
+                <div class="ww-disclaimer-modal-content"></div>
+            </div>
+            <div class="ww-disclaimer-modal-footer">
+                <button type="button" class="btn btn-primary ww-disclaimer-modal-close-btn">Close</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <style>
@@ -214,5 +243,106 @@
 
     @@keyframes ww-disc-spin {
         to { transform: rotate(360deg); }
+    }
+
+    /* Modal */
+    .ww-disclaimer-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+    }
+
+    .ww-disclaimer-modal {
+        background: var(--ww-disc-bg, #fff);
+        border-radius: 0.5rem;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+        width: 100%;
+        max-width: 720px;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+        animation: ww-disc-modal-in 0.2s ease-out;
+    }
+
+    @@keyframes ww-disc-modal-in {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .ww-disclaimer-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--ww-disc-border, #dee2e6);
+        flex-shrink: 0;
+    }
+
+    .ww-disclaimer-modal-header h5 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+        flex: 1;
+    }
+
+    .ww-disclaimer-modal-body {
+        padding: 1.25rem;
+        overflow-y: auto;
+        flex: 1;
+        font-size: 0.925rem;
+        line-height: 1.6;
+    }
+
+    .ww-disclaimer-modal-meta {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--ww-disc-border, #dee2e6);
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+
+    .ww-disclaimer-modal-meta .badge {
+        font-size: 0.8rem;
+    }
+
+    .ww-disclaimer-modal-change-notes {
+        background: rgba(13, 202, 240, 0.1);
+        color: #055160;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.25rem;
+        border-left: 3px solid #055160;
+        margin-bottom: 1rem;
+        font-size: 0.875rem;
+    }
+
+    .ww-disclaimer-modal-content {
+        color: var(--ww-disc-text, #212529);
+    }
+
+    .ww-disclaimer-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        padding: 0.75rem 1.25rem;
+        border-top: 1px solid var(--ww-disc-border, #dee2e6);
+        flex-shrink: 0;
+    }
+
+    @@media (max-width: 576px) {
+        .ww-disclaimer-modal-overlay {
+            padding: 0.75rem;
+        }
+
+        .ww-disclaimer-modal {
+            max-height: 92vh;
+        }
     }
 </style>

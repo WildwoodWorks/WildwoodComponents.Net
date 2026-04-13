@@ -110,3 +110,112 @@
     border: 1px solid var(--ww-danger, #dc3545);
     color: var(--ww-danger-text, #842029);
 }
+
+/* ========================================
+   EXPAND BUTTON
+   ======================================== */
+
+.ww-disclaimer-expand-btn {
+    font-size: 0.8rem;
+}
+
+/* ========================================
+   MODAL
+   ======================================== */
+
+.ww-disclaimer-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+.ww-disclaimer-modal {
+    background: var(--ww-bg-primary, #fff);
+    border-radius: 0.5rem;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 720px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    animation: ww-disc-modal-in 0.2s ease-out;
+}
+
+@keyframes ww-disc-modal-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.ww-disclaimer-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--ww-border-color, #dee2e6);
+    flex-shrink: 0;
+}
+
+.ww-disclaimer-modal-header h5 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    flex: 1;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-disclaimer-modal-body {
+    padding: 1.25rem;
+    overflow-y: auto;
+    flex: 1;
+    font-size: 0.925rem;
+    line-height: 1.6;
+}
+
+.ww-disclaimer-modal-meta {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--ww-border-color, #dee2e6);
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.ww-disclaimer-modal-change-notes {
+    background: rgba(13, 202, 240, 0.1);
+    color: #055160;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    border-left: 3px solid #055160;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+}
+
+.ww-disclaimer-modal-content {
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-disclaimer-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--ww-border-color, #dee2e6);
+    flex-shrink: 0;
+}
+
+@media (max-width: 576px) {
+    .ww-disclaimer-modal-overlay {
+        padding: 0.75rem;
+    }
+
+    .ww-disclaimer-modal {
+        max-height: 92vh;
+    }
+}

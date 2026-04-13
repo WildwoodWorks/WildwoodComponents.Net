@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using WildwoodComponents.Razor.Models;
 using WildwoodComponents.Razor.Services;
 using WildwoodComponents.Shared.Models;
+using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Razor.Components.Disclaimer;
 
@@ -57,6 +58,13 @@ public class DisclaimerViewComponent : ViewComponent
                 _logger.LogWarning(ex, "Failed to load pending disclaimers for app {AppId}", appId);
                 disclaimers = new();
             }
+        }
+
+        // Sanitize HTML content server-side before rendering
+        foreach (var d in disclaimers)
+        {
+            if (string.Equals(d.ContentFormat, "html", StringComparison.OrdinalIgnoreCase))
+                d.Content = HtmlSanitizer.Sanitize(d.Content);
         }
 
         var model = new DisclaimerViewModel

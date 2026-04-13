@@ -1,6 +1,7 @@
 @using WildwoodComponents.Blazor.Components.Base
 @using WildwoodComponents.Blazor.Models
 @using WildwoodComponents.Blazor.Services
+@using WildwoodComponents.Shared.Utilities
 @using Microsoft.AspNetCore.Components
 @inherits BaseWildwoodComponent
 
@@ -48,15 +49,20 @@
                     }
 
                     <div class="ww-disclaimer-content">
-                        @if (disclaimer.ContentFormat == "html")
+                        @if (string.Equals(disclaimer.ContentFormat, "html", StringComparison.OrdinalIgnoreCase))
                         {
-                            @((MarkupString)disclaimer.Content)
+                            @((MarkupString)HtmlSanitizer.Sanitize(disclaimer.Content))
                         }
                         else
                         {
                             <pre>@disclaimer.Content</pre>
                         }
                     </div>
+
+                    <button type="button" class="ww-btn ww-btn-link ww-disclaimer-expand-btn"
+                            @onclick="() => OpenFullDocument(disclaimer)">
+                        Read Full Document
+                    </button>
 
                     <div class="ww-disclaimer-accept">
                         <label class="ww-checkbox-label">
@@ -93,6 +99,50 @@
                     <span>Accept @(_disclaimers.Count > 1 ? "All" : "")</span>
                 }
             </button>
+        </div>
+    }
+
+    @if (_expandedDisclaimer != null)
+    {
+        <div class="ww-disclaimer-modal-overlay" tabindex="0"
+             @onclick="CloseFullDocument"
+             @onkeydown="HandleModalKeyDown"
+             @ref="_modalOverlayRef">
+            <div class="ww-disclaimer-modal" @onclick:stopPropagation="true">
+                <div class="ww-disclaimer-modal-header">
+                    <h4>@_expandedDisclaimer.Title</h4>
+                    <button type="button" class="ww-disclaimer-modal-close" @onclick="CloseFullDocument">&times;</button>
+                </div>
+                <div class="ww-disclaimer-modal-body">
+                    <div class="ww-disclaimer-modal-meta">
+                        <span class="ww-disclaimer-version">v@(_expandedDisclaimer.VersionNumber)</span>
+                        <span class="ww-disclaimer-type">@_expandedDisclaimer.DisclaimerType</span>
+                        @if (_expandedDisclaimer.PreviouslyAcceptedVersion.HasValue)
+                        {
+                            <span>Previously accepted: v@(_expandedDisclaimer.PreviouslyAcceptedVersion)</span>
+                        }
+                    </div>
+                    @if (!string.IsNullOrEmpty(_expandedDisclaimer.ChangeNotes))
+                    {
+                        <div class="ww-disclaimer-modal-change-notes">
+                            <strong>What changed:</strong> @_expandedDisclaimer.ChangeNotes
+                        </div>
+                    }
+                    <div class="ww-disclaimer-modal-content">
+                        @if (string.Equals(_expandedDisclaimer.ContentFormat, "html", StringComparison.OrdinalIgnoreCase))
+                        {
+                            @((MarkupString)HtmlSanitizer.Sanitize(_expandedDisclaimer.Content))
+                        }
+                        else
+                        {
+                            <pre>@_expandedDisclaimer.Content</pre>
+                        }
+                    </div>
+                </div>
+                <div class="ww-disclaimer-modal-footer">
+                    <button type="button" class="ww-btn ww-btn-primary" @onclick="CloseFullDocument">Close</button>
+                </div>
+            </div>
         </div>
     }
 </div>

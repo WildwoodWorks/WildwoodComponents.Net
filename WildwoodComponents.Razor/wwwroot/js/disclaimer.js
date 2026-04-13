@@ -113,6 +113,132 @@
                 });
         });
 
+        // ===== READ FULL DOCUMENT MODAL =====
+
+        var modalOverlay = document.getElementById('ww-disclaimer-modal-overlay-' + cid);
+        var expandBtns = root.querySelectorAll('.ww-disclaimer-expand-btn');
+
+        function sanitizeHtml(html) {
+            if (typeof DOMParser === 'undefined') return html;
+            var doc = new DOMParser().parseFromString(html, 'text/html');
+            var dangerous = doc.querySelectorAll('script, style, iframe, object, embed, form, link, meta');
+            dangerous.forEach(function (el) { el.remove(); });
+            var allEls = doc.querySelectorAll('*');
+            allEls.forEach(function (el) {
+                for (var a = el.attributes.length - 1; a >= 0; a--) {
+                    var attr = el.attributes[a];
+                    if (attr.name.indexOf('on') === 0 || attr.name === 'srcdoc' || attr.name === 'formaction') {
+                        el.removeAttribute(attr.name);
+                    }
+                    if (attr.name === 'href' || attr.name === 'src' || attr.name === 'action') {
+                        var val = (attr.value || '').trim().toLowerCase();
+                        if (val.indexOf('javascript:') === 0 || val.indexOf('data:') === 0 || val.indexOf('vbscript:') === 0) {
+                            el.removeAttribute(attr.name);
+                        }
+                    }
+                }
+            });
+            return doc.body.innerHTML;
+        }
+
+        function openModal(disclaimerItem) {
+            if (!modalOverlay) return;
+            var title = disclaimerItem.dataset.title || '';
+            var version = disclaimerItem.dataset.version || '';
+            var dtype = disclaimerItem.dataset.type || '';
+            var prevVersion = disclaimerItem.dataset.prevVersion || '';
+            var changeNotes = disclaimerItem.dataset.changeNotes || '';
+            var contentFormat = disclaimerItem.dataset.contentFormat || '';
+
+            // Populate title
+            var titleEl = modalOverlay.querySelector('.ww-disclaimer-modal-title');
+            if (titleEl) titleEl.textContent = title;
+
+            // Populate meta bar (use DOM APIs to avoid innerHTML XSS)
+            var metaEl = modalOverlay.querySelector('.ww-disclaimer-modal-meta');
+            if (metaEl) {
+                metaEl.textContent = '';
+                if (version) {
+                    var vBadge = document.createElement('span');
+                    vBadge.className = 'badge bg-info text-dark';
+                    vBadge.textContent = 'v' + version;
+                    metaEl.appendChild(vBadge);
+                }
+                if (dtype) {
+                    var typeSpan = document.createElement('span');
+                    typeSpan.textContent = dtype;
+                    metaEl.appendChild(typeSpan);
+                }
+                if (prevVersion) {
+                    var prevSpan = document.createElement('span');
+                    prevSpan.textContent = 'Previously accepted: v' + prevVersion;
+                    metaEl.appendChild(prevSpan);
+                }
+            }
+
+            // Populate change notes (use textContent to avoid XSS from data attributes)
+            var notesEl = modalOverlay.querySelector('.ww-disclaimer-modal-change-notes');
+            if (notesEl) {
+                if (changeNotes) {
+                    notesEl.textContent = '';
+                    var strong = document.createElement('strong');
+                    strong.textContent = 'What changed: ';
+                    notesEl.appendChild(strong);
+                    notesEl.appendChild(document.createTextNode(changeNotes));
+                    notesEl.style.display = '';
+                } else {
+                    notesEl.style.display = 'none';
+                }
+            }
+
+            // Populate content — read from the existing rendered content in the card
+            var contentEl = modalOverlay.querySelector('.ww-disclaimer-modal-content');
+            if (contentEl) {
+                var sourceHtml = disclaimerItem.querySelector('.ww-disclaimer-html-content');
+                var sourceText = disclaimerItem.querySelector('.ww-disclaimer-text-content');
+                if (sourceHtml) {
+                    contentEl.innerHTML = sanitizeHtml(sourceHtml.innerHTML);
+                    contentEl.style.whiteSpace = '';
+                } else if (sourceText) {
+                    contentEl.textContent = sourceText.textContent;
+                    contentEl.style.whiteSpace = 'pre-wrap';
+                }
+            }
+
+            modalOverlay.style.display = '';
+        }
+
+        function closeModal() {
+            if (modalOverlay) modalOverlay.style.display = 'none';
+        }
+
+        for (var j = 0; j < expandBtns.length; j++) {
+            expandBtns[j].addEventListener('click', function (e) {
+                var item = e.target.closest('.ww-disclaimer-item');
+                if (item) openModal(item);
+            });
+        }
+
+        if (modalOverlay) {
+            // Close on overlay click
+            modalOverlay.addEventListener('click', function (e) {
+                if (e.target === modalOverlay) closeModal();
+            });
+
+            // Close on close buttons
+            var closeBtns = modalOverlay.querySelectorAll('.ww-disclaimer-modal-close-btn');
+            for (var k = 0; k < closeBtns.length; k++) {
+                closeBtns[k].addEventListener('click', closeModal);
+            }
+
+            // Close on Escape key
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && modalOverlay.style.display !== 'none') {
+                    closeModal();
+                }
+            });
+        }
+
         // ===== CANCEL =====
 
         if (cancelBtn) {

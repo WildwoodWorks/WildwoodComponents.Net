@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Blazor.Models;
 using WildwoodComponents.Blazor.Services;
 using WildwoodComponents.Blazor.Components.Base;
+using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Blazor.Components.Disclaimer;
 
@@ -24,8 +26,32 @@ public partial class DisclaimerComponent : BaseWildwoodComponent
     private bool _isLoading = true;
     private bool _isSubmitting = false;
     private string? _errorMessage;
+    private PendingDisclaimerModel? _expandedDisclaimer;
+    private ElementReference _modalOverlayRef;
 
     private bool CanSubmit => _disclaimers.All(d => d.IsAccepted || !d.IsRequired);
+
+    private async Task OpenFullDocument(PendingDisclaimerModel disclaimer)
+    {
+        _expandedDisclaimer = disclaimer;
+        StateHasChanged();
+        // Focus the overlay so it receives keyboard events
+        await Task.Yield();
+        try { await _modalOverlayRef.FocusAsync(); } catch { /* element may not be rendered yet */ }
+    }
+
+    private void CloseFullDocument()
+    {
+        _expandedDisclaimer = null;
+    }
+
+    private void HandleModalKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            CloseFullDocument();
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
