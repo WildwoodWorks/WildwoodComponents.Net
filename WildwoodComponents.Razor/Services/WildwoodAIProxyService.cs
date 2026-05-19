@@ -15,6 +15,7 @@ public class WildwoodAIProxyService : IWildwoodAIProxyService
     private readonly HttpClient _httpClient;
     private readonly IWildwoodSessionManager _sessionManager;
     private readonly ILogger<WildwoodAIProxyService> _logger;
+    private readonly string? _appId;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -24,11 +25,13 @@ public class WildwoodAIProxyService : IWildwoodAIProxyService
     public WildwoodAIProxyService(
         HttpClient httpClient,
         IWildwoodSessionManager sessionManager,
-        ILogger<WildwoodAIProxyService> logger)
+        ILogger<WildwoodAIProxyService> logger,
+        string? appId = null)
     {
         _httpClient = httpClient;
         _sessionManager = sessionManager;
         _logger = logger;
+        _appId = appId;
     }
 
     public async Task<AIProxyResponse> SendRequestAsync(AIProxyRequest request)
@@ -138,7 +141,10 @@ public class WildwoodAIProxyService : IWildwoodAIProxyService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync("api/ai/configurations");
+            var url = string.IsNullOrEmpty(_appId)
+                ? "api/ai/configurations"
+                : $"api/ai/configurations?requestedAppId={Uri.EscapeDataString(_appId)}";
+            using var response = await _httpClient.GetAsync(url);
 
             if (response.IsSuccessStatusCode)
             {

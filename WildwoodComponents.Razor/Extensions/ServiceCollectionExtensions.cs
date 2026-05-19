@@ -131,7 +131,7 @@ public static class ServiceCollectionExtensions
             var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
             var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
             var logger = sp.GetRequiredService<ILogger<WildwoodAIProxyService>>();
-            return new WildwoodAIProxyService(httpClient, sessionManager, logger);
+            return new WildwoodAIProxyService(httpClient, sessionManager, logger, options.AppId);
         });
 
         // App Tier service
