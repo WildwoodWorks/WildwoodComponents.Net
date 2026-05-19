@@ -57,7 +57,7 @@ public class WildwoodAIProxyService : IWildwoodAIProxyService
                 SaveToSession = request.SaveToSession
             };
 
-            using var response = await _httpClient.PostAsJsonAsync("api/ai/chat", apiRequest);
+            using var response = await _httpClient.PostAsJsonAsync("ai/chat", apiRequest);
             var content = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
@@ -116,7 +116,7 @@ public class WildwoodAIProxyService : IWildwoodAIProxyService
             };
 
             // Send as JSON (not multipart) — this is the key fix for the 415 error
-            using var response = await _httpClient.PostAsJsonAsync("api/ai/chat", apiRequest);
+            using var response = await _httpClient.PostAsJsonAsync("ai/chat", apiRequest);
             var content = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
@@ -142,8 +142,8 @@ public class WildwoodAIProxyService : IWildwoodAIProxyService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var url = string.IsNullOrEmpty(_appId)
-                ? "api/ai/configurations"
-                : $"api/ai/configurations?requestedAppId={Uri.EscapeDataString(_appId)}";
+                ? "ai/configurations"
+                : $"ai/configurations?requestedAppId={Uri.EscapeDataString(_appId)}";
             using var response = await _httpClient.GetAsync(url);
 
             if (response.IsSuccessStatusCode)
