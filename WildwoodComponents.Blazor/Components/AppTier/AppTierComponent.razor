@@ -444,7 +444,7 @@
                     }
 
                     <!-- PaymentComponent Integration -->
-                    <PaymentComponent AppId="@AppId"
+                    <PaymentComponent AppId="@_selectedTier?.AppId"
                                      Amount="@GetPaymentAmount()"
                                      Currency="@Currency"
                                      Description="@($"{_selectedTier?.Name} Subscription")"

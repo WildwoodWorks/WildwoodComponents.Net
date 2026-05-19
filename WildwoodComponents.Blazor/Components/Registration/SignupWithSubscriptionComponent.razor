@@ -156,7 +156,7 @@
             </div>
 
             <PaymentComponent
-                AppId="@AppId"
+                AppId="@_selectedTier.AppId"
                 Amount="@_selectedPricing.Price"
                 Currency="USD"
                 Description="@($"{_selectedTier.Name} Subscription")"
