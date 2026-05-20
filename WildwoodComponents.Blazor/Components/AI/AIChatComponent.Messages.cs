@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 using WildwoodComponents.Blazor.Components.Base;
@@ -83,7 +84,19 @@ public partial class AIChatComponent
             Logger?.LogInformation("?? AIChatComponent: Sending request - ConfigId: {ConfigId}, SessionId: {SessionId}, SaveToSession: {SaveToSession}",
                 CurrentConfigurationId, CurrentSession?.Id ?? "null", Settings.EnableSessions);
 
-            var response = await AIService.SendMessageAsync(request);
+            AIChatResponse response;
+            if (_selectedFile != null)
+            {
+                using var stream = _selectedFile.OpenReadStream(MaxFileSize);
+                using var memoryStream = new MemoryStream();
+                await stream.CopyToAsync(memoryStream);
+                var fileBytes = memoryStream.ToArray();
+                response = await AIService.SendMessageWithFileAsync(request, fileBytes, _selectedFile.Name);
+            }
+            else
+            {
+                response = await AIService.SendMessageAsync(request);
+            }
 
             Logger?.LogInformation("?? AIChatComponent: Received response - IsError: {IsError}, Response length: {ResponseLength}, ResponseId: {ResponseId}",
                 response.IsError, response.Response?.Length ?? 0, response.Id);
@@ -104,6 +117,10 @@ public partial class AIChatComponent
             else
             {
                 Logger?.LogInformation("? AIChatComponent: Processing successful AI response");
+
+                // Clear attached file only on success so user can retry on error
+                _selectedFile = null;
+                _selectedFileName = null;
 
                 var aiMessage = new AIMessage
                 {
@@ -216,6 +233,32 @@ public partial class AIChatComponent
         {
             Logger?.LogWarning(ex, "?? AIChatComponent: Error auto-naming session");
         }
+    }
+
+    #endregion
+
+    #region File Attachment
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file.Size > MaxFileSize)
+        {
+            Logger?.LogWarning("Selected file exceeds maximum size of {MaxBytes} bytes", MaxFileSize);
+            _selectedFile = null;
+            _selectedFileName = null;
+            return;
+        }
+        _selectedFile = file;
+        _selectedFileName = file.Name;
+        StateHasChanged();
+    }
+
+    private void ClearSelectedFile()
+    {
+        _selectedFile = null;
+        _selectedFileName = null;
+        StateHasChanged();
     }
 
     #endregion

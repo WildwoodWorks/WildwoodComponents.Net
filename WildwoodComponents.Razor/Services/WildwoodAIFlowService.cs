@@ -29,7 +29,7 @@ public class WildwoodAIFlowService : IWildwoodAIFlowService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/AppComponentConfigurations/{appId}/flows");
+            using var response = await _httpClient.GetAsync($"AppComponentConfigurations/{appId}/flows");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -48,7 +48,7 @@ public class WildwoodAIFlowService : IWildwoodAIFlowService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/AppComponentConfigurations/{appId}/flows/{flowId}");
+            using var response = await _httpClient.GetAsync($"AppComponentConfigurations/{appId}/flows/{flowId}");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -68,7 +68,7 @@ public class WildwoodAIFlowService : IWildwoodAIFlowService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { InputDataJson = inputDataJson };
-            using var response = await _httpClient.PostAsJsonAsync($"api/FlowExecution/{appId}/execute/{flowId}", payload);
+            using var response = await _httpClient.PostAsJsonAsync($"FlowExecution/{appId}/execute/{flowId}", payload);
             var content = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
@@ -91,7 +91,7 @@ public class WildwoodAIFlowService : IWildwoodAIFlowService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/FlowExecution/{appId}/status/{executionId}");
+            using var response = await _httpClient.GetAsync($"FlowExecution/{appId}/status/{executionId}");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -110,7 +110,7 @@ public class WildwoodAIFlowService : IWildwoodAIFlowService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/FlowExecution/{appId}/cancel/{executionId}", null);
+            using var response = await _httpClient.PostAsync($"FlowExecution/{appId}/cancel/{executionId}", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

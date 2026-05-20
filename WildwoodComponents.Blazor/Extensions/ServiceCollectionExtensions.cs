@@ -563,11 +563,12 @@ namespace WildwoodComponents.Blazor.Extensions
                                 ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.AIService>.Instance;
 
                     var aiService = new WildwoodComponents.Blazor.Services.AIService(httpClient, localStorage, logger);
-                    
+
                     // CRITICAL: Set the API base URL from configuration
                     var apiBaseUrl = options.BaseUrl?.TrimEnd('/') + "/api";
                     aiService.SetApiBaseUrl(apiBaseUrl);
-                    
+                    aiService.SetAppId(options.AppId);
+
                     Console.WriteLine($"[ServiceCollectionExtensions] AIService configured with API URL: {apiBaseUrl}");
 
                     return aiService;

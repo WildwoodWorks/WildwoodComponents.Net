@@ -28,7 +28,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/messaging/threads?companyAppId={companyAppId}");
+            using var response = await _httpClient.GetAsync($"messaging/threads?companyAppId={companyAppId}");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -44,7 +44,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/messaging/threads/{threadId}");
+            using var response = await _httpClient.GetAsync($"messaging/threads/{threadId}");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -61,7 +61,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { CompanyAppId = companyAppId, Subject = subject, ParticipantIds = participantIds, ThreadType = threadType };
-            using var response = await _httpClient.PostAsJsonAsync("api/messaging/threads", payload);
+            using var response = await _httpClient.PostAsJsonAsync("messaging/threads", payload);
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -77,7 +77,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/messaging/threads/{threadId}/messages?page={page}&pageSize={pageSize}");
+            using var response = await _httpClient.GetAsync($"messaging/threads/{threadId}/messages?page={page}&pageSize={pageSize}");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -94,7 +94,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { ThreadId = threadId, Content = content, MessageType = messageType, ReplyToMessageId = replyToMessageId };
-            using var response = await _httpClient.PostAsJsonAsync("api/messaging/messages", payload);
+            using var response = await _httpClient.PostAsJsonAsync("messaging/messages", payload);
             if (response.IsSuccessStatusCode)
             {
                 var responseContent = await response.Content.ReadAsStringAsync();
@@ -111,7 +111,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { Content = newContent };
-            using var response = await _httpClient.PutAsJsonAsync($"api/messaging/messages/{messageId}", payload);
+            using var response = await _httpClient.PutAsJsonAsync($"messaging/messages/{messageId}", payload);
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -127,7 +127,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.DeleteAsync($"api/messaging/messages/{messageId}");
+            using var response = await _httpClient.DeleteAsync($"messaging/messages/{messageId}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to delete message {MessageId}", messageId); return false; }
@@ -139,7 +139,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { Emoji = emoji };
-            using var response = await _httpClient.PostAsJsonAsync($"api/messaging/messages/{messageId}/reactions", payload);
+            using var response = await _httpClient.PostAsJsonAsync($"messaging/messages/{messageId}/reactions", payload);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to react to message"); return false; }
@@ -150,7 +150,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.DeleteAsync($"api/messaging/messages/{messageId}/reactions/{Uri.EscapeDataString(emoji)}");
+            using var response = await _httpClient.DeleteAsync($"messaging/messages/{messageId}/reactions/{Uri.EscapeDataString(emoji)}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to remove reaction"); return false; }
@@ -161,7 +161,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/messaging/threads/{threadId}/read", null);
+            using var response = await _httpClient.PostAsync($"messaging/threads/{threadId}/read", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to mark thread as read"); return false; }
@@ -172,7 +172,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/messaging/users?companyAppId={companyAppId}");
+            using var response = await _httpClient.GetAsync($"messaging/users?companyAppId={companyAppId}");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -188,7 +188,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/messaging/users/search?companyAppId={companyAppId}&q={Uri.EscapeDataString(searchTerm)}");
+            using var response = await _httpClient.GetAsync($"messaging/users/search?companyAppId={companyAppId}&q={Uri.EscapeDataString(searchTerm)}");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -204,7 +204,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/messaging/messages/{messageId}/read", null);
+            using var response = await _httpClient.PostAsync($"messaging/messages/{messageId}/read", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to mark message {MessageId} as read", messageId); return false; }
@@ -215,7 +215,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/messaging/threads/{threadId}/typing/start", null);
+            using var response = await _httpClient.PostAsync($"messaging/threads/{threadId}/typing/start", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to start typing for thread {ThreadId}", threadId); return false; }
@@ -226,7 +226,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/messaging/threads/{threadId}/typing/stop", null);
+            using var response = await _httpClient.PostAsync($"messaging/threads/{threadId}/typing/stop", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to stop typing for thread {ThreadId}", threadId); return false; }
@@ -237,7 +237,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/messaging/threads/{threadId}/typing");
+            using var response = await _httpClient.GetAsync($"messaging/threads/{threadId}/typing");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -260,7 +260,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
             fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
             content.Add(fileContent, "file", fileName);
 
-            using var response = await _httpClient.PostAsync("api/messaging/attachments", content);
+            using var response = await _httpClient.PostAsync("messaging/attachments", content);
             response.EnsureSuccessStatusCode();
 
             var responseJson = await response.Content.ReadAsStringAsync();
@@ -279,7 +279,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/messaging/attachments/{attachmentId}");
+            using var response = await _httpClient.GetAsync($"messaging/attachments/{attachmentId}");
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsByteArrayAsync();
         }
@@ -295,7 +295,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            var url = $"api/messaging/search?companyAppId={companyAppId}&q={Uri.EscapeDataString(searchTerm)}";
+            var url = $"messaging/search?companyAppId={companyAppId}&q={Uri.EscapeDataString(searchTerm)}";
             if (!string.IsNullOrEmpty(threadId))
                 url += $"&threadId={threadId}";
 
@@ -316,7 +316,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { CompanyAppId = companyAppId, Status = status, StatusMessage = statusMessage };
-            using var response = await _httpClient.PostAsJsonAsync("api/messaging/status", payload);
+            using var response = await _httpClient.PostAsJsonAsync("messaging/status", payload);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to update online status for app {CompanyAppId}", companyAppId); return false; }
@@ -327,7 +327,7 @@ public class WildwoodMessagingService : IWildwoodMessagingService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/messaging/status?companyAppId={companyAppId}");
+            using var response = await _httpClient.GetAsync($"messaging/status?companyAppId={companyAppId}");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();

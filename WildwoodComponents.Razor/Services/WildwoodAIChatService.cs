@@ -28,7 +28,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            var url = "api/ai/configurations";
+            var url = "ai/configurations";
             if (!string.IsNullOrEmpty(configurationType))
                 url += $"?configurationType={Uri.EscapeDataString(configurationType)}";
 
@@ -51,7 +51,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/ai/configurations/{configurationId}");
+            using var response = await _httpClient.GetAsync($"ai/configurations/{configurationId}");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -70,7 +70,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsJsonAsync("api/ai/chat", request);
+            using var response = await _httpClient.PostAsJsonAsync("ai/chat", request);
             var content = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
@@ -118,7 +118,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
             };
 
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsJsonAsync("api/ai/chat", payload);
+            using var response = await _httpClient.PostAsJsonAsync("ai/chat", payload);
             var content = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
@@ -142,7 +142,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { ConfigurationId = configurationId, SessionName = sessionName };
-            using var response = await _httpClient.PostAsJsonAsync("api/ai/sessions", payload);
+            using var response = await _httpClient.PostAsJsonAsync("ai/sessions", payload);
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -161,7 +161,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/ai/sessions/{sessionId}");
+            using var response = await _httpClient.GetAsync($"ai/sessions/{sessionId}");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -180,7 +180,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            var url = "api/ai/sessions";
+            var url = "ai/sessions";
             if (!string.IsNullOrEmpty(configurationId))
                 url += $"?configurationId={configurationId}";
 
@@ -203,7 +203,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/ai/sessions/{sessionId}/end", null);
+            using var response = await _httpClient.PostAsync($"ai/sessions/{sessionId}/end", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -218,7 +218,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.DeleteAsync($"api/ai/sessions/{sessionId}");
+            using var response = await _httpClient.DeleteAsync($"ai/sessions/{sessionId}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -233,7 +233,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PutAsJsonAsync($"api/ai/sessions/{sessionId}/name", new { NewName = newName });
+            using var response = await _httpClient.PutAsJsonAsync($"ai/sessions/{sessionId}/name", new { NewName = newName });
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -249,8 +249,8 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var url = string.IsNullOrEmpty(configurationId)
-                ? "api/tts/voices"
-                : $"api/tts/voices/configuration/{configurationId}";
+                ? "tts/voices"
+                : $"tts/voices/configuration/{configurationId}";
 
             using var response = await _httpClient.GetAsync(url);
             if (response.IsSuccessStatusCode)
@@ -272,7 +272,7 @@ public class WildwoodAIChatService : IWildwoodAIChatService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { Text = text, Voice = voice, Speed = speed, Format = "mp3", ConfigurationId = configurationId };
-            using var response = await _httpClient.PostAsJsonAsync("api/tts/synthesize/base64", payload);
+            using var response = await _httpClient.PostAsJsonAsync("tts/synthesize/base64", payload);
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();

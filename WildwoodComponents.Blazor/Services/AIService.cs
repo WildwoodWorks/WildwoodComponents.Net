@@ -19,6 +19,19 @@ namespace WildwoodComponents.Blazor.Services
 
         Task<AIChatResponse> SendMessageAsync(AIChatRequest request);
         Task<AIChatResponse> SendMessageWithFileAsync(AIChatRequest request, byte[] fileBytes, string fileName);
+
+        /// <summary>
+        /// Send a message via the AI proxy endpoint (POST /api/ai/proxy).
+        /// The backing handler is identical to /api/ai/chat, but the proxy alias is the
+        /// canonical endpoint for AIProxyComponent usage. Mirrors WildwoodAIProxyService.
+        /// </summary>
+        Task<AIChatResponse> SendProxyMessageAsync(AIChatRequest request);
+
+        /// <summary>
+        /// Send a message with a file attachment via the AI proxy endpoint (POST /api/ai/proxy).
+        /// </summary>
+        Task<AIChatResponse> SendProxyMessageWithFileAsync(AIChatRequest request, byte[] fileBytes, string fileName);
+
         Task<List<AIConfiguration>> GetConfigurationsAsync(string? configurationType = null);
         Task<AIConfiguration?> GetConfigurationAsync(string configurationId);
         Task<AISession?> CreateSessionAsync(string configurationId, string? sessionName = null);
@@ -29,6 +42,13 @@ namespace WildwoodComponents.Blazor.Services
         Task<bool> RenameSessionAsync(string sessionId, string newName);
         void SetAuthToken(string token);
         void SetApiBaseUrl(string apiBaseUrl);
+
+        /// <summary>
+        /// Sets the consuming app's AppId. When provided, GetConfigurationsAsync appends
+        /// ?requestedAppId=&lt;appId&gt; so admin users whose JWT app_id differs from the
+        /// configured app can still resolve named AI configurations.
+        /// </summary>
+        void SetAppId(string? appId);
         
         // Text-to-Speech methods
         Task<string> GetTTSAudioUrlAsync(string text, string? voice = null, string format = "mp3", double speed = 1.0);
@@ -66,6 +86,7 @@ namespace WildwoodComponents.Blazor.Services
         private readonly ILogger<AIService> _logger;
         private string _authToken = string.Empty;
         private string _apiBaseUrl = string.Empty; // Must be configured via SetApiBaseUrl - no hardcoded default
+        private string? _appId;
         private bool _authFailureFired;
 
         public event EventHandler? AuthenticationFailed;
@@ -119,16 +140,33 @@ namespace WildwoodComponents.Blazor.Services
             _logger.LogInformation("?? AIService: API base URL set to: {ApiBaseUrl}", _apiBaseUrl);
         }
 
-        public async Task<AIChatResponse> SendMessageAsync(AIChatRequest request)
+        public void SetAppId(string? appId)
+        {
+            _appId = appId;
+        }
+
+        public Task<AIChatResponse> SendMessageAsync(AIChatRequest request) =>
+            PostChatAsync($"{_apiBaseUrl}/ai/chat", request, "SendMessage");
+
+        public Task<AIChatResponse> SendProxyMessageAsync(AIChatRequest request) =>
+            PostChatAsync($"{_apiBaseUrl}/ai/proxy", request, "SendProxyMessage");
+
+        public Task<AIChatResponse> SendMessageWithFileAsync(AIChatRequest request, byte[] fileBytes, string fileName) =>
+            PostChatWithFileAsync($"{_apiBaseUrl}/ai/chat", request, fileBytes, fileName, "SendMessageWithFile");
+
+        public Task<AIChatResponse> SendProxyMessageWithFileAsync(AIChatRequest request, byte[] fileBytes, string fileName) =>
+            PostChatWithFileAsync($"{_apiBaseUrl}/ai/proxy", request, fileBytes, fileName, "SendProxyMessageWithFile");
+
+        private async Task<AIChatResponse> PostChatAsync(string url, AIChatRequest request, string operationName)
         {
             try
             {
                 var json = JsonSerializer.Serialize(request, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                var response = await _httpClient.PostAsync($"{_apiBaseUrl}/ai/chat", content);
+                var response = await _httpClient.PostAsync(url, content);
 
-                CheckForAuthFailure(response, "SendMessage");
+                CheckForAuthFailure(response, operationName);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -158,7 +196,7 @@ namespace WildwoodComponents.Blazor.Services
             }
         }
 
-        public async Task<AIChatResponse> SendMessageWithFileAsync(AIChatRequest request, byte[] fileBytes, string fileName)
+        private async Task<AIChatResponse> PostChatWithFileAsync(string url, AIChatRequest request, byte[] fileBytes, string fileName, string operationName)
         {
             try
             {
@@ -180,9 +218,9 @@ namespace WildwoodComponents.Blazor.Services
                 var json = JsonSerializer.Serialize(apiRequest, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                var response = await _httpClient.PostAsync($"{_apiBaseUrl}/ai/chat", content);
+                var response = await _httpClient.PostAsync(url, content);
 
-                CheckForAuthFailure(response, "SendMessageWithFile");
+                CheckForAuthFailure(response, operationName);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -286,11 +324,14 @@ namespace WildwoodComponents.Blazor.Services
         {
             try
             {
-                var url = $"{_apiBaseUrl}/ai/configurations";
+                var query = new List<string>();
                 if (!string.IsNullOrEmpty(configurationType))
-                {
-                    url += $"?configurationType={Uri.EscapeDataString(configurationType)}";
-                }
+                    query.Add($"configurationType={Uri.EscapeDataString(configurationType)}");
+                if (!string.IsNullOrEmpty(_appId))
+                    query.Add($"requestedAppId={Uri.EscapeDataString(_appId)}");
+                var url = query.Count > 0
+                    ? $"{_apiBaseUrl}/ai/configurations?{string.Join("&", query)}"
+                    : $"{_apiBaseUrl}/ai/configurations";
 
                 _logger.LogInformation("?? AIService: Getting AI configurations from {ApiUrl}", url);
                 _logger.LogInformation("?? AIService: Auth token set: {HasToken}", !string.IsNullOrEmpty(_authToken));

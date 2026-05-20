@@ -176,7 +176,19 @@ public partial class AIProxyComponent : BaseWildwoodComponent
                 SaveToSession = false
             };
 
-            var response = await AIService.SendMessageAsync(request);
+            AIChatResponse response;
+            if (_selectedFile != null)
+            {
+                using var stream = _selectedFile.OpenReadStream(MaxFileSize);
+                using var memoryStream = new MemoryStream();
+                await stream.CopyToAsync(memoryStream);
+                var fileBytes = memoryStream.ToArray();
+                response = await AIService.SendProxyMessageWithFileAsync(request, fileBytes, _selectedFile.Name);
+            }
+            else
+            {
+                response = await AIService.SendProxyMessageAsync(request);
+            }
 
             if (response.IsError)
             {
@@ -188,6 +200,8 @@ public partial class AIProxyComponent : BaseWildwoodComponent
             {
                 _responseText = response.Response;
                 _hasResponse = true;
+                _selectedFile = null;
+                _selectedFileName = null;
 
                 if (OnResponse.HasDelegate)
                     await OnResponse.InvokeAsync(response);

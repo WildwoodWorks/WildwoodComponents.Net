@@ -39,7 +39,7 @@ public class WildwoodPaymentService : IWildwoodPaymentService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/payment/configuration/{appId}");
+            using var response = await _httpClient.GetAsync($"payment/configuration/{appId}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -62,7 +62,7 @@ public class WildwoodPaymentService : IWildwoodPaymentService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             // Web platform = 1
-            using var response = await _httpClient.GetAsync($"api/payment/providers/{appId}?platform=Web");
+            using var response = await _httpClient.GetAsync($"payment/providers/{appId}?platform=Web");
 
             if (response.IsSuccessStatusCode)
             {
@@ -89,7 +89,7 @@ public class WildwoodPaymentService : IWildwoodPaymentService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var content = new StringContent(JsonSerializer.Serialize(request, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync("api/payment/initiate", content);
+            using var response = await _httpClient.PostAsync("payment/initiate", content);
 
             if (response.IsSuccessStatusCode)
             {
@@ -115,7 +115,7 @@ public class WildwoodPaymentService : IWildwoodPaymentService
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var body = new { PaymentIntentId = paymentIntentId, ProviderType = providerType };
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync("api/payment/confirm", content);
+            using var response = await _httpClient.PostAsync("payment/confirm", content);
 
             if (response.IsSuccessStatusCode)
             {
@@ -142,7 +142,7 @@ public class WildwoodPaymentService : IWildwoodPaymentService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/payment/methods/{customerId}");
+            using var response = await _httpClient.GetAsync($"payment/methods/{customerId}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -163,7 +163,7 @@ public class WildwoodPaymentService : IWildwoodPaymentService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.DeleteAsync($"api/payment/methods/{paymentMethodId}");
+            using var response = await _httpClient.DeleteAsync($"payment/methods/{paymentMethodId}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -178,7 +178,7 @@ public class WildwoodPaymentService : IWildwoodPaymentService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/payment/methods/{paymentMethodId}/default", null);
+            using var response = await _httpClient.PostAsync($"payment/methods/{paymentMethodId}/default", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -197,7 +197,7 @@ public class WildwoodPaymentService : IWildwoodPaymentService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/payment/status/{transactionId}");
+            using var response = await _httpClient.GetAsync($"payment/status/{transactionId}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -224,7 +224,7 @@ public class WildwoodPaymentService : IWildwoodPaymentService
                 CompanyClientId = companyClientId
             };
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync("api/payment/link-transaction", content);
+            using var response = await _httpClient.PostAsync("payment/link-transaction", content);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

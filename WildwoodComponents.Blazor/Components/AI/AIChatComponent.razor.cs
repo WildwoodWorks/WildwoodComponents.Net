@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 using WildwoodComponents.Blazor.Models;
@@ -100,6 +101,11 @@ public partial class AIChatComponent : BaseWildwoodComponent
     private bool IsLoadingVoices = false;
 
     private string CurrentMessage = string.Empty;
+
+    // File attachment state
+    private IBrowserFile? _selectedFile;
+    private string? _selectedFileName;
+    private const long MaxFileSize = 10 * 1024 * 1024;
 
     #endregion
 

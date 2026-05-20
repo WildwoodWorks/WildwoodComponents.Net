@@ -29,7 +29,7 @@ public class WildwoodDisclaimerService : IWildwoodDisclaimerService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            var url = $"api/disclaimeracceptance/pending/{appId}";
+            var url = $"disclaimeracceptance/pending/{appId}";
             var queryParams = new List<string>();
             if (!string.IsNullOrEmpty(userId)) queryParams.Add($"userId={Uri.EscapeDataString(userId)}");
             if (!string.IsNullOrEmpty(showOn)) queryParams.Add($"showOn={Uri.EscapeDataString(showOn)}");
@@ -52,7 +52,7 @@ public class WildwoodDisclaimerService : IWildwoodDisclaimerService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { AppId = appId, Acceptances = acceptances };
-            using var response = await _httpClient.PostAsJsonAsync("api/disclaimeracceptance/accept-bulk", payload);
+            using var response = await _httpClient.PostAsJsonAsync("disclaimeracceptance/accept-bulk", payload);
             if (response.IsSuccessStatusCode)
                 return ApiResult.Ok("Disclaimers accepted");
 

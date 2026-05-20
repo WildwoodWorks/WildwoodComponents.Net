@@ -38,7 +38,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
     {
         try
         {
-            using var response = await _httpClient.GetAsync($"api/app-tiers/{appId}");
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -60,7 +60,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
     {
         try
         {
-            using var response = await _httpClient.GetAsync($"api/app-tier-addons/{appId}/available");
+            using var response = await _httpClient.GetAsync($"app-tier-addons/{appId}/available");
 
             if (response.IsSuccessStatusCode)
             {
@@ -87,7 +87,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tiers/{appId}/my-subscription");
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/my-subscription");
 
             if (response.IsSuccessStatusCode)
             {
@@ -112,7 +112,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tier-addons/{appId}/my-addons");
+            using var response = await _httpClient.GetAsync($"app-tier-addons/{appId}/my-addons");
 
             if (response.IsSuccessStatusCode)
             {
@@ -148,7 +148,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
             };
 
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync($"api/app-tiers/{appId}/subscribe", content);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/subscribe", content);
 
             if (response.IsSuccessStatusCode)
             {
@@ -181,7 +181,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
             };
 
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync($"api/app-tiers/{appId}/change-tier", content);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/change-tier", content);
 
             if (response.IsSuccessStatusCode)
             {
@@ -204,7 +204,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/app-tiers/{appId}/cancel-subscription", null);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/cancel-subscription", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -232,7 +232,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
             };
 
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync($"api/app-tier-addons/{appId}/subscribe", content);
+            using var response = await _httpClient.PostAsync($"app-tier-addons/{appId}/subscribe", content);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -247,7 +247,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/app-tier-addons/subscriptions/{subscriptionId}/cancel", null);
+            using var response = await _httpClient.PostAsync($"app-tier-addons/subscriptions/{subscriptionId}/cancel", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -266,7 +266,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tiers/{appId}/limit-statuses");
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/limit-statuses");
 
             if (response.IsSuccessStatusCode)
             {
@@ -292,7 +292,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
     {
         try
         {
-            using var response = await _httpClient.GetAsync($"api/app-tiers/{appId}/public");
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/public");
 
             if (response.IsSuccessStatusCode)
             {
@@ -319,7 +319,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tiers/{appId}/subscription/company/{companyId}");
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/subscription/company/{companyId}");
 
             if (response.IsSuccessStatusCode)
                 return await response.Content.ReadFromJsonAsync<UserTierSubscriptionModel>(JsonOptions);
@@ -342,7 +342,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tier-addons/{appId}/company/{companyId}/addon-subscriptions");
+            using var response = await _httpClient.GetAsync($"app-tier-addons/{appId}/company/{companyId}/addon-subscriptions");
 
             if (response.IsSuccessStatusCode)
             {
@@ -365,7 +365,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tiers/{appId}/limits/company/{companyId}");
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/limits/company/{companyId}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -392,7 +392,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-feature-definitions/{appId}?activeOnly=true");
+            using var response = await _httpClient.GetAsync($"app-feature-definitions/{appId}?activeOnly=true");
 
             if (response.IsSuccessStatusCode)
             {
@@ -415,7 +415,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/companies/{companyId}/features");
+            using var response = await _httpClient.GetAsync($"companies/{companyId}/features");
 
             if (response.IsSuccessStatusCode)
             {
@@ -444,7 +444,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var body = new { CompanyId = companyId, AppTierId = tierId, AppTierPricingId = pricingId };
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync($"api/app-tiers/{appId}/subscribe/company", content);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/subscribe/company", content);
 
             if (response.IsSuccessStatusCode)
             {
@@ -469,7 +469,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var body = new { CompanyId = companyId, NewAppTierId = newTierId, NewAppTierPricingId = pricingId, Immediate = immediate };
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync($"api/app-tiers/{appId}/change-tier/company", content);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/change-tier/company", content);
 
             if (response.IsSuccessStatusCode)
             {
@@ -492,7 +492,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/app-tiers/{appId}/cancel/company/{companyId}", null);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/cancel/company/{companyId}", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -509,7 +509,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var body = new { CompanyId = companyId, AppTierAddOnId = addOnId };
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync($"api/app-tier-addons/{appId}/subscribe/company", content);
+            using var response = await _httpClient.PostAsync($"app-tier-addons/{appId}/subscribe/company", content);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -524,7 +524,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/app-tier-addons/subscriptions/{subscriptionId}/cancel?immediate={immediate}", null);
+            using var response = await _httpClient.PostAsync($"app-tier-addons/subscriptions/{subscriptionId}/cancel?immediate={immediate}", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -543,7 +543,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tier-addons/{appId}");
+            using var response = await _httpClient.GetAsync($"app-tier-addons/{appId}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -570,7 +570,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tiers/{appId}/subscriptions/{userId}");
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/subscriptions/{userId}");
 
             if (response.IsSuccessStatusCode)
                 return await response.Content.ReadFromJsonAsync<UserTierSubscriptionModel>(JsonOptions);
@@ -593,7 +593,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tiers/{appId}/admin/user-features/{userId}");
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/admin/user-features/{userId}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -614,7 +614,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tiers/{appId}/admin/user-limits/{userId}");
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/admin/user-limits/{userId}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -635,7 +635,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tier-addons/{appId}/admin/user-addons/{userId}");
+            using var response = await _httpClient.GetAsync($"app-tier-addons/{appId}/admin/user-addons/{userId}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -656,7 +656,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/app-tiers/{appId}/cancel/{userId}", null);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/cancel/{userId}", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -677,7 +677,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var body = new { UserId = userId, AppId = appId, AppTierId = tierId, AppTierPricingId = pricingId };
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync("api/app-tiers/subscribe", content);
+            using var response = await _httpClient.PostAsync("app-tiers/subscribe", content);
 
             if (response.IsSuccessStatusCode)
             {
@@ -702,7 +702,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var body = new { UserId = userId, AppId = appId, NewAppTierId = newTierId, NewAppTierPricingId = newPricingId, Immediate = immediate };
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync("api/app-tiers/change-tier", content);
+            using var response = await _httpClient.PostAsync("app-tiers/change-tier", content);
 
             if (response.IsSuccessStatusCode)
             {
@@ -727,7 +727,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var body = new { AppTierAddOnId = addOnId };
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync($"api/app-tier-addons/{appId}/admin/subscribe-user/{userId}", content);
+            using var response = await _httpClient.PostAsync($"app-tier-addons/{appId}/admin/subscribe-user/{userId}", content);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -742,7 +742,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/app-tier-addons/{appId}/admin/cancel-user-addon/{subscriptionId}", null);
+            using var response = await _httpClient.PostAsync($"app-tier-addons/{appId}/admin/cancel-user-addon/{subscriptionId}", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -757,7 +757,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/app-tiers/{appId}/admin/usage-limits/user/{userId}/{limitCode}/reset", null);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/admin/usage-limits/user/{userId}/{limitCode}/reset", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -773,7 +773,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var content = JsonContent.Create(new { MaxValue = newMaxValue });
-            using var response = await _httpClient.PutAsync($"api/app-tiers/{appId}/admin/usage-limits/user/{userId}/{limitCode}", content);
+            using var response = await _httpClient.PutAsync($"app-tiers/{appId}/admin/usage-limits/user/{userId}/{limitCode}", content);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -792,7 +792,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tiers/{appId}/settings/tracking-mode");
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/settings/tracking-mode");
 
             if (response.IsSuccessStatusCode)
             {
@@ -824,7 +824,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var body = new { MaxValue = newMaxValue };
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PutAsync($"api/app-tiers/{appId}/admin/usage-limits/{limitCode}", content);
+            using var response = await _httpClient.PutAsync($"app-tiers/{appId}/admin/usage-limits/{limitCode}", content);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -839,7 +839,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/app-tiers/{appId}/admin/usage-limits/{limitCode}/reset", null);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/admin/usage-limits/{limitCode}/reset", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -856,7 +856,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var body = new { MaxValue = newMaxValue };
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PutAsync($"api/app-tiers/{appId}/admin/usage-limits/company/{companyId}/{limitCode}", content);
+            using var response = await _httpClient.PutAsync($"app-tiers/{appId}/admin/usage-limits/company/{companyId}/{limitCode}", content);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -871,7 +871,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/app-tiers/{appId}/admin/usage-limits/company/{companyId}/{limitCode}/reset", null);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/admin/usage-limits/company/{companyId}/{limitCode}/reset", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -892,7 +892,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var body = new { UserId = userId, FeatureCode = featureCode, IsEnabled = isEnabled, Reason = reason, ExpiresAt = expiresAt };
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync($"api/app-tiers/{appId}/admin/feature-overrides", content);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/admin/feature-overrides", content);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -908,7 +908,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var userQuery = !string.IsNullOrEmpty(userId) ? $"?userId={userId}" : "";
-            using var response = await _httpClient.DeleteAsync($"api/app-tiers/{appId}/admin/feature-overrides/{featureCode}{userQuery}");
+            using var response = await _httpClient.DeleteAsync($"app-tiers/{appId}/admin/feature-overrides/{featureCode}{userQuery}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -924,7 +924,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var userQuery = !string.IsNullOrEmpty(userId) ? $"?userId={userId}" : "";
-            using var response = await _httpClient.GetAsync($"api/app-tiers/{appId}/admin/feature-overrides{userQuery}");
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/admin/feature-overrides{userQuery}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -949,7 +949,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tiers/{appId}/user-features");
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/user-features");
 
             if (response.IsSuccessStatusCode)
             {
@@ -970,7 +970,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tiers/{appId}/check-feature/{featureCode}");
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/check-feature/{featureCode}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -990,7 +990,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"api/app-tiers/{appId}/check-limit/{limitCode}");
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/check-limit/{limitCode}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -1010,7 +1010,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/app-tiers/{appId}/increment-usage/{limitCode}", null);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/increment-usage/{limitCode}", null);
 
             if (response.IsSuccessStatusCode)
             {

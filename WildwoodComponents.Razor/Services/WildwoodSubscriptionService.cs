@@ -38,7 +38,7 @@ public class WildwoodSubscriptionService : IWildwoodSubscriptionService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync("api/subscription/plans");
+            using var response = await _httpClient.GetAsync("subscription/plans");
 
             if (response.IsSuccessStatusCode)
             {
@@ -66,8 +66,8 @@ public class WildwoodSubscriptionService : IWildwoodSubscriptionService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var url = string.IsNullOrEmpty(userId)
-                ? "api/subscription/current"
-                : $"api/subscription/current/{userId}";
+                ? "subscription/current"
+                : $"subscription/current/{userId}";
             using var response = await _httpClient.GetAsync(url);
 
             if (response.IsSuccessStatusCode)
@@ -98,7 +98,7 @@ public class WildwoodSubscriptionService : IWildwoodSubscriptionService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { UserId = userId, PlanId = planId };
-            using var response = await _httpClient.PostAsJsonAsync("api/subscription/subscribe", payload);
+            using var response = await _httpClient.PostAsJsonAsync("subscription/subscribe", payload);
 
             if (response.IsSuccessStatusCode)
                 return ApiResult.Ok("Subscription created successfully");
@@ -119,7 +119,7 @@ public class WildwoodSubscriptionService : IWildwoodSubscriptionService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/subscription/cancel/{subscriptionId}", null);
+            using var response = await _httpClient.PostAsync($"subscription/cancel/{subscriptionId}", null);
 
             if (response.IsSuccessStatusCode)
                 return ApiResult.Ok("Subscription cancelled");
@@ -140,7 +140,7 @@ public class WildwoodSubscriptionService : IWildwoodSubscriptionService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/subscription/pause/{subscriptionId}", null);
+            using var response = await _httpClient.PostAsync($"subscription/pause/{subscriptionId}", null);
 
             if (response.IsSuccessStatusCode)
                 return ApiResult.Ok("Subscription paused");
@@ -161,7 +161,7 @@ public class WildwoodSubscriptionService : IWildwoodSubscriptionService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"api/subscription/resume/{subscriptionId}", null);
+            using var response = await _httpClient.PostAsync($"subscription/resume/{subscriptionId}", null);
 
             if (response.IsSuccessStatusCode)
                 return ApiResult.Ok("Subscription resumed");
@@ -183,7 +183,7 @@ public class WildwoodSubscriptionService : IWildwoodSubscriptionService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { NewPlanId = newPlanId };
-            using var response = await _httpClient.PostAsJsonAsync($"api/subscription/upgrade/{subscriptionId}", payload);
+            using var response = await _httpClient.PostAsJsonAsync($"subscription/upgrade/{subscriptionId}", payload);
 
             if (response.IsSuccessStatusCode)
                 return ApiResult.Ok("Subscription upgraded");
@@ -209,8 +209,8 @@ public class WildwoodSubscriptionService : IWildwoodSubscriptionService
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var url = string.IsNullOrEmpty(subscriptionId)
-                ? "api/subscription/invoices"
-                : $"api/subscription/invoices?subscriptionId={subscriptionId}";
+                ? "subscription/invoices"
+                : $"subscription/invoices?subscriptionId={subscriptionId}";
             using var response = await _httpClient.GetAsync(url);
 
             if (response.IsSuccessStatusCode)

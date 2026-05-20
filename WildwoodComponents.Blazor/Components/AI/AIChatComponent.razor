@@ -321,11 +321,22 @@
             <div class="ai-chat-input-container">
                 @if (Settings.EnableFileUpload)
                 {
-                    <button class="ai-chat-action-btn ai-chat-attach-btn" title="Attach" disabled="@IsLoading">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                        </svg>
-                    </button>
+                    @if (_selectedFile != null)
+                    {
+                        <div class="ai-chat-attach-badge" title="@_selectedFileName">
+                            <span class="ai-chat-attach-name">@_selectedFileName</span>
+                            <button type="button" class="ai-chat-attach-remove" @onclick="ClearSelectedFile" disabled="@IsLoading">&times;</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <label class="ai-chat-action-btn ai-chat-attach-btn" title="Attach">
+                            <InputFile OnChange="OnFileSelected" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.gif,.webp" disabled="@IsLoading" style="display:none" />
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                            </svg>
+                        </label>
+                    }
                 }
                 
                 @* Speech Controls Popup Menu *@

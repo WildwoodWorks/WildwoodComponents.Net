@@ -28,7 +28,7 @@ public class WildwoodTwoFactorSettingsService : IWildwoodTwoFactorSettingsServic
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync("api/twofactor/status");
+            using var response = await _httpClient.GetAsync("twofactor/status");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -44,7 +44,7 @@ public class WildwoodTwoFactorSettingsService : IWildwoodTwoFactorSettingsServic
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync("api/twofactor/credentials");
+            using var response = await _httpClient.GetAsync("twofactor/credentials");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -60,7 +60,7 @@ public class WildwoodTwoFactorSettingsService : IWildwoodTwoFactorSettingsServic
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PutAsync($"api/twofactor/credentials/{credentialId}/primary", null);
+            using var response = await _httpClient.PutAsync($"twofactor/credentials/{credentialId}/primary", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to set primary credential"); return false; }
@@ -71,7 +71,7 @@ public class WildwoodTwoFactorSettingsService : IWildwoodTwoFactorSettingsServic
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.DeleteAsync($"api/twofactor/credentials/{credentialId}");
+            using var response = await _httpClient.DeleteAsync($"twofactor/credentials/{credentialId}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to remove credential"); return false; }
@@ -83,7 +83,7 @@ public class WildwoodTwoFactorSettingsService : IWildwoodTwoFactorSettingsServic
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { Email = email };
-            using var response = await _httpClient.PostAsJsonAsync("api/twofactor/enroll/email", payload);
+            using var response = await _httpClient.PostAsJsonAsync("twofactor/enroll/email", payload);
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -100,7 +100,7 @@ public class WildwoodTwoFactorSettingsService : IWildwoodTwoFactorSettingsServic
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { CredentialId = credentialId, Code = code };
-            using var response = await _httpClient.PostAsJsonAsync("api/twofactor/enroll/email/verify", payload);
+            using var response = await _httpClient.PostAsJsonAsync("twofactor/enroll/email/verify", payload);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to verify email enrollment"); return false; }
@@ -112,7 +112,7 @@ public class WildwoodTwoFactorSettingsService : IWildwoodTwoFactorSettingsServic
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { FriendlyName = friendlyName };
-            using var response = await _httpClient.PostAsJsonAsync("api/twofactor/enroll/authenticator", payload);
+            using var response = await _httpClient.PostAsJsonAsync("twofactor/enroll/authenticator", payload);
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -129,7 +129,7 @@ public class WildwoodTwoFactorSettingsService : IWildwoodTwoFactorSettingsServic
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var payload = new { CredentialId = credentialId, Code = code };
-            using var response = await _httpClient.PostAsJsonAsync("api/twofactor/enroll/authenticator/verify", payload);
+            using var response = await _httpClient.PostAsJsonAsync("twofactor/enroll/authenticator/verify", payload);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to complete authenticator enrollment"); return false; }
@@ -140,7 +140,7 @@ public class WildwoodTwoFactorSettingsService : IWildwoodTwoFactorSettingsServic
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync("api/twofactor/recovery-codes/info");
+            using var response = await _httpClient.GetAsync("twofactor/recovery-codes/info");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -156,7 +156,7 @@ public class WildwoodTwoFactorSettingsService : IWildwoodTwoFactorSettingsServic
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync("api/twofactor/recovery-codes/regenerate", null);
+            using var response = await _httpClient.PostAsync("twofactor/recovery-codes/regenerate", null);
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -172,7 +172,7 @@ public class WildwoodTwoFactorSettingsService : IWildwoodTwoFactorSettingsServic
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync("api/twofactor/trusted-devices");
+            using var response = await _httpClient.GetAsync("twofactor/trusted-devices");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -188,7 +188,7 @@ public class WildwoodTwoFactorSettingsService : IWildwoodTwoFactorSettingsServic
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.DeleteAsync($"api/twofactor/trusted-devices/{deviceId}");
+            using var response = await _httpClient.DeleteAsync($"twofactor/trusted-devices/{deviceId}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to revoke trusted device"); return false; }
@@ -199,7 +199,7 @@ public class WildwoodTwoFactorSettingsService : IWildwoodTwoFactorSettingsServic
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.DeleteAsync("api/twofactor/trusted-devices");
+            using var response = await _httpClient.DeleteAsync("twofactor/trusted-devices");
             if (response.IsSuccessStatusCode)
             {
                 // API returns { "message": "3 device(s) revoked" } — parse count from message

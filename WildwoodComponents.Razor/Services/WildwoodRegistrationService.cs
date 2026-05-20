@@ -38,7 +38,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            using var response = await _httpClient.GetAsync($"api/registrationtokens/validate-detailed/{token}");
+            using var response = await _httpClient.GetAsync($"registrationtokens/validate-detailed/{token}");
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<TokenValidationResponse>(JsonOptions);
@@ -58,7 +58,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            using var response = await _httpClient.PostAsJsonAsync("api/userregistration/validate", request);
+            using var response = await _httpClient.PostAsJsonAsync("userregistration/validate", request);
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<RegistrationValidationResponse>(JsonOptions);
@@ -78,7 +78,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            using var response = await _httpClient.PostAsJsonAsync("api/userregistration/register-with-token", request);
+            using var response = await _httpClient.PostAsJsonAsync("userregistration/register-with-token", request);
             var content = await response.Content.ReadAsStringAsync();
 
             try
@@ -108,7 +108,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            using var response = await _httpClient.PostAsJsonAsync("api/userregistration/register", request);
+            using var response = await _httpClient.PostAsJsonAsync("userregistration/register", request);
             var content = await response.Content.ReadAsStringAsync();
 
             try
@@ -138,7 +138,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            using var response = await _httpClient.GetAsync($"api/auth/password-requirements/{appId}");
+            using var response = await _httpClient.GetAsync($"auth/password-requirements/{appId}");
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadAsStringAsync();
@@ -155,7 +155,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            using var response = await _httpClient.GetAsync($"api/pricingmodels/{pricingModelId}/public");
+            using var response = await _httpClient.GetAsync($"pricingmodels/{pricingModelId}/public");
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<PricingModelResponse>(JsonOptions);
@@ -175,7 +175,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            using var response = await _httpClient.GetAsync($"api/registrationpayment/pricing/{token}");
+            using var response = await _httpClient.GetAsync($"registrationpayment/pricing/{token}");
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<PricingDetails>(JsonOptions);
@@ -192,7 +192,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            using var response = await _httpClient.PostAsJsonAsync("api/registrationpayment/skip", request);
+            using var response = await _httpClient.PostAsJsonAsync("registrationpayment/skip", request);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -214,7 +214,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
                 CompanyClientId = companyClientId
             };
 
-            using var response = await _httpClient.PostAsJsonAsync("api/payment/link-transaction", request);
+            using var response = await _httpClient.PostAsJsonAsync("payment/link-transaction", request);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -229,7 +229,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            using var response = await _httpClient.GetAsync($"api/disclaimeracceptance/pending/{appId}?showOn=registration");
+            using var response = await _httpClient.GetAsync($"disclaimeracceptance/pending/{appId}?showOn=registration");
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<PendingDisclaimersResponse>(JsonOptions);
@@ -254,7 +254,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
                 AppId = appId ?? _appId
             };
 
-            using var response = await _httpClient.PostAsJsonAsync("api/auth/login", loginRequest);
+            using var response = await _httpClient.PostAsJsonAsync("auth/login", loginRequest);
             var content = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
