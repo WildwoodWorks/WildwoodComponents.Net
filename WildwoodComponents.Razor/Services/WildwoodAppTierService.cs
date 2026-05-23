@@ -167,21 +167,21 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         }
     }
 
-    public async Task<AppTierChangeResultModel> ChangeTierAsync(string appId, string newTierId, string? newPricingId, bool immediate)
+    public async Task<AppTierChangeResultModel> ChangeTierAsync(string appId, string newTierId, string? newPricingId, bool immediate, string? paymentTransactionId = null)
     {
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var body = new
             {
-                AppId = appId,
                 NewAppTierId = newTierId,
                 NewAppTierPricingId = newPricingId,
-                Immediate = immediate
+                Immediate = immediate,
+                PaymentTransactionId = paymentTransactionId
             };
 
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/change-tier", content);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/my-subscription/change", content);
 
             if (response.IsSuccessStatusCode)
             {

@@ -174,7 +174,7 @@ namespace WildwoodComponents.Blazor.Services
             }
         }
 
-        public async Task<AppTierChangeResultModel> ChangeTierAsync(string appId, string newTierId, string? newPricingId, bool immediate)
+        public async Task<AppTierChangeResultModel> ChangeTierAsync(string appId, string newTierId, string? newPricingId, bool immediate, string? paymentTransactionId = null)
         {
             try
             {
@@ -183,7 +183,8 @@ namespace WildwoodComponents.Blazor.Services
                 {
                     NewAppTierId = newTierId,
                     NewAppTierPricingId = newPricingId,
-                    Immediate = immediate
+                    Immediate = immediate,
+                    PaymentTransactionId = paymentTransactionId
                 };
 
                 var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
