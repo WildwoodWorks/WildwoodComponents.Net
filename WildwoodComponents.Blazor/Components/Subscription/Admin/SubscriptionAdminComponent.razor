@@ -239,6 +239,15 @@ else
     </div>
 }
 
+@if (_preview != null)
+{
+    <TierChangeConfirmationModal
+        Preview="_preview"
+        OnConfirm="HandleConfirmChange"
+        OnCancel="HandleCancelConfirmation"
+        IsLoading="_isProcessing" />
+}
+
 @if (!string.IsNullOrEmpty(ErrorMessage))
 {
     <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">

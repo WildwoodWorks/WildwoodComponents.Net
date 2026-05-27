@@ -206,6 +206,35 @@ namespace WildwoodComponents.Blazor.Services
             }
         }
 
+        public async Task<TierChangePreviewModel?> PreviewTierChangeAsync(string appId, string newTierId, string? newPricingId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/{appId}/my-subscription/preview-change");
+                var body = new
+                {
+                    NewAppTierId = newTierId,
+                    NewAppTierPricingId = newPricingId
+                };
+
+                var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(url, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadFromJsonAsync<TierChangePreviewModel>(JsonOptions);
+                }
+
+                var errorBody = await response.Content.ReadAsStringAsync();
+                return new TierChangePreviewModel { Success = false, ErrorMessage = errorBody };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error previewing tier change for app {AppId}", appId);
+                return new TierChangePreviewModel { Success = false, ErrorMessage = ex.Message };
+            }
+        }
+
         public async Task<bool> CancelSubscriptionAsync(string appId)
         {
             try

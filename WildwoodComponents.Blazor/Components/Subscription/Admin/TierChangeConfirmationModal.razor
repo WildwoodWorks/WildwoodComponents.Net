@@ -1,0 +1,226 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Shared.Models
+@inherits BaseWildwoodComponent
+
+<div class="ww-modal-overlay" @onclick="HandleOverlayClick">
+    <div class="ww-modal" @onclick:stopPropagation="true" style="max-width: 560px;">
+        <div class="ww-modal-header" style="padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--ww-border-color, #dee2e6);">
+            <h5 style="margin: 0; color: var(--ww-text-primary, #212529); font-weight: 600;">
+                @if (Preview.IsUpgrade)
+                {
+                    <i class="fas fa-arrow-up me-2" style="color: var(--ww-success, #198754);"></i>
+                    <span>Confirm Upgrade</span>
+                }
+                else if (Preview.IsDowngrade)
+                {
+                    <i class="fas fa-arrow-down me-2" style="color: var(--ww-warning, #ffc107);"></i>
+                    <span>Confirm Downgrade</span>
+                }
+                else
+                {
+                    <i class="fas fa-exchange-alt me-2" style="color: var(--ww-info, #0dcaf0);"></i>
+                    <span>Confirm Plan Change</span>
+                }
+            </h5>
+            <button type="button" class="btn-close" @onclick="HandleCancel" disabled="@IsLoading"></button>
+        </div>
+
+        <div class="ww-modal-body" style="padding: 1.5rem; max-height: 70vh; overflow-y: auto;">
+            @* Plan Comparison *@
+            <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="flex: 1; text-align: center; padding: 1rem; background: var(--ww-bg-secondary, #f8f9fa); border-radius: var(--ww-border-radius, 0.5rem);">
+                    <div style="font-size: 0.8rem; color: var(--ww-text-muted, #6c757d); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem;">Current</div>
+                    <div style="font-weight: 600; color: var(--ww-text-primary, #212529);">@(Preview.CurrentTierName ?? "None")</div>
+                    @if (Preview.CurrentPrice.HasValue)
+                    {
+                        <div style="font-size: 0.9rem; color: var(--ww-text-secondary, #495057);">@FormatCurrency(Preview.CurrentPrice, Preview.Currency)/@(Preview.CurrentBillingFrequency ?? "mo")</div>
+                    }
+                </div>
+
+                <div style="flex-shrink: 0;">
+                    <i class="fas fa-arrow-right" style="color: var(--ww-text-muted, #6c757d); font-size: 1.25rem;"></i>
+                </div>
+
+                <div style="flex: 1; text-align: center; padding: 1rem; background: var(--ww-primary, #0d6efd); border-radius: var(--ww-border-radius, 0.5rem); color: var(--ww-btn-primary-text, white);">
+                    <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; opacity: 0.85;">New</div>
+                    <div style="font-weight: 600;">@(Preview.NewTierName ?? "Unknown")</div>
+                    @if (Preview.NewPrice.HasValue)
+                    {
+                        <div style="font-size: 0.9rem; opacity: 0.9;">@FormatCurrency(Preview.NewPrice, Preview.Currency)/@(Preview.NewBillingFrequency ?? "mo")</div>
+                    }
+                </div>
+            </div>
+
+            @* Proration Breakdown (Upgrades) *@
+            @if (Preview.IsUpgrade && (Preview.ProratedChargeToday.HasValue || Preview.NextBillingAmount.HasValue))
+            {
+                <div style="margin-bottom: 1.5rem; padding: 1rem; border: 1px solid var(--ww-border-color, #dee2e6); border-radius: var(--ww-border-radius, 0.5rem);">
+                    <h6 style="margin: 0 0 0.75rem 0; color: var(--ww-text-primary, #212529); font-weight: 600;">
+                        <i class="fas fa-receipt me-2"></i>Billing Summary
+                    </h6>
+                    @if (Preview.ProratedChargeToday.HasValue && Preview.ProratedChargeToday.Value > 0)
+                    {
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="color: var(--ww-text-secondary, #495057);">Due today (prorated)</span>
+                            <span style="font-weight: 600; color: var(--ww-text-primary, #212529);">@FormatCurrency(Preview.ProratedChargeToday, Preview.Currency)</span>
+                        </div>
+                    }
+                    @if (Preview.NextBillingAmount.HasValue)
+                    {
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                            <span style="color: var(--ww-text-secondary, #495057);">Next billing amount</span>
+                            <span style="font-weight: 600; color: var(--ww-text-primary, #212529);">@FormatCurrency(Preview.NextBillingAmount, Preview.Currency)</span>
+                        </div>
+                    }
+                    @if (Preview.NextBillingDate.HasValue)
+                    {
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--ww-text-secondary, #495057);">Next billing date</span>
+                            <span style="color: var(--ww-text-primary, #212529);">@Preview.NextBillingDate.Value.ToString("MMM d, yyyy")</span>
+                        </div>
+                    }
+                </div>
+            }
+
+            @* Credit Info (Downgrades) *@
+            @if (Preview.IsDowngrade && Preview.CreditAmount.HasValue && Preview.CreditAmount.Value > 0)
+            {
+                <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--ww-info-bg, #cff4fc); border-radius: var(--ww-border-radius, 0.5rem);">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; color: var(--ww-info, #0dcaf0);">
+                        <i class="fas fa-info-circle"></i>
+                        <span>You have @FormatCurrency(Preview.CreditAmount, Preview.Currency) in credit that will be applied to your next billing cycle.</span>
+                    </div>
+                </div>
+            }
+
+            @* Features Diff *@
+            @if (Preview.FeaturesGained.Count > 0 || Preview.FeaturesLost.Count > 0)
+            {
+                <div style="margin-bottom: 1.5rem;">
+                    <h6 style="margin: 0 0 0.75rem 0; color: var(--ww-text-primary, #212529); font-weight: 600;">
+                        <i class="fas fa-list-check me-2"></i>Feature Changes
+                    </h6>
+                    @if (Preview.FeaturesGained.Count > 0)
+                    {
+                        <div style="margin-bottom: 0.5rem;">
+                            @foreach (var feature in Preview.FeaturesGained)
+                            {
+                                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; color: var(--ww-success, #198754);">
+                                    <i class="fas fa-plus-circle"></i>
+                                    <span>@feature</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (Preview.FeaturesLost.Count > 0)
+                    {
+                        <div>
+                            @foreach (var feature in Preview.FeaturesLost)
+                            {
+                                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; color: var(--ww-danger, #dc3545);">
+                                    <i class="fas fa-minus-circle"></i>
+                                    <span>@feature</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            @* Downgrade Timing Options *@
+            @if (Preview.IsDowngrade && Preview.AllowImmediateChange && Preview.AllowScheduledChange)
+            {
+                <div style="margin-bottom: 1.5rem; padding: 1rem; border: 1px solid var(--ww-border-color, #dee2e6); border-radius: var(--ww-border-radius, 0.5rem);">
+                    <h6 style="margin: 0 0 0.75rem 0; color: var(--ww-text-primary, #212529); font-weight: 600;">
+                        <i class="fas fa-clock me-2"></i>When should this change take effect?
+                    </h6>
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; padding: 0.5rem; border-radius: var(--ww-border-radius-sm, 0.25rem);">
+                            <input type="radio" name="timing" checked="@_immediate" @onchange="@(() => SetImmediate(true))" style="margin-top: 0.25rem;" />
+                            <div>
+                                <div style="font-weight: 500; color: var(--ww-text-primary, #212529);">Change immediately</div>
+                                <div style="font-size: 0.85rem; color: var(--ww-text-muted, #6c757d);">Switch to the new plan right now</div>
+                            </div>
+                        </label>
+                    </div>
+                    <div>
+                        <label style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; padding: 0.5rem; border-radius: var(--ww-border-radius-sm, 0.25rem);">
+                            <input type="radio" name="timing" checked="@(!_immediate)" @onchange="@(() => SetImmediate(false))" style="margin-top: 0.25rem;" />
+                            <div>
+                                <div style="font-weight: 500; color: var(--ww-text-primary, #212529);">At end of current period</div>
+                                <div style="font-size: 0.85rem; color: var(--ww-text-muted, #6c757d);">
+                                    @if (Preview.EffectiveDate.HasValue)
+                                    {
+                                        <span>Takes effect @Preview.EffectiveDate.Value.ToString("MMM d, yyyy") (@Preview.DaysRemainingInPeriod days remaining)</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Keep current plan until it expires</span>
+                                    }
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            }
+
+            @* Admin Payment Bypass *@
+            @if (Preview.PaymentBypassAllowed && Preview.PaymentRequired)
+            {
+                <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--ww-warning-bg, #fff3cd); border-radius: var(--ww-border-radius, 0.5rem);">
+                    <label style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" checked="@_bypassPayment" @onchange="ToggleBypassPayment" style="margin-top: 0.25rem;" />
+                        <div>
+                            <div style="font-weight: 500; color: var(--ww-text-primary, #212529);">
+                                <i class="fas fa-shield-alt me-1"></i>Bypass payment requirement (Admin)
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--ww-text-muted, #6c757d);">Apply this change without processing payment</div>
+                        </div>
+                    </label>
+                </div>
+            }
+
+            @* Error from preview *@
+            @if (!Preview.Success && !string.IsNullOrEmpty(Preview.ErrorMessage))
+            {
+                <div class="alert alert-danger" role="alert">
+                    <i class="fas fa-exclamation-circle me-2"></i>@Preview.ErrorMessage
+                </div>
+            }
+        </div>
+
+        <div class="ww-modal-footer" style="padding: 1rem 1.5rem; border-top: 1px solid var(--ww-border-color, #dee2e6); display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    @onclick="HandleCancel"
+                    disabled="@IsLoading">
+                Cancel
+            </button>
+            <button type="button"
+                    class="btn @(Preview.IsDowngrade ? "btn-warning" : "btn-primary")"
+                    @onclick="HandleConfirm"
+                    disabled="@(IsLoading || (!Preview.Success && !string.IsNullOrEmpty(Preview.ErrorMessage)))">
+                @if (IsLoading)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    <span>Processing...</span>
+                }
+                else if (Preview.IsUpgrade)
+                {
+                    <i class="fas fa-arrow-up me-1"></i>
+                    <span>Confirm Upgrade</span>
+                }
+                else if (Preview.IsDowngrade)
+                {
+                    <i class="fas fa-arrow-down me-1"></i>
+                    <span>Confirm Downgrade</span>
+                }
+                else
+                {
+                    <i class="fas fa-check me-1"></i>
+                    <span>Confirm Change</span>
+                }
+            </button>
+        </div>
+    </div>
+</div>

@@ -272,4 +272,35 @@ public class AppTierChangeResultModel
     public DateTime? EffectiveDate { get; set; }
 }
 
+public class TierChangePreviewModel
+{
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+    public bool IsUpgrade { get; set; }
+    public bool IsDowngrade { get; set; }
+    public bool IsBillingFrequencyChange { get; set; }
+    public bool PaymentRequired { get; set; }
+    public bool PaymentBypassAllowed { get; set; }
+    public bool PaymentProviderAvailable { get; set; }
+    public string? CurrentTierName { get; set; }
+    public decimal? CurrentPrice { get; set; }
+    public string? CurrentBillingFrequency { get; set; }
+    public string? NewTierName { get; set; }
+    public decimal? NewPrice { get; set; }
+    public string? NewBillingFrequency { get; set; }
+    public decimal? MonthlyEquivalentCurrent { get; set; }
+    public decimal? MonthlyEquivalentNew { get; set; }
+    public decimal? ProratedChargeToday { get; set; }
+    public decimal? CreditAmount { get; set; }
+    public decimal? NextBillingAmount { get; set; }
+    public DateTime? NextBillingDate { get; set; }
+    public DateTime? EffectiveDate { get; set; }
+    public List<string> FeaturesGained { get; set; } = new();
+    public List<string> FeaturesLost { get; set; } = new();
+    public string Currency { get; set; } = "USD";
+    public int DaysRemainingInPeriod { get; set; }
+    public bool AllowImmediateChange { get; set; } = true;
+    public bool AllowScheduledChange { get; set; }
+}
+
 #endregion

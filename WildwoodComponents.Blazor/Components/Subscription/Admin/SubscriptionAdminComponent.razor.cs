@@ -36,6 +36,8 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         private bool _isProcessing;
         private bool _isCompanyMode;
         private int _overrideCount;
+        private TierChangePreviewModel? _preview;
+        private TierSelectedEventArgs? _pendingArgs;
 
         // References to child panels for refreshing
         private SubscriptionStatusPanel? _statusPanel;
@@ -147,6 +149,64 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         private async Task HandleTierSelected(TierSelectedEventArgs args)
         {
             if (_isProcessing) return;
+
+            if (args.IsChange)
+            {
+                // Show preview modal for tier changes
+                _isProcessing = true;
+                StateHasChanged();
+
+                try
+                {
+                    var preview = await AppTierService.PreviewTierChangeAsync(AppId, args.TierId, args.PricingId);
+                    if (preview != null)
+                    {
+                        _preview = preview;
+                        _pendingArgs = args;
+                    }
+                    else
+                    {
+                        await HandleErrorAsync(new Exception("Failed to load tier change preview"), "Previewing tier change");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await HandleErrorAsync(ex, "Previewing tier change");
+                }
+                finally
+                {
+                    _isProcessing = false;
+                    StateHasChanged();
+                }
+            }
+            else
+            {
+                // New subscription - execute directly (no preview needed)
+                await ExecuteTierChange(args, true);
+            }
+        }
+
+        private async Task HandleConfirmChange(TierChangeConfirmOptions options)
+        {
+            if (_pendingArgs == null) return;
+
+            var args = _pendingArgs;
+            _preview = null;
+            _pendingArgs = null;
+
+            await ExecuteTierChange(args, options.Immediate);
+        }
+
+        private void HandleCancelConfirmation()
+        {
+            _preview = null;
+            _pendingArgs = null;
+            StateHasChanged();
+        }
+
+        private async Task ExecuteTierChange(TierSelectedEventArgs args, bool immediate)
+        {
+            if (_isProcessing) return;
             _isProcessing = true;
             StateHasChanged();
 
@@ -160,17 +220,17 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                     if (UseCompanyScope)
                     {
                         result = await AppTierService.ChangeCompanyTierAsync(
-                            AppId, CompanyId!, args.TierId, args.PricingId, true);
+                            AppId, CompanyId!, args.TierId, args.PricingId, immediate);
                     }
                     else if (UseUserScope)
                     {
                         result = await AppTierService.ChangeUserTierAsync(
-                            AppId, UserId!, args.TierId, args.PricingId, true);
+                            AppId, UserId!, args.TierId, args.PricingId, immediate);
                     }
                     else
                     {
                         result = await AppTierService.ChangeTierAsync(
-                            AppId, args.TierId, args.PricingId, true);
+                            AppId, args.TierId, args.PricingId, immediate);
                     }
                 }
                 else
