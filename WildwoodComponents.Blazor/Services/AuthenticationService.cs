@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Blazor.Models;
+using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Blazor.Services
 {
@@ -741,7 +742,8 @@ namespace WildwoodComponents.Blazor.Services
         {
             try
             {
-                var refreshToken = await _localStorage.GetItemAsync<string>("refreshToken");
+                var refreshToken = await _localStorage.GetItemWithMigrationAsync<string>(
+                    WildwoodStorageKeys.RefreshToken, WildwoodStorageKeys.Legacy.RefreshToken);
                 if (!string.IsNullOrEmpty(refreshToken))
                 {
                     var content = new StringContent(
@@ -766,7 +768,8 @@ namespace WildwoodComponents.Blazor.Services
         {
             try
             {
-                var refreshToken = await _localStorage.GetItemAsync<string>("refreshToken");
+                var refreshToken = await _localStorage.GetItemWithMigrationAsync<string>(
+                    WildwoodStorageKeys.RefreshToken, WildwoodStorageKeys.Legacy.RefreshToken);
                 if (string.IsNullOrEmpty(refreshToken))
                     return false;
 
@@ -904,9 +907,9 @@ namespace WildwoodComponents.Blazor.Services
             _logger.LogInformation("🔑 JWT Token length: {TokenLength}", response.JwtToken?.Length ?? 0);
             _logger.LogInformation("🔄 Refresh Token length: {RefreshTokenLength}", response.RefreshToken?.Length ?? 0);
 
-            await _localStorage.SetItemAsync("accessToken", response.JwtToken);
-            await _localStorage.SetItemAsync("refreshToken", response.RefreshToken);
-            await _localStorage.SetItemAsync("user", response);
+            await _localStorage.SetItemAsync(WildwoodStorageKeys.AccessToken, response.JwtToken);
+            await _localStorage.SetItemAsync(WildwoodStorageKeys.RefreshToken, response.RefreshToken);
+            await _localStorage.SetItemAsync(WildwoodStorageKeys.User, response);
 
             // Set authorization header for future requests
             _httpClient.DefaultRequestHeaders.Authorization =
@@ -919,9 +922,13 @@ namespace WildwoodComponents.Blazor.Services
 
         private async Task ClearAuthenticationAsync()
         {
-            await _localStorage.RemoveItemAsync("accessToken");
-            await _localStorage.RemoveItemAsync("refreshToken");
-            await _localStorage.RemoveItemAsync("user");
+            await _localStorage.RemoveItemAsync(WildwoodStorageKeys.AccessToken);
+            await _localStorage.RemoveItemAsync(WildwoodStorageKeys.RefreshToken);
+            await _localStorage.RemoveItemAsync(WildwoodStorageKeys.User);
+            // Also clear any leftover legacy-keyed values from pre-ww_ versions.
+            await _localStorage.RemoveItemAsync(WildwoodStorageKeys.Legacy.AccessToken);
+            await _localStorage.RemoveItemAsync(WildwoodStorageKeys.Legacy.RefreshToken);
+            await _localStorage.RemoveItemAsync(WildwoodStorageKeys.Legacy.User);
 
             // Clear authorization header
             _httpClient.DefaultRequestHeaders.Authorization = null;

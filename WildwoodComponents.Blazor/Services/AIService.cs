@@ -81,6 +81,16 @@ namespace WildwoodComponents.Blazor.Services
     /// </summary>
     public class AIService : IAIService
     {
+        /// <summary>
+        /// Shared JSON options for AI (de)serialization. camelCase on the wire to match the
+        /// API and the JS SDK; case-insensitive on read so field-name casing never drops data.
+        /// </summary>
+        private static readonly JsonSerializerOptions JsonOpts = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true
+        };
+
         private readonly HttpClient _httpClient;
         private readonly ILocalStorageService _localStorage;
         private readonly ILogger<AIService> _logger;
@@ -161,7 +171,7 @@ namespace WildwoodComponents.Blazor.Services
         {
             try
             {
-                var json = JsonSerializer.Serialize(request, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                var json = JsonSerializer.Serialize(request, JsonOpts);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
                 var response = await _httpClient.PostAsync(url, content);
@@ -171,7 +181,7 @@ namespace WildwoodComponents.Blazor.Services
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
-                    var aiResponse = JsonSerializer.Deserialize<AIChatResponse>(responseJson, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                    var aiResponse = JsonSerializer.Deserialize<AIChatResponse>(responseJson, JsonOpts);
                     return aiResponse ?? new AIChatResponse { IsError = true, ErrorMessage = "Failed to deserialize response" };
                 }
                 else
@@ -215,7 +225,7 @@ namespace WildwoodComponents.Blazor.Services
                     FileName = fileName
                 };
 
-                var json = JsonSerializer.Serialize(apiRequest, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                var json = JsonSerializer.Serialize(apiRequest, JsonOpts);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
                 var response = await _httpClient.PostAsync(url, content);
@@ -225,7 +235,7 @@ namespace WildwoodComponents.Blazor.Services
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
-                    var aiResponse = JsonSerializer.Deserialize<AIChatResponse>(responseJson, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                    var aiResponse = JsonSerializer.Deserialize<AIChatResponse>(responseJson, JsonOpts);
                     return aiResponse ?? new AIChatResponse { IsError = true, ErrorMessage = "Failed to deserialize response" };
                 }
                 else
@@ -355,7 +365,7 @@ namespace WildwoodComponents.Blazor.Services
                 {
                     var json = await response.Content.ReadAsStringAsync();
                     _logger.LogInformation("? AIService: Successfully received configurations, JSON length: {JsonLength}", json.Length);
-                    var configurations = JsonSerializer.Deserialize<List<AIConfiguration>>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                    var configurations = JsonSerializer.Deserialize<List<AIConfiguration>>(json, JsonOpts);
                     return configurations ?? new List<AIConfiguration>();
                 }
                 else
@@ -387,7 +397,7 @@ namespace WildwoodComponents.Blazor.Services
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
-                    return JsonSerializer.Deserialize<AIConfiguration>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                    return JsonSerializer.Deserialize<AIConfiguration>(json, JsonOpts);
                 }
                 return null;
             }
@@ -407,7 +417,7 @@ namespace WildwoodComponents.Blazor.Services
             try
             {
                 var request = new { ConfigurationId = configurationId, SessionName = sessionName };
-                var json = JsonSerializer.Serialize(request, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                var json = JsonSerializer.Serialize(request, JsonOpts);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
                 var response = await _httpClient.PostAsync($"{_apiBaseUrl}/ai/sessions", content);
@@ -415,7 +425,7 @@ namespace WildwoodComponents.Blazor.Services
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
-                    return JsonSerializer.Deserialize<AISession>(responseJson, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                    return JsonSerializer.Deserialize<AISession>(responseJson, JsonOpts);
                 }
                 return null;
             }
@@ -469,7 +479,7 @@ namespace WildwoodComponents.Blazor.Services
                         _logger.LogWarning("?? AIService: JSON does NOT contain 'messages' field!");
                     }
                     
-                    var session = JsonSerializer.Deserialize<AISession>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                    var session = JsonSerializer.Deserialize<AISession>(json, JsonOpts);
                     
                     if (session != null)
                     {
@@ -527,7 +537,7 @@ namespace WildwoodComponents.Blazor.Services
                     _logger.LogInformation("?? AIService: Sessions response JSON length: {Length}", json.Length);
                     
                     // The backend returns AISessionSummaryDto directly, so deserialize to AISessionSummary
-                    var sessions = JsonSerializer.Deserialize<List<AISessionSummary>>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                    var sessions = JsonSerializer.Deserialize<List<AISessionSummary>>(json, JsonOpts);
                     _logger.LogInformation("? AIService: Loaded {Count} sessions", sessions?.Count ?? 0);
                     return sessions ?? new List<AISessionSummary>();
                 }
@@ -583,7 +593,7 @@ namespace WildwoodComponents.Blazor.Services
             try
             {
                 var requestData = new { NewName = newName };
-                var json = JsonSerializer.Serialize(requestData, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                var json = JsonSerializer.Serialize(requestData, JsonOpts);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
                 
                 _logger.LogInformation("?? AIService: Renaming session {SessionId} to '{NewName}'", sessionId, newName);
@@ -635,7 +645,7 @@ namespace WildwoodComponents.Blazor.Services
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
-                    var voices = JsonSerializer.Deserialize<List<TTSVoice>>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                    var voices = JsonSerializer.Deserialize<List<TTSVoice>>(json, JsonOpts);
                     _logger.LogInformation("Successfully loaded {Count} TTS voices", voices?.Count ?? 0);
                     return voices ?? new List<TTSVoice>();
                 }
@@ -665,7 +675,7 @@ namespace WildwoodComponents.Blazor.Services
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
-                    var voices = JsonSerializer.Deserialize<List<TTSVoice>>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                    var voices = JsonSerializer.Deserialize<List<TTSVoice>>(json, JsonOpts);
                     _logger.LogInformation("?? AIService: Successfully loaded {Count} TTS voices for configuration {ConfigId}", 
                         voices?.Count ?? 0, configurationId);
                     return voices ?? new List<TTSVoice>();
@@ -703,7 +713,7 @@ namespace WildwoodComponents.Blazor.Services
                     ConfigurationId = configurationId
                 };
 
-                var json = JsonSerializer.Serialize(request, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                var json = JsonSerializer.Serialize(request, JsonOpts);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
                 var response = await _httpClient.PostAsync(url, content);
@@ -711,7 +721,7 @@ namespace WildwoodComponents.Blazor.Services
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
-                    var ttsResponse = JsonSerializer.Deserialize<TTSResponse>(responseJson, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                    var ttsResponse = JsonSerializer.Deserialize<TTSResponse>(responseJson, JsonOpts);
                     
                     if (ttsResponse != null && ttsResponse.Success && !string.IsNullOrEmpty(ttsResponse.AudioData))
                     {

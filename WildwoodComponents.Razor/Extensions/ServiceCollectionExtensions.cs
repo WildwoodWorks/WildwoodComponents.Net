@@ -205,15 +205,6 @@ public static class ServiceCollectionExtensions
             var logger = sp.GetRequiredService<ILogger<WildwoodAIChatService>>();
             return new WildwoodAIChatService(httpClient, sessionManager, logger);
         });
-
-        // AI Flow service
-        services.AddScoped<IWildwoodAIFlowService>(sp =>
-        {
-            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
-            var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
-            var logger = sp.GetRequiredService<ILogger<WildwoodAIFlowService>>();
-            return new WildwoodAIFlowService(httpClient, sessionManager, logger);
-        });
     }
 }
 

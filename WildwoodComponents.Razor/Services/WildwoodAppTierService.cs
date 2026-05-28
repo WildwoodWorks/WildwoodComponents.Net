@@ -233,7 +233,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/cancel-subscription", null);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/my-subscription/cancel", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

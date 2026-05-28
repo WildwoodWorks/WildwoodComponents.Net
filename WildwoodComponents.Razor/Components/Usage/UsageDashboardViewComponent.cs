@@ -31,20 +31,28 @@ public class UsageDashboardViewComponent : ViewComponent
     /// <param name="subtitle">Header subtitle</param>
     /// <param name="showOverageInfo">Whether to show overage warnings</param>
     /// <param name="warningThreshold">Percentage threshold for warning state (default: 80)</param>
+    /// <param name="limitStatusesOverride">Optional externally-managed limit statuses that bypass the
+    /// fetched/merged data for display (subscription is still loaded). Mirrors the React limitStatuses override.</param>
+    /// <param name="onMergeUsage">Optional callback to merge/transform fetched limit statuses before display.
+    /// Mirrors the React onMergeUsage option.</param>
     public async Task<IViewComponentResult> InvokeAsync(
         string appId,
         string proxyBaseUrl = "/api/wildwood-app-tiers",
         string? title = null,
         string? subtitle = null,
         bool showOverageInfo = true,
-        int warningThreshold = 80)
+        int warningThreshold = 80,
+        List<AppTierLimitStatusModel>? limitStatusesOverride = null,
+        Func<List<AppTierLimitStatusModel>, UserTierSubscriptionModel?, Task<List<AppTierLimitStatusModel>>>? onMergeUsage = null)
     {
         var limitStatuses = new List<AppTierLimitStatusModel>();
         UserTierSubscriptionModel? subscription = null;
         try
         {
-            limitStatuses = await _appTierService.GetAllLimitStatusesAsync(appId);
+            var raw = await _appTierService.GetAllLimitStatusesAsync(appId);
             subscription = await _appTierService.GetMySubscriptionAsync(appId);
+            var merged = (onMergeUsage != null ? await onMergeUsage(raw, subscription) : raw) ?? new();
+            limitStatuses = limitStatusesOverride ?? merged;
         }
         catch (Exception ex)
         {

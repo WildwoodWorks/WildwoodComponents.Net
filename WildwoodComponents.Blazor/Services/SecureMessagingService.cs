@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Blazor.Models;
 using WildwoodComponents.Shared.Models;
+using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Blazor.Services
 {
@@ -512,7 +513,7 @@ namespace WildwoodComponents.Blazor.Services
                 };
 
                 _drafts[threadId] = draft;
-                await _localStorage.SetItemAsync($"draft_{threadId}", draft);
+                await _localStorage.SetItemAsync(WildwoodStorageKeys.Draft(threadId), draft);
             }
             catch (Exception ex)
             {
@@ -527,7 +528,8 @@ namespace WildwoodComponents.Blazor.Services
                 if (_drafts.TryGetValue(threadId, out var draft))
                     return draft;
 
-                return await _localStorage.GetItemAsync<MessageDraft>($"draft_{threadId}");
+                return await _localStorage.GetItemWithMigrationAsync<MessageDraft>(
+                    WildwoodStorageKeys.Draft(threadId), WildwoodStorageKeys.Legacy.Draft(threadId));
             }
             catch (Exception ex)
             {
@@ -541,7 +543,8 @@ namespace WildwoodComponents.Blazor.Services
             try
             {
                 _drafts.Remove(threadId);
-                await _localStorage.RemoveItemAsync($"draft_{threadId}");
+                await _localStorage.RemoveItemAsync(WildwoodStorageKeys.Draft(threadId));
+                await _localStorage.RemoveItemAsync(WildwoodStorageKeys.Legacy.Draft(threadId));
             }
             catch (Exception ex)
             {

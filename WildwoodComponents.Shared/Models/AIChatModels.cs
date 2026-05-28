@@ -56,6 +56,7 @@ public class AIConfiguration
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string Model { get; set; } = string.Empty;
+    [JsonPropertyName("providerTypeCode")]
     public string ProviderType { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public bool PersistentSessionEnabled { get; set; }
@@ -156,6 +157,7 @@ public class AIChatResponse
     public string Response { get; set; } = string.Empty;
     public int TokensUsed { get; set; }
     public string Model { get; set; } = string.Empty;
+    [JsonPropertyName("providerTypeCode")]
     public string ProviderType { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public bool IsError { get; set; }

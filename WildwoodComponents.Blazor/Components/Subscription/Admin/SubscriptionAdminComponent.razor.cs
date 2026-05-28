@@ -158,7 +158,11 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
                 try
                 {
-                    var preview = await AppTierService.PreviewTierChangeAsync(AppId, args.TierId, args.PricingId);
+                    // Admin managing a specific user previews against that user; self/company
+                    // mode falls back to the self preview (no company-scoped preview endpoint).
+                    var preview = UseUserScope
+                        ? await AppTierService.PreviewTierChangeAdminAsync(AppId, UserId!, args.TierId, args.PricingId)
+                        : await AppTierService.PreviewTierChangeAsync(AppId, args.TierId, args.PricingId);
                     if (preview != null)
                     {
                         _preview = preview;

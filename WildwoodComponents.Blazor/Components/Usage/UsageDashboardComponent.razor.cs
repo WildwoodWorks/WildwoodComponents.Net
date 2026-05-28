@@ -34,11 +34,26 @@ namespace WildwoodComponents.Blazor.Components.Usage
 
         [Parameter] public EventCallback OnUpgradeClick { get; set; }
 
+        /// <summary>
+        /// Optionally inject externally-managed limit statuses, bypassing the fetched/merged
+        /// data for display. Mirrors the React <c>limitStatuses</c> override prop. The
+        /// subscription is still loaded from the API.
+        /// </summary>
+        [Parameter] public List<AppTierLimitStatusModel>? LimitStatusesOverride { get; set; }
+
+        /// <summary>
+        /// Optional callback to merge or transform limit statuses after fetching from the API.
+        /// Called during each load/refresh cycle. Mirrors the React <c>onMergeUsage</c> option.
+        /// </summary>
+        [Parameter]
+        public Func<List<AppTierLimitStatusModel>, UserTierSubscriptionModel?, Task<List<AppTierLimitStatusModel>>>? OnMergeUsage { get; set; }
+
         #endregion
 
         #region State
 
         private List<AppTierLimitStatusModel> _limitStatuses = new();
+        private List<AppTierLimitStatusModel> _fetchedLimitStatuses = new();
         private UserTierSubscriptionModel? _subscription;
         private bool _anyAtWarning;
         private bool _anyOverage;
@@ -71,9 +86,12 @@ namespace WildwoodComponents.Blazor.Components.Usage
             await SetLoadingAsync(true);
             try
             {
-                _limitStatuses = await AppTierService.GetAllLimitStatusesAsync(AppId);
+                var raw = await AppTierService.GetAllLimitStatusesAsync(AppId);
                 _subscription = await AppTierService.GetMySubscriptionAsync(AppId);
-                UpdateWarningFlags();
+                _fetchedLimitStatuses = (OnMergeUsage != null
+                    ? await OnMergeUsage(raw, _subscription)
+                    : raw) ?? new();
+                ApplyEffectiveStatuses();
             }
             catch (Exception ex)
             {
@@ -83,6 +101,23 @@ namespace WildwoodComponents.Blazor.Components.Usage
             {
                 await SetLoadingAsync(false);
             }
+        }
+
+        /// <summary>
+        /// Applies the <see cref="LimitStatusesOverride"/> (if provided) over the fetched/merged
+        /// data and recomputes warning flags. Re-run on parameter changes so a changed override
+        /// reflects without a refetch (mirrors React applying the override at render).
+        /// </summary>
+        private void ApplyEffectiveStatuses()
+        {
+            _limitStatuses = LimitStatusesOverride ?? _fetchedLimitStatuses;
+            UpdateWarningFlags();
+        }
+
+        protected override void OnParametersSet()
+        {
+            base.OnParametersSet();
+            ApplyEffectiveStatuses();
         }
 
         #endregion
@@ -102,6 +137,12 @@ namespace WildwoodComponents.Blazor.Components.Usage
         /// Gets the current limit statuses for external consumers (e.g., OverageSummaryComponent).
         /// </summary>
         public List<AppTierLimitStatusModel> GetLimitStatuses() => _limitStatuses;
+
+        /// <summary>
+        /// Gets the raw limit statuses from the API before any override/merge transform.
+        /// Mirrors the React hook's <c>rawLimitStatuses</c>.
+        /// </summary>
+        public List<AppTierLimitStatusModel> GetRawLimitStatuses() => _fetchedLimitStatuses;
 
         /// <summary>
         /// Gets the current subscription for external consumers.

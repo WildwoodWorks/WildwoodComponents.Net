@@ -18,6 +18,7 @@ namespace WildwoodComponents.Blazor.Services
         Task<AppTierChangeResultModel> SubscribeToTierAsync(string appId, string tierId, string? pricingId, string? paymentTransactionId);
         Task<AppTierChangeResultModel> ChangeTierAsync(string appId, string newTierId, string? newPricingId, bool immediate, string? paymentTransactionId = null);
         Task<TierChangePreviewModel?> PreviewTierChangeAsync(string appId, string newTierId, string? newPricingId);
+        Task<TierChangePreviewModel?> PreviewTierChangeAdminAsync(string appId, string userId, string newTierId, string? newPricingId);
         Task<bool> CancelSubscriptionAsync(string appId);
 
         // Add-on subscription actions

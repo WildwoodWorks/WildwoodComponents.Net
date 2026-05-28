@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 using WildwoodComponents.Blazor.Models;
 using WildwoodComponents.Shared.Models;
+using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Blazor.Services
 {
@@ -135,21 +136,22 @@ namespace WildwoodComponents.Blazor.Services
 
         public async Task<ComponentTheme> GetCurrentThemeAsync()
         {
-            var savedTheme = await _localStorage.GetItemAsync<ComponentTheme>("wildwood-theme");
+            var savedTheme = await _localStorage.GetItemWithMigrationAsync<ComponentTheme>(
+                WildwoodStorageKeys.Theme, WildwoodStorageKeys.Legacy.Theme);
             return savedTheme ?? _currentTheme;
         }
 
         public async Task SetThemeAsync(ComponentTheme theme)
         {
             _currentTheme = theme;
-            await _localStorage.SetItemAsync("wildwood-theme", theme);
+            await _localStorage.SetItemAsync(WildwoodStorageKeys.Theme,theme);
             ThemeChanged?.Invoke(this, theme);
         }
 
         public async Task ResetThemeAsync()
         {
             _currentTheme = new ComponentTheme();
-            await _localStorage.SetItemAsync("wildwood-theme", _currentTheme);
+            await _localStorage.SetItemAsync(WildwoodStorageKeys.Theme,_currentTheme);
             ThemeChanged?.Invoke(this, _currentTheme);
         }
     }

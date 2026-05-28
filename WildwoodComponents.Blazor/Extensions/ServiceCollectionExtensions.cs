@@ -467,16 +467,6 @@ namespace WildwoodComponents.Blazor.Extensions
                 // Service may not exist, ignore
             }
 
-            // Register AI Flow service if available
-            try
-            {
-                RegisterAIFlowService(services, assembly, options);
-            }
-            catch
-            {
-                // Service may not exist, ignore
-            }
-
             // Register Disclaimer service if available
             try
             {
@@ -609,40 +599,6 @@ namespace WildwoodComponents.Blazor.Extensions
                     Console.WriteLine($"[ServiceCollectionExtensions] TwoFactorSettingsService configured with API URL: {apiBaseUrl}");
 
                     return twoFactorService;
-                });
-            }
-        }
-
-        /// <summary>
-        /// Registers AI Flow service with proper URL configuration
-        /// </summary>
-        private static void RegisterAIFlowService(IServiceCollection services, Assembly assembly, WildwoodComponentsOptions options)
-        {
-            var serviceInterface = assembly.GetType("WildwoodComponents.Blazor.Services.IAIFlowService");
-            var serviceImplementation = assembly.GetType("WildwoodComponents.Blazor.Services.AIFlowService");
-
-            if (serviceInterface != null && serviceImplementation != null)
-            {
-                services.AddScoped(serviceInterface, serviceProvider =>
-                {
-                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
-                    httpClient.BaseAddress = new Uri(options.BaseUrl);
-
-                    if (!string.IsNullOrEmpty(options.ApiKey))
-                    {
-                        httpClient.DefaultRequestHeaders.Add("X-API-Key", options.ApiKey);
-                    }
-
-                    var loggerFactory = serviceProvider.GetService<ILoggerFactory>();
-                    var logger = loggerFactory?.CreateLogger<WildwoodComponents.Blazor.Services.AIFlowService>()
-                                ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.AIFlowService>.Instance;
-
-                    var flowService = new WildwoodComponents.Blazor.Services.AIFlowService(httpClient, logger);
-
-                    var apiBaseUrl = options.BaseUrl?.TrimEnd('/') + "/api";
-                    flowService.SetApiBaseUrl(apiBaseUrl);
-
-                    return flowService;
                 });
             }
         }
