@@ -58,7 +58,7 @@
             <div class="plans-grid row justify-content-center">
                 @foreach (var plan in _availablePlans)
                 {
-                    var isCurrentPlan = _currentSubscription?.PlanId == plan.Id;
+                    var isCurrentPlan = string.Equals(_currentSubscription?.PlanId, plan.Id, StringComparison.OrdinalIgnoreCase);
                     var isSelected = _selectedPlan?.Id == plan.Id;
                     
                     <div class="col-md-4 mb-4">
@@ -111,13 +111,13 @@
                                 {
                                     <button class="btn @(plan.IsRecommended ? "btn-primary" : "btn-outline-primary") w-100"
                                             @onclick="() => SelectPlan(plan)">
-                                        @if (plan.IsFree)
-                                        {
-                                            <text>Get Started Free</text>
-                                        }
-                                        else if (_currentSubscription != null)
+                                        @if (_currentSubscription != null)
                                         {
                                             <text>Switch to @plan.Name</text>
+                                        }
+                                        else if (plan.IsFree)
+                                        {
+                                            <text>Get Started Free</text>
                                         }
                                         else
                                         {
@@ -565,9 +565,9 @@
         return currency.ToUpperInvariant() switch
         {
             "USD" => "$",
-            "EUR" => "€",
-            "GBP" => "£",
-            "JPY" => "¥",
+            "EUR" => "ï¿½",
+            "GBP" => "ï¿½",
+            "JPY" => "ï¿½",
             "INR" => "?",
             _ => currency
         };

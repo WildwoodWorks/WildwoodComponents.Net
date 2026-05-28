@@ -58,7 +58,7 @@
             @foreach (var plan in plans)
             {
                 var isCurrentPlan = currentSub != null &&
-                                    currentSub.PlanId == plan.Id &&
+                                    string.Equals(currentSub.PlanId, plan.Id, StringComparison.OrdinalIgnoreCase) &&
                                     currentSub.IsActive;
 
                 <div class="col-md-4 mb-4">
@@ -129,13 +129,13 @@
                                         data-plan-id="@plan.Id"
                                         data-plan-name="@plan.Name"
                                         data-plan-price="@plan.Price">
-                                    @if (plan.Price == 0)
-                                    {
-                                        <text>Get Started Free</text>
-                                    }
-                                    else if (currentSub != null && currentSub.IsActive)
+                                    @if (currentSub != null && currentSub.IsActive)
                                     {
                                         <text>Switch to @plan.Name</text>
+                                    }
+                                    else if (plan.Price == 0)
+                                    {
+                                        <text>Get Started Free</text>
                                     }
                                     else
                                     {

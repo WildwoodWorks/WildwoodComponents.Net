@@ -196,14 +196,18 @@
                             <div class="card-footer">
                                 <button class="btn @(plan.IsRecommended ? "btn-primary" : "btn-outline-primary") w-100" 
                                         @onclick="() => SelectPlanAsync(plan)"
-                                        disabled="@(IsLoading || (currentSubscription?.PlanId == plan.Id))">
+                                        disabled="@(IsLoading || string.Equals(currentSubscription?.PlanId, plan.Id, StringComparison.OrdinalIgnoreCase))">
                                     @if (IsLoading && selectedPlanId == plan.Id)
                                     {
                                         <span class="spinner-border spinner-border-sm me-2"></span>
                                     }
-                                    @if (currentSubscription?.PlanId == plan.Id)
+                                    @if (string.Equals(currentSubscription?.PlanId, plan.Id, StringComparison.OrdinalIgnoreCase))
                                     {
                                         <span>Current Plan</span>
+                                    }
+                                    else if (plan.IsFree && currentSubscription != null)
+                                    {
+                                        <span>Switch to @plan.Name</span>
                                     }
                                     else if (plan.IsFree)
                                     {
