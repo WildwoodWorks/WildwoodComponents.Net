@@ -199,6 +199,35 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         }
     }
 
+    public async Task<TierChangePreviewModel?> PreviewTierChangeAsync(string appId, string newTierId, string? newPricingId)
+    {
+        try
+        {
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
+            var body = new
+            {
+                NewAppTierId = newTierId,
+                NewAppTierPricingId = newPricingId
+            };
+
+            var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/my-subscription/preview-change", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<TierChangePreviewModel>(JsonOptions);
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync();
+            return new TierChangePreviewModel { Success = false, ErrorMessage = errorBody };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error previewing tier change for app {AppId}", appId);
+            return new TierChangePreviewModel { Success = false, ErrorMessage = ex.Message };
+        }
+    }
+
     public async Task<bool> CancelSubscriptionAsync(string appId)
     {
         try
@@ -717,6 +746,35 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         {
             _logger.LogError(ex, "Error changing tier for user {UserId} in app {AppId}", userId, appId);
             return new AppTierChangeResultModel { Success = false, ErrorMessage = ex.Message };
+        }
+    }
+
+    public async Task<TierChangePreviewModel?> PreviewTierChangeAdminAsync(string appId, string userId, string newTierId, string? newPricingId)
+    {
+        try
+        {
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
+            var body = new
+            {
+                NewAppTierId = newTierId,
+                NewAppTierPricingId = newPricingId
+            };
+
+            var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/admin/preview-change/{userId}", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<TierChangePreviewModel>(JsonOptions);
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync();
+            return new TierChangePreviewModel { Success = false, ErrorMessage = errorBody };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error previewing tier change for user {UserId} in app {AppId}", userId, appId);
+            return new TierChangePreviewModel { Success = false, ErrorMessage = ex.Message };
         }
     }
 

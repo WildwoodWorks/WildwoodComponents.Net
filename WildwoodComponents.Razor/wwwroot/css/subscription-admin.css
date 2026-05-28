@@ -122,3 +122,285 @@
 .ww-edit-limit-view .input-group {
     max-width: 220px;
 }
+
+/* ========================================
+   TIER CHANGE CONFIRMATION MODAL
+   Mirrors the React/Blazor TierChangeConfirmationModal.
+   ======================================== */
+
+.ww-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1080;
+    padding: 1rem;
+}
+
+.ww-modal {
+    background: var(--bs-body-bg, #fff);
+    color: var(--bs-body-color, #212529);
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    max-width: 520px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.ww-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem 0.75rem;
+    border-bottom: 1px solid var(--bs-border-color, #e5e7eb);
+}
+
+.ww-modal-title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+}
+
+.ww-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--bs-secondary-color, #6b7280);
+    cursor: pointer;
+    padding: 0.25rem;
+}
+
+.ww-modal-close:hover {
+    color: var(--bs-body-color, #111827);
+}
+
+.ww-modal-body {
+    padding: 1rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.ww-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 0.75rem 1.5rem 1.25rem;
+    border-top: 1px solid var(--bs-border-color, #e5e7eb);
+}
+
+/* Plan comparison row */
+.ww-tier-change-comparison {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 0.75rem;
+    background: var(--bs-tertiary-bg, #f9fafb);
+    border-radius: 0.5rem;
+}
+
+.ww-tier-change-plan {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+}
+
+.ww-tier-change-plan-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--bs-secondary-color, #6b7280);
+}
+
+.ww-tier-change-plan-name {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.ww-tier-change-plan-price {
+    font-size: 0.85rem;
+    color: var(--bs-secondary-color, #374151);
+}
+
+.ww-tier-change-arrow {
+    font-size: 1.25rem;
+    color: var(--bs-secondary-color, #9ca3af);
+}
+
+/* Savings callout */
+.ww-tier-change-savings {
+    background: var(--bs-success-bg-subtle, #ecfdf5);
+    color: var(--bs-success-text-emphasis, #059669);
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-align: center;
+}
+
+/* Charge breakdown */
+.ww-tier-change-charge {
+    border: 1px solid var(--bs-border-color, #e5e7eb);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+}
+
+.ww-tier-change-charge-header {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--bs-secondary-color, #6b7280);
+    margin-bottom: 0.5rem;
+}
+
+.ww-tier-change-line-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--bs-secondary-color, #374151);
+    padding: 0.2rem 0;
+}
+
+.ww-tier-change-credit {
+    color: var(--bs-success, #059669);
+}
+
+.ww-tier-change-total {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border-top: 1px solid var(--bs-border-color, #e5e7eb);
+    padding-top: 0.5rem;
+    margin-top: 0.35rem;
+}
+
+.ww-tier-change-next-billing {
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color, #6b7280);
+    margin-top: 0.5rem;
+}
+
+.ww-tier-change-credit-info {
+    background: var(--bs-info-bg-subtle, #eff6ff);
+    color: var(--bs-info-text-emphasis, #2563eb);
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.85rem;
+}
+
+/* Feature diff */
+.ww-tier-change-features {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.ww-tier-change-features-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--bs-secondary-color, #374151);
+}
+
+.ww-tier-change-features-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.ww-tier-change-feature-gained,
+.ww-tier-change-feature-lost {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+}
+
+.ww-tier-change-feature-gained {
+    color: var(--bs-success, #059669);
+}
+
+.ww-tier-change-feature-lost {
+    color: var(--bs-danger, #dc2626);
+}
+
+/* Downgrade timing options */
+.ww-tier-change-timing {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.ww-tier-change-timing-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--bs-secondary-color, #374151);
+}
+
+.ww-tier-change-timing-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--bs-border-color, #e5e7eb);
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+
+.ww-tier-change-timing-option:hover {
+    border-color: var(--bs-primary, #3b82f6);
+}
+
+.ww-tier-change-timing-option input[type="radio"] {
+    margin-top: 0.25rem;
+}
+
+.ww-tier-change-timing-option strong {
+    display: block;
+    font-size: 0.85rem;
+}
+
+.ww-tier-change-timing-desc {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color, #6b7280);
+    margin-top: 0.15rem;
+}
+
+/* Admin bypass toggle */
+.ww-tier-change-bypass {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--bs-secondary-color, #374151);
+    padding: 0.5rem 0.75rem;
+    background: var(--bs-warning-bg-subtle, #fffbeb);
+    border: 1px solid var(--bs-warning, #f59e0b);
+    border-radius: 0.375rem;
+    cursor: pointer;
+}
+
+/* Inline warning alert inside the modal */
+.ww-tier-change-modal .ww-alert {
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.85rem;
+}
+
+.ww-tier-change-modal .ww-alert-warning {
+    background: var(--bs-warning-bg-subtle, #fff3cd);
+    color: var(--bs-warning-text-emphasis, #664d03);
+    border: 1px solid var(--bs-warning-border-subtle, #ffe69c);
+}
