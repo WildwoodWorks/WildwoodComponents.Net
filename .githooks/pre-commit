@@ -1,0 +1,14 @@
+#!/bin/sh
+# Wildwood cross-stack parity guard (localStorage keys) for the .NET repo.
+# Versioned hook — enable once per clone with:
+#   git config core.hooksPath .githooks
+# Runs only when the sibling JS repo and the Sync script are present; skips otherwise.
+PARITY="../../WildwoodComponents.Sync/scripts/parity-check.mjs"
+JS="../../WildwoodComponents.JS/Dev"
+if command -v node >/dev/null 2>&1 && [ -f "$PARITY" ] && [ -d "$JS" ]; then
+  node "$PARITY" . "$JS" --quiet || {
+    echo "✗ parity-check failed — resolve storage-key drift before committing."
+    echo "  Details: node $PARITY . $JS"
+    exit 1
+  }
+fi
