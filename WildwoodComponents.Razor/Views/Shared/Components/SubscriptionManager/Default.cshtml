@@ -126,7 +126,7 @@
                         <div class="row">
                             @foreach (var plan in plans)
                             {
-                                var isCurrent = plan.Id == currentSub.PlanId;
+                                var isCurrent = string.Equals(plan.Id, currentSub.PlanId, StringComparison.OrdinalIgnoreCase);
                                 <div class="col-md-4 mb-3">
                                     <div class="card h-100 @(isCurrent ? "border-success" : "")">
                                         <div class="card-body text-center">

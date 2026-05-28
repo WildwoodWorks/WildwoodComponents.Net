@@ -67,8 +67,8 @@
         <div class="row g-3">
             @foreach (var addon in Model.AvailableAddOns)
             {
-                var isSubscribed = Model.ActiveAddOns.Any(a => a.AppTierAddOnId == addon.Id);
-                var isBundled = !string.IsNullOrEmpty(Model.CurrentTierId) && addon.BundledInTierIds.Contains(Model.CurrentTierId);
+                var isSubscribed = Model.ActiveAddOns.Any(a => string.Equals(a.AppTierAddOnId, addon.Id, StringComparison.OrdinalIgnoreCase));
+                var isBundled = !string.IsNullOrEmpty(Model.CurrentTierId) && addon.BundledInTierIds.Any(id => string.Equals(id, Model.CurrentTierId, StringComparison.OrdinalIgnoreCase));
 
                 <div class="col-md-6 col-lg-4">
                     <div class="card h-100 ww-available-addon-card @(isSubscribed ? "border-success" : "")" data-addon-id="@addon.Id">

@@ -553,7 +553,7 @@ namespace WildwoodComponents.Blazor.Components.AppTier
         {
             foreach (var sub in _myAddOns)
             {
-                if (sub.AppTierAddOnId == addOn.Id &&
+                if (string.Equals(sub.AppTierAddOnId, addOn.Id, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(sub.Status, "Active", StringComparison.OrdinalIgnoreCase))
                     return true;
             }
@@ -565,7 +565,7 @@ namespace WildwoodComponents.Blazor.Components.AppTier
             if (_currentSubscription == null) return false;
             foreach (var tierId in addOn.BundledInTierIds)
             {
-                if (tierId == _currentSubscription.AppTierId)
+                if (string.Equals(tierId, _currentSubscription.AppTierId, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
             return false;

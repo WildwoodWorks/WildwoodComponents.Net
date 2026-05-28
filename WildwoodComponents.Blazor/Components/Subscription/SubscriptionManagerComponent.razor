@@ -50,7 +50,7 @@
                                 <span class="price">@FormatPrice(currentSubscription.Price, currentSubscription.Currency)</span>
                                 <span class="period">/@GetPeriodLabel(currentSubscription.BillingInterval)</span>
                             </div>
-                            @if (AllowUpgrade && availablePlans.Any(p => p.Id != currentSubscription.PlanId))
+                            @if (AllowUpgrade && availablePlans.Any(p => !string.Equals(p.Id, currentSubscription.PlanId, StringComparison.OrdinalIgnoreCase)))
                             {
                                 <button class="btn btn-outline-primary btn-sm mt-2" @onclick="ShowUpgradeOptions">
                                     Upgrade Plan

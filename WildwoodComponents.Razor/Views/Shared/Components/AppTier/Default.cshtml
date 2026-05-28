@@ -253,7 +253,7 @@
                         var isSubscribed = false;
                         foreach (var sub in Model.MyAddOns)
                         {
-                            if (sub.AppTierAddOnId == addOn.Id &&
+                            if (string.Equals(sub.AppTierAddOnId, addOn.Id, StringComparison.OrdinalIgnoreCase) &&
                                 string.Equals(sub.Status, "Active", StringComparison.OrdinalIgnoreCase))
                             {
                                 isSubscribed = true;
@@ -266,7 +266,7 @@
                         {
                             foreach (var tierId in addOn.BundledInTierIds)
                             {
-                                if (tierId == Model.CurrentSubscription.AppTierId)
+                                if (string.Equals(tierId, Model.CurrentSubscription.AppTierId, StringComparison.OrdinalIgnoreCase))
                                 {
                                     isBundled = true;
                                     break;

@@ -171,7 +171,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         {
             foreach (var sub in _activeSubscriptions)
             {
-                if (sub.AppTierAddOnId == addOn.Id &&
+                if (string.Equals(sub.AppTierAddOnId, addOn.Id, StringComparison.OrdinalIgnoreCase) &&
                     (string.Equals(sub.Status, "Active", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(sub.Status, "Trialing", StringComparison.OrdinalIgnoreCase)))
                     return true;
@@ -184,7 +184,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             if (string.IsNullOrEmpty(CurrentTierId)) return false;
             foreach (var tierId in addOn.BundledInTierIds)
             {
-                if (tierId == CurrentTierId)
+                if (string.Equals(tierId, CurrentTierId, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
             return false;
