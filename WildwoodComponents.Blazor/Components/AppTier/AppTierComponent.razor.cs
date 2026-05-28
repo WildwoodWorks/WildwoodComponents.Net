@@ -522,12 +522,12 @@ namespace WildwoodComponents.Blazor.Components.AppTier
         private bool IsTierCurrentPlan(AppTierModel tier)
         {
             if (_currentSubscription == null) return false;
-            return _currentSubscription.AppTierId == tier.Id && _currentSubscription.IsActive;
+            return string.Equals(_currentSubscription.AppTierId, tier.Id, StringComparison.OrdinalIgnoreCase) && _currentSubscription.IsActive;
         }
 
         private bool IsTierPreSelected(AppTierModel tier)
         {
-            return !string.IsNullOrEmpty(PreSelectedTierId) && PreSelectedTierId == tier.Id;
+            return !string.IsNullOrEmpty(PreSelectedTierId) && string.Equals(PreSelectedTierId, tier.Id, StringComparison.OrdinalIgnoreCase);
         }
 
         private bool HasMonthlyAndAnnualPricing()

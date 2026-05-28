@@ -110,7 +110,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         private bool IsTierCurrentPlan(AppTierModel tier)
         {
             if (_currentSubscription == null) return false;
-            return _currentSubscription.AppTierId == tier.Id && _currentSubscription.IsActive;
+            return string.Equals(_currentSubscription.AppTierId, tier.Id, StringComparison.OrdinalIgnoreCase) && _currentSubscription.IsActive;
         }
 
         private static bool IsAnnualFrequency(string? frequency)

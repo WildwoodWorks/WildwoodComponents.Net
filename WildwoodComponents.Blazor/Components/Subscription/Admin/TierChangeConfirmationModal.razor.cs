@@ -23,6 +23,12 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         private bool _immediate = true;
         private bool _bypassPayment;
 
+        protected override void OnInitialized()
+        {
+            // Downgrades default to end-of-period; upgrades/other default to immediate.
+            _immediate = !Preview.IsDowngrade;
+        }
+
         private void SetImmediate(bool value)
         {
             _immediate = value;

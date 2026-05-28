@@ -30,7 +30,7 @@
         <div class="row g-3 justify-content-center">
             @foreach (var tier in Model.Tiers)
             {
-                var isCurrentPlan = Model.Subscription != null && Model.Subscription.AppTierId == tier.Id;
+                var isCurrentPlan = Model.Subscription != null && string.Equals(Model.Subscription.AppTierId, tier.Id, StringComparison.OrdinalIgnoreCase);
                 var isEnterprise = IsEnterpriseTier(tier);
 
                 <div class="col-md-4 col-lg-3">

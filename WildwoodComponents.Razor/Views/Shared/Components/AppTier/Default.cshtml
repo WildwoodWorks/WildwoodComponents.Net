@@ -48,7 +48,7 @@
             @foreach (var tier in Model.Tiers)
             {
                 var isCurrentPlan = Model.CurrentSubscription != null &&
-                                    Model.CurrentSubscription.AppTierId == tier.Id &&
+                                    string.Equals(Model.CurrentSubscription.AppTierId, tier.Id, StringComparison.OrdinalIgnoreCase) &&
                                     Model.CurrentSubscription.IsActive;
 
                 <div class="col-md-4 mb-4">
@@ -175,9 +175,13 @@
                                         data-tier-id="@tier.Id"
                                         data-tier-name="@tier.Name"
                                         data-is-free="@tier.IsFreeTier.ToString().ToLower()">
-                                    @if (tier.IsFreeTier)
+                                    @if (tier.IsFreeTier && Model.CurrentSubscription != null && Model.CurrentSubscription.IsActive)
                                     {
-                                        <text>Get Started Free</text>
+                                        <text>Switch to @tier.Name</text>
+                                    }
+                                    else if (tier.IsFreeTier)
+                                    {
+                                        <text>Get Started</text>
                                     }
                                     else if (Model.CurrentSubscription != null && Model.CurrentSubscription.IsActive)
                                     {

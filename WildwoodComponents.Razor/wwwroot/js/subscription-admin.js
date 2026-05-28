@@ -291,7 +291,8 @@
         }
 
         function openTierChangeModal(preview, ctx) {
-            var state = { immediate: true, bypassPayment: false, loading: false };
+            // Downgrades default to end-of-period; upgrades/other default to immediate.
+            var state = { immediate: !preview.isDowngrade, bypassPayment: false, loading: false };
 
             var overlay = el('div', 'ww-modal-overlay');
             overlay.addEventListener('click', function (e) {
