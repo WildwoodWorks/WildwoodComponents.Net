@@ -62,12 +62,12 @@
                 var discount = _billingAnnual ? GetAnnualDiscount(tier) : (int?)null;
                 var enterprise = IsEnterpriseTier(tier);
 
-                <div class="ww-tier-card @(tier.IsDefault ? "ww-tier-default" : "") @(tier.Id == PreSelectedTierId ? "ww-tier-selected" : "")">
+                <div class="ww-tier-card @(tier.IsDefault ? "ww-tier-default" : "") @(string.Equals(tier.Id, PreSelectedTierId, StringComparison.OrdinalIgnoreCase) ? "ww-tier-selected" : "")">
                     @if (!string.IsNullOrEmpty(tier.CustomBadgeText))
                     {
                         <div class="ww-tier-default-badge">@tier.CustomBadgeText</div>
                     }
-                    else if (tier.Id == PreSelectedTierId)
+                    else if (string.Equals(tier.Id, PreSelectedTierId, StringComparison.OrdinalIgnoreCase))
                     {
                         <div class="ww-tier-default-badge">Your Selection</div>
                     }

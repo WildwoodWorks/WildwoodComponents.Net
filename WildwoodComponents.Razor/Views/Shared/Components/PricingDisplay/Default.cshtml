@@ -59,7 +59,7 @@
     <div class="ww-pricing-grid row justify-content-center">
         @foreach (var tier in tiers)
         {
-            var isPreSelected = tier.Id == Model.PreSelectedTierId;
+            var isPreSelected = string.Equals(tier.Id, Model.PreSelectedTierId, StringComparison.OrdinalIgnoreCase);
 
             <div class="col-md-4 mb-4">
                 <div class="ww-pricing-card card h-100 @(tier.IsDefault || isPreSelected ? "border-primary ww-highlighted" : "")"

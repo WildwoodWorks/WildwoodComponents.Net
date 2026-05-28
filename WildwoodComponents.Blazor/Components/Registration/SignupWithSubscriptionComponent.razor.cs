@@ -118,7 +118,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
                 try
                 {
                     var tiers = await AppTierService.GetPublicTiersAsync(AppId);
-                    var tier = tiers?.FirstOrDefault(t => t.Id == PreSelectedTierId);
+                    var tier = tiers?.FirstOrDefault(t => string.Equals(t.Id, PreSelectedTierId, StringComparison.OrdinalIgnoreCase));
                     if (tier != null)
                     {
                         _preSelectedTier = tier;
