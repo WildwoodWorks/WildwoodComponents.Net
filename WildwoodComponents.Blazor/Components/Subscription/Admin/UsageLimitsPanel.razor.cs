@@ -19,6 +19,8 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         [Parameter] public bool IsAdmin { get; set; }
         [Parameter] public int WarningThreshold { get; set; } = 80;
         [Parameter] public EventCallback OnLimitChanged { get; set; }
+        /// <summary>When supplied, these limit statuses are displayed instead of fetching from the API.</summary>
+        [Parameter] public IReadOnlyList<AppTierLimitStatusModel>? LimitStatusesOverride { get; set; }
 
         private List<AppTierLimitStatusModel> _limits = new();
         private bool _isProcessing;
@@ -35,6 +37,14 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
         public async Task LoadDataAsync()
         {
+            // Consumer-supplied statuses (e.g. locally-merged real-time usage) bypass the API fetch.
+            if (LimitStatusesOverride != null)
+            {
+                _limits = new List<AppTierLimitStatusModel>(LimitStatusesOverride);
+                StateHasChanged();
+                return;
+            }
+
             try
             {
                 await SetLoadingAsync(true);

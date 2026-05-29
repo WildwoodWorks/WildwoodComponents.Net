@@ -23,6 +23,13 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         private bool _immediate = true;
         private bool _bypassPayment;
 
+        /// <summary>Payment is still required after accounting for the admin bypass toggle.</summary>
+        private bool EffectivePaymentRequired => Preview.PaymentRequired && !_bypassPayment;
+
+        /// <summary>Payment is required but cannot be collected (no provider) and cannot be bypassed.</summary>
+        private bool ShowNoProviderWarning =>
+            EffectivePaymentRequired && !Preview.PaymentProviderAvailable && !Preview.PaymentBypassAllowed;
+
         protected override void OnInitialized()
         {
             // Downgrades default to end-of-period; upgrades/other default to immediate.

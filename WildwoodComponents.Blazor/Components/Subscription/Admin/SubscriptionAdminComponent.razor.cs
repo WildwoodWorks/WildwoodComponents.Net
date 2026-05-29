@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
@@ -26,6 +27,17 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         /// <summary>When true, render the subscription status card above the tab bar instead of as a tab.</summary>
         [Parameter] public bool ShowStatusAboveTabs { get; set; }
         [Parameter] public EventCallback<AppTierSubscriptionChangedEventArgs> OnSubscriptionChanged { get; set; }
+
+        /// <summary>
+        /// Called when the server confirms a tier change requires payment and no card is on file.
+        /// Return a payment transaction id to complete the change, or null/empty to cancel.
+        /// Consumers typically wire this to a modal containing PaymentFormComponent.
+        /// When not wired, a payment-required change surfaces an error via the alert banner.
+        /// </summary>
+        [Parameter] public Func<PaymentRequiredArgs, Task<string?>>? OnPaymentRequired { get; set; }
+
+        /// <summary>Override the internally-fetched limit statuses (e.g. with locally-merged real-time usage data).</summary>
+        [Parameter] public IReadOnlyList<AppTierLimitStatusModel>? LimitStatusesOverride { get; set; }
 
         #endregion
 
@@ -186,7 +198,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             else
             {
                 // New subscription - execute directly (no preview needed)
-                await ExecuteTierChange(args, true);
+                await ExecuteTierChange(args, true, null);
             }
         }
 
@@ -195,10 +207,38 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             if (_pendingArgs == null) return;
 
             var args = _pendingArgs;
+            var preview = _preview;
             _preview = null;
             _pendingArgs = null;
+            StateHasChanged();
 
-            await ExecuteTierChange(args, options.Immediate);
+            // When the server says payment is required (and the admin didn't bypass it),
+            // collect a payment transaction id via the OnPaymentRequired extension point
+            // before committing the change. Mirrors the React preview -> payment -> change flow.
+            string? paymentTransactionId = null;
+            if (preview != null && preview.PaymentRequired && !options.BypassPayment)
+            {
+                if (OnPaymentRequired == null)
+                {
+                    await HandleErrorAsync(
+                        new Exception("Payment is required for this tier change. Wire the OnPaymentRequired callback to collect payment."),
+                        "Tier change");
+                    return;
+                }
+
+                paymentTransactionId = await OnPaymentRequired(new PaymentRequiredArgs
+                {
+                    TierId = args.TierId,
+                    TierName = args.TierName,
+                    PricingId = args.PricingId,
+                    Price = preview.ProratedChargeToday ?? preview.NewPrice ?? 0m,
+                });
+
+                // Null/empty transaction id means the consumer cancelled payment collection.
+                if (string.IsNullOrEmpty(paymentTransactionId)) return;
+            }
+
+            await ExecuteTierChange(args, options.Immediate, paymentTransactionId);
         }
 
         private void HandleCancelConfirmation()
@@ -208,7 +248,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             StateHasChanged();
         }
 
-        private async Task ExecuteTierChange(TierSelectedEventArgs args, bool immediate)
+        private async Task ExecuteTierChange(TierSelectedEventArgs args, bool immediate, string? paymentTransactionId)
         {
             if (_isProcessing) return;
             _isProcessing = true;
@@ -220,7 +260,8 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
                 if (args.IsChange)
                 {
-                    // Change existing tier
+                    // Change existing tier. Admin/company-scoped changes route through the admin
+                    // endpoints (no self-service payment token); self-service forwards the token.
                     if (UseCompanyScope)
                     {
                         result = await AppTierService.ChangeCompanyTierAsync(
@@ -234,7 +275,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                     else
                     {
                         result = await AppTierService.ChangeTierAsync(
-                            AppId, args.TierId, args.PricingId, immediate);
+                            AppId, args.TierId, args.PricingId, immediate, paymentTransactionId);
                     }
                 }
                 else
@@ -253,7 +294,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                     else
                     {
                         result = await AppTierService.SubscribeToTierAsync(
-                            AppId, args.TierId, args.PricingId, null);
+                            AppId, args.TierId, args.PricingId, paymentTransactionId);
                     }
                 }
 
@@ -430,5 +471,17 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         }
 
         #endregion
+    }
+
+    /// <summary>
+    /// Details passed to <see cref="SubscriptionAdminComponent.OnPaymentRequired"/> when a tier
+    /// change requires payment. The handler returns a payment transaction id (or null to cancel).
+    /// </summary>
+    public class PaymentRequiredArgs
+    {
+        public string TierId { get; set; } = string.Empty;
+        public string TierName { get; set; } = string.Empty;
+        public string? PricingId { get; set; }
+        public decimal Price { get; set; }
     }
 }

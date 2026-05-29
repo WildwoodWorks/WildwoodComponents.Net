@@ -148,7 +148,7 @@ public class WildwoodAppTierService : IWildwoodAppTierService
             };
 
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/subscribe", content);
+            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/my-subscription", content);
 
             if (response.IsSuccessStatusCode)
             {

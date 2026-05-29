@@ -51,6 +51,20 @@
                 </div>
             </div>
 
+            @* Billing frequency savings callout *@
+            @if (Preview.IsBillingFrequencyChange
+                && Preview.MonthlyEquivalentCurrent.HasValue
+                && Preview.MonthlyEquivalentNew.HasValue
+                && Preview.MonthlyEquivalentNew.Value < Preview.MonthlyEquivalentCurrent.Value)
+            {
+                var savingsPct = (int)Math.Round(
+                    (double)((Preview.MonthlyEquivalentCurrent.Value - Preview.MonthlyEquivalentNew.Value)
+                        / Preview.MonthlyEquivalentCurrent.Value) * 100);
+                <div style="margin-bottom: 1.5rem; padding: 0.5rem 0.75rem; text-align: center; font-weight: 500; background: var(--ww-success-bg, #d1e7dd); color: var(--ww-success, #198754); border-radius: var(--ww-border-radius, 0.5rem);">
+                    Save @savingsPct% &mdash; @FormatCurrency(Preview.MonthlyEquivalentNew, Preview.Currency)/mo billed @(Preview.NewBillingFrequency?.ToLower())
+                </div>
+            }
+
             @* Proration Breakdown (Upgrades) *@
             @if (Preview.IsUpgrade && (Preview.ProratedChargeToday.HasValue || Preview.NextBillingAmount.HasValue))
             {
@@ -164,6 +178,14 @@
                 </div>
             }
 
+            @* No payment provider configured *@
+            @if (ShowNoProviderWarning)
+            {
+                <div class="alert alert-warning" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Payment processing is not configured for this application. Contact your administrator.
+                </div>
+            }
+
             @* Admin Payment Bypass *@
             @if (Preview.PaymentBypassAllowed && Preview.PaymentRequired)
             {
@@ -199,7 +221,7 @@
             <button type="button"
                     class="btn @(Preview.IsDowngrade ? "btn-warning" : "btn-primary")"
                     @onclick="HandleConfirm"
-                    disabled="@(IsLoading || (!Preview.Success && !string.IsNullOrEmpty(Preview.ErrorMessage)))">
+                    disabled="@(IsLoading || ShowNoProviderWarning || (!Preview.Success && !string.IsNullOrEmpty(Preview.ErrorMessage)))">
                 @if (IsLoading)
                 {
                     <span class="spinner-border spinner-border-sm me-1" role="status"></span>
