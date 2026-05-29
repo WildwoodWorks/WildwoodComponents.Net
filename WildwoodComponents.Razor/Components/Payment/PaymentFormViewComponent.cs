@@ -9,6 +9,14 @@ namespace WildwoodComponents.Razor.Components.Payment;
 /// Client-side JavaScript handles form validation, card formatting, and AJAX submission.
 /// Razor Pages equivalent of WildwoodComponents.Blazor PaymentFormComponent.
 /// </summary>
+/// <remarks>
+/// IMPORTANT: The form POSTs to <c>{proxyBaseUrl}/process</c> (default base
+/// <c>/api/wildwood-payment</c>), which is NOT a built-in WildwoodAPI endpoint — the host
+/// application must provide it (e.g. a server-side proxy that tokenizes the card). Until
+/// then this is a UI-only demo. For end-to-end WildwoodAPI payments use
+/// <c>PaymentViewComponent</c> (provider tokenization + persisted PaymentTransaction with
+/// AppId). The <c>appId</c> is included in the submitted payload when supplied.
+/// </remarks>
 public class PaymentFormViewComponent : ViewComponent
 {
     /// <summary>

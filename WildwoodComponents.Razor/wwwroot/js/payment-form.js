@@ -14,6 +14,7 @@
     function initPaymentForm(root) {
         var cid = root.dataset.componentId;
         var proxyBase = root.dataset.proxyBase;
+        var appId = root.dataset.appId || '';
         var amount = parseFloat(root.dataset.amount || '0');
         var currency = root.dataset.currency || 'USD';
         var description = root.dataset.description || '';
@@ -147,6 +148,7 @@
 
                 var exp = cardExpiry.value.split('/');
                 var payload = {
+                    appId: appId,
                     amount: amount,
                     currency: currency,
                     description: description,

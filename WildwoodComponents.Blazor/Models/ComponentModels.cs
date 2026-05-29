@@ -332,6 +332,7 @@ namespace WildwoodComponents.Blazor.Models
     public class PaymentRequest
     {
         public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string AppId { get; set; } = string.Empty;
         public decimal Amount { get; set; }
         public string Currency { get; set; } = "USD";
         public string MerchantId { get; set; } = string.Empty;

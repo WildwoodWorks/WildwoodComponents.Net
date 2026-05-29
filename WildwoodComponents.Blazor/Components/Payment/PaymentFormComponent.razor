@@ -4,6 +4,14 @@
 @inherits BaseWildwoodComponent
 @inject IPaymentService PaymentService
 
+@*
+    Standalone raw card-entry form. Submits to /api/payment/process via IPaymentService,
+    which is NOT a built-in WildwoodAPI endpoint and must be provided by the host app.
+    For end-to-end WildwoodAPI payments use PaymentComponent (provider tokenization +
+    persisted PaymentTransaction with AppId). The AppId parameter is forwarded when a
+    /process endpoint is supplied. See IPaymentService remarks for details.
+*@
+
 <div class="@GetRootCssClasses() payment-component">
     <div class="payment-form-container">
         @if (!string.IsNullOrEmpty(ErrorMessage) && EnableErrorHandling)
@@ -227,6 +235,7 @@
 </div>
 
 @code {
+    [Parameter] public string AppId { get; set; } = string.Empty;
     [Parameter] public decimal Amount { get; set; }
     [Parameter] public string Currency { get; set; } = "USD";
     [Parameter] public string MerchantId { get; set; } = string.Empty;
@@ -244,6 +253,7 @@
 
     protected override async Task OnComponentInitializedAsync()
     {
+        paymentRequest.AppId = AppId;
         paymentRequest.Amount = Amount;
         paymentRequest.Currency = Currency;
         paymentRequest.MerchantId = MerchantId;

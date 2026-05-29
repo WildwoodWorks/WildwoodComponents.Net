@@ -6,10 +6,27 @@ using WildwoodComponents.Blazor.Models;
 namespace WildwoodComponents.Blazor.Services
 {
     /// <summary>
-    /// Interface for Payment Service operations.
+    /// Interface for the standalone <c>PaymentFormComponent</c> (raw card-entry form).
     /// </summary>
+    /// <remarks>
+    /// IMPORTANT: This service POSTs to <c>/api/payment/process</c>, which is NOT a built-in
+    /// WildwoodAPI endpoint. It must be supplied by the host application (e.g. a server-side
+    /// proxy that tokenizes the card and forwards to a provider). Collecting a raw card number
+    /// in your own request is a PCI-DSS anti-pattern.
+    /// <para>
+    /// For end-to-end payments against WildwoodAPI, prefer <c>PaymentComponent</c> +
+    /// <c>PaymentProviderService.InitiatePaymentAsync</c>, which uses provider tokenization
+    /// (Stripe Elements, PayPal, etc.), persists a <c>PaymentTransaction</c>, and carries
+    /// the <c>AppId</c>. Until a <c>/process</c> endpoint exists, this form is a UI demo only.
+    /// </para>
+    /// </remarks>
     public interface IPaymentService
     {
+        /// <summary>
+        /// POSTs the card details to <c>/api/payment/process</c>. Requires a host-provided
+        /// endpoint (see the interface remarks); returns a failed <see cref="PaymentResult"/>
+        /// (e.g. 404) if none is configured. The request's <c>AppId</c> is forwarded when set.
+        /// </summary>
         Task<PaymentResult> ProcessPaymentAsync(PaymentRequest request);
         Task<PaymentResult> RefundPaymentAsync(string transactionId, decimal? amount = null);
         Task<PaymentResult> GetPaymentStatusAsync(string transactionId);
