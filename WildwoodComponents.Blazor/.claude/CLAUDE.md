@@ -36,6 +36,7 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 | Token Registration | TokenRegistrationComponent | TokenRegistrationViewComponent | (via authService) | TokenRegistrationComponent | -- | -- |
 | App Tier | AppTierComponent | AppTierViewComponent | appTierService | AppTierComponent | -- | -- |
 | Disclaimer | DisclaimerComponent | -- | disclaimerService | DisclaimerComponent | -- | -- |
+| Feedback | FeedbackWidgetComponent | FeedbackWidgetViewComponent | feedbackService | FeedbackComponent | FeedbackComponent | -- |
 
 *`--` = not yet implemented on that platform*
 

@@ -42,6 +42,7 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 | Usage Dashboard | UsageDashboardComponent | UsageDashboardViewComponent | (via appTierService) | -- | -- | -- |
 | Overage Summary | OverageSummaryComponent | OverageSummaryViewComponent | (via appTierService) | -- | -- | -- |
 | Disclaimer | DisclaimerComponent | DisclaimerViewComponent | disclaimerService | DisclaimerComponent | -- | -- |
+| Feedback | FeedbackWidgetComponent | FeedbackWidgetViewComponent | feedbackService | FeedbackComponent | FeedbackComponent | -- |
 | Signup + Sub | SignupWithSubscriptionComponent | SignupWithSubscriptionViewComponent | -- | -- | -- | -- |
 
 *`--` = not yet implemented on that platform*
