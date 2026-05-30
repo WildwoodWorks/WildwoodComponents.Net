@@ -782,3 +782,133 @@
     justify-content: flex-end;
     gap: 0.75rem;
 }
+
+/* ============================================================
+   Feedback widget — screenshot capture + annotation overlays
+   These elements are created in JS at document.body by
+   feedback-component.js, so they cannot be styled via Blazor
+   scoped CSS and live here in the global theme stylesheet.
+   ============================================================ */
+
+.ww-feedback-capture-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10001;
+    cursor: crosshair;
+    background: rgba(0, 0, 0, 0.3);
+    touch-action: none;
+}
+
+.ww-feedback-capture-selection {
+    position: absolute;
+    border: 2px dashed var(--ww-primary, #4A90D9);
+    background: rgba(74, 144, 217, 0.1);
+}
+
+.ww-feedback-annotation-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10002;
+    background: rgba(30, 30, 30, 0.92);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.ww-feedback-annotation-toolbar {
+    display: flex;
+    gap: 6px;
+    padding: 8px 14px;
+    background: #2a2a3a;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.ww-feedback-annotation-toolbar button {
+    padding: 6px 12px;
+    border: 1px solid #555;
+    border-radius: 6px;
+    background: #3a3a4a;
+    color: #e0e0e0;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+
+.ww-feedback-annotation-toolbar button:hover {
+    background: #4a4a5a;
+}
+
+.ww-feedback-annotation-toolbar button.active {
+    background: var(--ww-primary, #4A90D9);
+    border-color: var(--ww-primary, #4A90D9);
+    color: #fff;
+}
+
+.ww-feedback-annotation-toolbar input[type="color"] {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 1px;
+    background: #3a3a4a;
+    cursor: pointer;
+}
+
+.ww-feedback-annotation-toolbar .ann-done-btn {
+    background: var(--ww-success, #198754);
+    border-color: var(--ww-success, #198754);
+    color: #fff;
+    font-weight: 600;
+}
+
+.ww-feedback-annotation-toolbar .ann-done-btn:hover {
+    background: #157347;
+}
+
+.ww-feedback-annotation-toolbar .ann-cancel-btn {
+    background: #6c757d;
+    border-color: #6c757d;
+    color: #fff;
+}
+
+.ww-feedback-annotation-toolbar .ann-cancel-btn:hover {
+    background: #5c636a;
+}
+
+.ww-feedback-annotation-canvas-wrap {
+    position: relative;
+    max-width: 90vw;
+    max-height: calc(100vh - 100px);
+    overflow: auto;
+    border: 2px solid #555;
+    border-radius: 6px;
+    background: #111;
+}
+
+.ww-feedback-annotation-canvas-wrap canvas {
+    display: block;
+    cursor: crosshair;
+}
+
+.ww-feedback-annotation-canvas-wrap canvas.ww-feedback-annotation-bg {
+    position: relative;
+}
+
+.ww-feedback-annotation-canvas-wrap canvas.ww-feedback-annotation-draw {
+    position: absolute;
+    top: 0;
+    left: 0;
+}

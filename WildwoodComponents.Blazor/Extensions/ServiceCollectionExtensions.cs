@@ -486,6 +486,16 @@ namespace WildwoodComponents.Blazor.Extensions
             {
                 // Service may not exist, ignore
             }
+
+            // Register Feedback service if available
+            try
+            {
+                RegisterFeedbackService(services, assembly, options);
+            }
+            catch
+            {
+                // Service may not exist, ignore
+            }
         }
 
         /// <summary>
@@ -657,6 +667,42 @@ namespace WildwoodComponents.Blazor.Extensions
                     appTierService.SetApiBaseUrl(apiBaseUrl);
 
                     return appTierService;
+                });
+            }
+        }
+
+        /// <summary>
+        /// Registers the feedback service with proper URL configuration.
+        /// The service strips a trailing /api segment from the base URL itself, so the raw
+        /// configured BaseUrl is passed through unmodified.
+        /// </summary>
+        private static void RegisterFeedbackService(IServiceCollection services, Assembly assembly, WildwoodComponentsOptions options)
+        {
+            var serviceInterface = assembly.GetType("WildwoodComponents.Blazor.Services.IFeedbackService");
+            var serviceImplementation = assembly.GetType("WildwoodComponents.Blazor.Services.FeedbackService");
+
+            if (serviceInterface != null && serviceImplementation != null)
+            {
+                services.AddScoped(serviceInterface, serviceProvider =>
+                {
+                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                    httpClient.BaseAddress = new Uri(options.BaseUrl);
+
+                    if (!string.IsNullOrEmpty(options.ApiKey))
+                    {
+                        httpClient.DefaultRequestHeaders.Add("X-API-Key", options.ApiKey);
+                    }
+
+                    var loggerFactory = serviceProvider.GetService<ILoggerFactory>();
+                    var logger = loggerFactory?.CreateLogger<WildwoodComponents.Blazor.Services.FeedbackService>()
+                                ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.FeedbackService>.Instance;
+
+                    var feedbackService = new WildwoodComponents.Blazor.Services.FeedbackService(httpClient, logger);
+
+                    // Pass the raw base URL; the service computes the API root (strips trailing /api).
+                    feedbackService.SetApiBaseUrl(options.BaseUrl ?? string.Empty);
+
+                    return feedbackService;
                 });
             }
         }

@@ -1,0 +1,144 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Models
+@using WildwoodComponents.Blazor.Services
+@using Microsoft.AspNetCore.Components.Web
+@inherits BaseWildwoodComponent
+
+@if (_config != null && _config.IsEnabled)
+{
+    <div class="ww-feedback @CssClass" style="@GetAccentStyle()">
+
+        <button type="button"
+                class="ww-feedback-btn @(IsBottomLeft ? "ww-bottom-left" : "")"
+                title="Send Feedback"
+                aria-label="Open feedback form"
+                @ref="_buttonRef"
+                @onclick="TogglePanel">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+            </svg>
+        </button>
+
+        @if (_panelOpen)
+        {
+            <div class="ww-feedback-panel @(IsBottomLeft ? "ww-bottom-left" : "")" role="dialog" aria-label="Feedback form">
+                <div class="ww-feedback-panel-header">
+                    <span>Send Feedback</span>
+                    <button type="button" class="ww-feedback-close" title="Close" aria-label="Close feedback form" @onclick="ClosePanel">&times;</button>
+                </div>
+
+                <div class="ww-feedback-panel-body">
+                    <label for="@($"ww-fb-type-{ComponentId}")">Type</label>
+                    <select id="@($"ww-fb-type-{ComponentId}")" @bind="_feedbackType">
+                        @foreach (var type in _feedbackTypes)
+                        {
+                            <option value="@type">@FormatTypeLabel(type)</option>
+                        }
+                    </select>
+
+                    <label for="@($"ww-fb-title-{ComponentId}")">Title <span class="ww-feedback-req">*</span></label>
+                    <input type="text"
+                           id="@($"ww-fb-title-{ComponentId}")"
+                           placeholder="Brief summary"
+                           maxlength="200"
+                           class="@(_titleInvalid ? "ww-feedback-invalid" : "")"
+                           value="@_title"
+                           @oninput="OnTitleInput" />
+
+                    @if (_duplicate != null && _duplicate.HasPotentialDuplicate)
+                    {
+                        <div class="ww-feedback-duplicate-warning">
+                            &#9888; Similar feedback exists: <strong>@_duplicate.DuplicateTitle</strong>
+                            @if (_duplicate.DuplicateVoteCount > 0)
+                            {
+                                <span> (@_duplicate.DuplicateVoteCount votes)</span>
+                            }
+                            <br />
+                            <button type="button" class="ww-feedback-vote-btn" disabled="@_isVoting" @onclick="VoteForDuplicate">
+                                &#128077; Me too! Upvote instead
+                            </button>
+                        </div>
+                    }
+
+                    <label for="@($"ww-fb-desc-{ComponentId}")">Description <span class="ww-feedback-req">*</span></label>
+                    <textarea id="@($"ww-fb-desc-{ComponentId}")"
+                              placeholder="Tell us more..."
+                              rows="3"
+                              class="@(_descriptionInvalid ? "ww-feedback-invalid" : "")"
+                              @bind="_description"
+                              @bind:event="oninput"></textarea>
+
+                    @if (!_isAuthenticated)
+                    {
+                        <label for="@($"ww-fb-email-{ComponentId}")">Email</label>
+                        <input type="email" id="@($"ww-fb-email-{ComponentId}")" placeholder="your@@email.com" @bind="_submitterEmail" />
+
+                        <label for="@($"ww-fb-name-{ComponentId}")">Name (optional)</label>
+                        <input type="text" id="@($"ww-fb-name-{ComponentId}")" placeholder="Your name" @bind="_submitterName" />
+                    }
+
+                    <div class="ww-feedback-screenshot-section">
+                        <label>Screenshot @if (_config.RequireScreenshot){<span class="ww-feedback-req">*</span>}</label>
+                        <div class="ww-feedback-screenshot-btns">
+                            <button type="button" disabled="@_isCapturing" @onclick="CaptureArea">&#128247; Capture Area</button>
+                            <button type="button" disabled="@_isCapturing" @onclick="CaptureFullPage">&#128248; Full Page</button>
+                        </div>
+                        @if (!string.IsNullOrEmpty(_screenshotData))
+                        {
+                            <div class="ww-feedback-screenshot-preview">
+                                <img src="@_screenshotData" alt="Screenshot" />
+                                <button type="button" class="ww-feedback-remove-screenshot" title="Remove" @onclick="RemoveScreenshot">&times;</button>
+                            </div>
+                        }
+                    </div>
+
+                    @if (_config.AllowAttachments)
+                    {
+                        <div class="ww-feedback-attachment-section">
+                            <label>Attachments</label>
+                            <div class="ww-feedback-attachment-drop">
+                                <InputFile OnChange="OnAttachmentsSelected" multiple accept="@(_config.AllowedAttachmentTypes ?? "")" class="ww-feedback-file-input" />
+                                <span class="ww-feedback-attachment-label">Drop files here or browse</span>
+                            </div>
+                            @if (_attachments.Count > 0)
+                            {
+                                <div class="ww-feedback-attachment-list">
+                                    @for (int i = 0; i < _attachments.Count; i++)
+                                    {
+                                        var index = i;
+                                        var att = _attachments[index];
+                                        <div class="ww-feedback-attachment-item">
+                                            <span class="ww-feedback-att-name">@att.Name <small>(@FormatSize(att.Size))</small></span>
+                                            <button type="button" class="ww-feedback-att-remove" title="Remove" @onclick="() => RemoveAttachment(index)">&times;</button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(_formError))
+                    {
+                        <div class="ww-feedback-form-error">@_formError</div>
+                    }
+
+                    <button type="button" class="ww-feedback-submit-btn" disabled="@_isSubmitting" @onclick="SubmitFeedback">
+                        @if (_isSubmitting)
+                        {
+                            <span>Submitting...</span>
+                        }
+                        else
+                        {
+                            <span>Submit Feedback</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_toastMessage))
+        {
+            <div class="ww-feedback-toast @(_toastIsError ? "ww-error" : "ww-success")">@_toastMessage</div>
+        }
+    </div>
+}

@@ -1,0 +1,389 @@
+/* FeedbackWidgetComponent scoped styles.
+   The floating button + slide-out panel + toast live in this component's markup and are
+   styled here. Screenshot/annotation overlays are created in JS at document.body and are
+   styled globally in wildwood-themes.css (scoped CSS cannot reach JS-created elements).
+
+   Accent color is supplied via the inline --ww-feedback-color custom property; everything
+   else uses the shared --ww-* variables with Bootstrap-like fallbacks. */
+
+.ww-feedback {
+    font-family: var(--ww-font-family, inherit);
+}
+
+/* ---------- Floating button ---------- */
+.ww-feedback-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--ww-feedback-color, var(--ww-primary, #4A90D9));
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    box-shadow: var(--ww-shadow-lg, 0 4px 12px rgba(0, 0, 0, 0.25));
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+    user-select: none;
+    touch-action: none;
+}
+
+.ww-feedback-btn:hover {
+    transform: scale(1.08);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.ww-feedback-btn:focus-visible {
+    outline: 2px solid var(--ww-feedback-color, var(--ww-primary, #4A90D9));
+    outline-offset: 3px;
+}
+
+.ww-feedback-btn.ww-bottom-left {
+    right: auto;
+    left: 24px;
+}
+
+/* ---------- Panel ---------- */
+.ww-feedback-panel {
+    position: fixed;
+    bottom: 86px;
+    right: 24px;
+    width: 370px;
+    max-height: 520px;
+    background: var(--ww-bg-primary, #fff);
+    color: var(--ww-text-primary, #212529);
+    border-radius: var(--ww-border-radius, 12px);
+    box-shadow: var(--ww-shadow-lg, 0 8px 32px rgba(0, 0, 0, 0.2));
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    animation: ww-feedback-slide-up 0.25s ease-out;
+}
+
+.ww-feedback-panel.ww-bottom-left {
+    right: auto;
+    left: 24px;
+}
+
+@keyframes ww-feedback-slide-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.ww-feedback-panel-header {
+    padding: 14px 16px;
+    background: var(--ww-feedback-color, var(--ww-primary, #4A90D9));
+    color: #fff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.ww-feedback-close {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+    opacity: 0.8;
+}
+
+.ww-feedback-close:hover {
+    opacity: 1;
+}
+
+.ww-feedback-panel-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.ww-feedback-panel-body label {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: block;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-feedback-req {
+    color: var(--ww-danger, #dc3545);
+}
+
+.ww-feedback-panel-body input,
+.ww-feedback-panel-body select,
+.ww-feedback-panel-body textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--ww-border-color, #ced4da);
+    border-radius: var(--ww-border-radius-sm, 6px);
+    font-size: 14px;
+    margin-bottom: 10px;
+    background: var(--ww-input-bg, #fff);
+    color: var(--ww-text-primary, #212529);
+    box-sizing: border-box;
+}
+
+.ww-feedback-panel-body textarea {
+    resize: vertical;
+    min-height: 70px;
+}
+
+.ww-feedback-panel-body input:focus,
+.ww-feedback-panel-body select:focus,
+.ww-feedback-panel-body textarea:focus {
+    outline: none;
+    border-color: var(--ww-focus-border, var(--ww-feedback-color, #4A90D9));
+    box-shadow: 0 0 0 2px var(--ww-focus-ring, rgba(74, 144, 217, 0.2));
+}
+
+.ww-feedback-panel-body input.ww-feedback-invalid,
+.ww-feedback-panel-body textarea.ww-feedback-invalid {
+    border-color: var(--ww-danger, #dc3545);
+}
+
+/* ---------- Screenshot section ---------- */
+.ww-feedback-screenshot-section {
+    margin-bottom: 10px;
+}
+
+.ww-feedback-screenshot-btns {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.ww-feedback-screenshot-btns button {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 12px;
+    border: 1px solid var(--ww-border-color, #ced4da);
+    border-radius: var(--ww-border-radius-sm, 6px);
+    background: var(--ww-bg-tertiary, #f8f9fa);
+    color: var(--ww-text-primary, #212529);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.ww-feedback-screenshot-btns button:hover:not(:disabled) {
+    background: var(--ww-bg-secondary, #e9ecef);
+}
+
+.ww-feedback-screenshot-btns button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.ww-feedback-screenshot-preview {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+}
+
+.ww-feedback-screenshot-preview img {
+    max-width: 100%;
+    max-height: 100px;
+    border-radius: var(--ww-border-radius-sm, 6px);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+}
+
+.ww-feedback-remove-screenshot {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--ww-danger, #dc3545);
+    color: #fff;
+    border: none;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+/* ---------- Duplicate warning + vote ---------- */
+.ww-feedback-duplicate-warning {
+    background: var(--ww-warning-bg, #fff3cd);
+    color: var(--ww-warning-color, #856404);
+    border: 1px solid var(--ww-warning, #ffc107);
+    border-radius: var(--ww-border-radius-sm, 6px);
+    padding: 8px 10px;
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+.ww-feedback-vote-btn {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--ww-warning-color, #856404);
+    border-radius: var(--ww-border-radius-sm, 4px);
+    background: rgba(255, 193, 7, 0.15);
+    color: var(--ww-warning-color, #856404);
+    cursor: pointer;
+    transition: background 0.15s;
+    width: auto !important;
+}
+
+.ww-feedback-vote-btn:hover:not(:disabled) {
+    background: rgba(255, 193, 7, 0.3);
+}
+
+.ww-feedback-vote-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ---------- Attachments ---------- */
+.ww-feedback-attachment-section {
+    margin-bottom: 10px;
+}
+
+.ww-feedback-attachment-drop {
+    position: relative;
+    border: 2px dashed var(--ww-border-color, #ced4da);
+    border-radius: var(--ww-border-radius-sm, 6px);
+    padding: 12px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--ww-text-muted, #6c757d);
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+
+/* The native InputFile overlays the drop zone so the whole area is clickable/droppable. */
+.ww-feedback-file-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.ww-feedback-attachment-label {
+    pointer-events: none;
+}
+
+.ww-feedback-attachment-list {
+    max-height: 80px;
+    overflow-y: auto;
+}
+
+.ww-feedback-attachment-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    font-size: 12px;
+    background: var(--ww-bg-tertiary, #f8f9fa);
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+.ww-feedback-att-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.ww-feedback-att-remove {
+    background: none;
+    border: none;
+    color: var(--ww-danger, #dc3545);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+
+/* ---------- Form error + submit ---------- */
+.ww-feedback-form-error {
+    color: var(--ww-danger-color, #842029);
+    background: var(--ww-danger-bg, #f8d7da);
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    margin-bottom: 10px;
+    font-size: 0.8rem;
+}
+
+.ww-feedback-submit-btn {
+    width: 100%;
+    padding: 10px;
+    background: var(--ww-feedback-color, var(--ww-primary, #4A90D9));
+    color: var(--ww-btn-primary-text, #fff);
+    border: none;
+    border-radius: var(--ww-border-radius-sm, 6px);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.ww-feedback-submit-btn:hover:not(:disabled) {
+    opacity: 0.9;
+}
+
+.ww-feedback-submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ---------- Toast ---------- */
+.ww-feedback-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: var(--ww-border-radius, 8px);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 10000;
+    box-shadow: var(--ww-shadow, 0 4px 12px rgba(0, 0, 0, 0.2));
+    animation: ww-feedback-toast-in 0.3s ease-out;
+    max-width: 350px;
+}
+
+.ww-feedback-toast.ww-success {
+    background: var(--ww-success, #198754);
+}
+
+.ww-feedback-toast.ww-error {
+    background: var(--ww-danger, #dc3545);
+}
+
+@keyframes ww-feedback-toast-in {
+    from { opacity: 0; transform: translateY(-12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 480px) {
+    .ww-feedback-panel {
+        width: calc(100vw - 24px);
+        right: 12px;
+        left: 12px;
+        bottom: 80px;
+    }
+
+    .ww-feedback-panel.ww-bottom-left {
+        right: 12px;
+    }
+}

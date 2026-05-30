@@ -1,0 +1,126 @@
+@page "/test/feedback"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Feedback
+@using WildwoodComponents.Blazor.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="FeedbackWidgetComponent Test" ComponentName="FeedbackWidgetComponent" IconClass="fas fa-comment-dots"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">AppId</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Base URL (optional)</label>
+            <input class="form-control form-control-sm" @bind="baseUrl" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Auth Token (optional)</label>
+            <input class="form-control form-control-sm" @bind="authToken" />
+        </div>
+        <hr class="my-2" />
+        <p class="small text-muted mb-0">
+            The widget renders a floating button in the bottom corner of the page. Its position,
+            color, feedback types, screenshot and attachment options are driven by the app's
+            feedback widget configuration loaded from the API. If the widget does not appear,
+            confirm the AppId has the feedback widget enabled.
+        </p>
+    </Settings>
+    <Component>
+        @if (!string.IsNullOrEmpty(appId))
+        {
+            <div style="min-height: 120px; display: flex; align-items: center; justify-content: center;">
+                <p class="text-muted mb-0">
+                    Feedback widget is active for AppId <code>@appId</code>.
+                    Look for the floating button in the corner of the page.
+                </p>
+            </div>
+            <FeedbackWidgetComponent @key="_widgetKey"
+                                     AppId="@appId"
+                                     BaseUrl="@(string.IsNullOrWhiteSpace(baseUrl) ? null : baseUrl)"
+                                     AuthToken="@(string.IsNullOrWhiteSpace(authToken) ? null : authToken)"
+                                     OnFeedbackSubmitted="HandleFeedbackSubmitted"
+                                     OnError="HandleError" />
+        }
+        else
+        {
+            <div class="alert alert-warning mb-0">
+                Enter an AppId in the settings panel and click Apply to render the feedback widget.
+            </div>
+        }
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string appId = "";
+    private string baseUrl = "";
+    private string authToken = "";
+    private int _widgetKey = 0;
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        baseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "";
+        // Use the logged-in user's token so submissions are attributed when available.
+        authToken = await StateStorage.GetItemAsync("wildwood_auth_token") ?? "";
+        LifecycleTracker.TrackInitialized("FeedbackWidgetComponent");
+        AddEvent("FeedbackWidgetComponent initialized");
+    }
+
+    private void HandleFeedbackSubmitted()
+    {
+        AddEvent("Feedback submitted successfully");
+        LifecycleTracker.TrackCallback("FeedbackWidgetComponent", "OnFeedbackSubmitted");
+        StateHasChanged();
+    }
+
+    private void HandleError(ComponentErrorEventArgs args)
+    {
+        var msg = $"Error: {args.Exception.Message}";
+        AddEvent(msg);
+        LifecycleTracker.TrackError("FeedbackWidgetComponent", args.Exception.Message);
+        StateHasChanged();
+    }
+
+    private void ApplySettings()
+    {
+        // Re-key the widget so it reloads config with the new settings.
+        _widgetKey++;
+        AddEvent($"Settings applied - AppId: {appId}, BaseUrl: {(string.IsNullOrWhiteSpace(baseUrl) ? "(default)" : baseUrl)}, AuthToken: {(string.IsNullOrWhiteSpace(authToken) ? "(none)" : "(set)")}");
+        StateHasChanged();
+    }
+
+    private void ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        baseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "";
+        authToken = "";
+        _widgetKey++;
+        events.Clear();
+        AddEvent("Settings reset to defaults");
+        StateHasChanged();
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}

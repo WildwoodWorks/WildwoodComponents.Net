@@ -133,15 +133,18 @@
     </li>
 
     <!-- Other -->
-    <li class="@GetParentActiveClass(new[] { "/test/disclaimer", "/test/theme" })">
+    <li class="@GetParentActiveClass(new[] { "/test/disclaimer", "/test/feedback", "/test/theme" })">
         <a href="#otherSubmenu" data-bs-toggle="collapse"
-           aria-expanded="@IsParentExpanded(new[] { "/test/disclaimer", "/test/theme" })"
+           aria-expanded="@IsParentExpanded(new[] { "/test/disclaimer", "/test/feedback", "/test/theme" })"
            class="dropdown-toggle">
             <i class="fas fa-cog me-2"></i><span>Other</span>
         </a>
-        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/disclaimer", "/test/theme" })" id="otherSubmenu">
+        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/disclaimer", "/test/feedback", "/test/theme" })" id="otherSubmenu">
             <li class="@GetActiveClass("/test/disclaimer")">
                 <a href="/test/disclaimer"><span>Disclaimer</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/feedback")">
+                <a href="/test/feedback"><span>Feedback</span></a>
             </li>
             <li class="@GetActiveClass("/test/theme")">
                 <a href="/test/theme"><span>Theme</span></a>
