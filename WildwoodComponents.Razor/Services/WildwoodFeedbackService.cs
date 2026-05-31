@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Razor.Models;
 
@@ -21,7 +22,23 @@ public class WildwoodFeedbackService : IWildwoodFeedbackService
     private readonly HttpClient _httpClient;
     private readonly IWildwoodSessionManager _sessionManager;
     private readonly ILogger<WildwoodFeedbackService> _logger;
+    private readonly IMemoryCache? _cache;
     private readonly string _apiRoot;
+
+    /// <summary>How long a successfully-resolved widget config is cached (it changes rarely).</summary>
+    private static readonly TimeSpan WidgetConfigTtl = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Short negative-cache TTL when the config endpoint returns nothing (app down / not configured).
+    /// Avoids hammering the API on every page render while still recovering quickly once it's healthy.
+    /// </summary>
+    private static readonly TimeSpan WidgetConfigNegativeTtl = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Per-call timeout for the widget-config fetch. It runs on every page render, so it must never
+    /// block the page for the HttpClient's full (default 30s) timeout when the API is slow.
+    /// </summary>
+    private static readonly TimeSpan WidgetConfigTimeout = TimeSpan.FromSeconds(5);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -31,13 +48,17 @@ public class WildwoodFeedbackService : IWildwoodFeedbackService
     public WildwoodFeedbackService(
         HttpClient httpClient,
         IWildwoodSessionManager sessionManager,
-        ILogger<WildwoodFeedbackService> logger)
+        ILogger<WildwoodFeedbackService> logger,
+        IMemoryCache? cache = null)
     {
         _httpClient = httpClient;
         _sessionManager = sessionManager;
         _logger = logger;
+        _cache = cache;
         _apiRoot = StripApiSuffix(_httpClient.BaseAddress?.ToString());
     }
+
+    private static string WidgetCacheKey(string appId) => $"ww-feedback-widget-cfg:{appId}";
 
     /// <summary>
     /// Removes a trailing <c>/api</c> or <c>/api/</c> from the configured base address so the result
@@ -69,10 +90,30 @@ public class WildwoodFeedbackService : IWildwoodFeedbackService
         if (string.IsNullOrEmpty(appId))
             return null;
 
+        // The widget config is fetched server-side on every page render and changes rarely, so a
+        // shared (singleton) IMemoryCache turns the per-render API round-trip into an occasional one.
+        var cacheKey = WidgetCacheKey(appId);
+        if (_cache != null && _cache.TryGetValue(cacheKey, out FeedbackWidgetConfig? cached))
+            return cached;
+
+        var config = await FetchWidgetConfigAsync(appId);
+
+        // Cache successes for the full TTL; negative-cache misses briefly so a transient outage or a
+        // not-yet-configured app doesn't hammer the API on every render but recovers within seconds.
+        _cache?.Set(cacheKey, config, config != null ? WidgetConfigTtl : WidgetConfigNegativeTtl);
+
+        return config;
+    }
+
+    private async Task<FeedbackWidgetConfig?> FetchWidgetConfigAsync(string appId)
+    {
+        // Bound this call independently of the HttpClient's (default 30s) timeout — it must not stall
+        // page rendering when the API is slow or unreachable.
+        using var cts = new CancellationTokenSource(WidgetConfigTimeout);
         try
         {
             var url = BuildUrl($"AppComponentConfigurations/{Uri.EscapeDataString(appId)}/feedback/widget");
-            using var response = await _httpClient.GetAsync(url);
+            using var response = await _httpClient.GetAsync(url, cts.Token);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -80,16 +121,17 @@ public class WildwoodFeedbackService : IWildwoodFeedbackService
                 return null;
             }
 
-            return await response.Content.ReadFromJsonAsync<FeedbackWidgetConfig>(JsonOptions);
+            return await response.Content.ReadFromJsonAsync<FeedbackWidgetConfig>(JsonOptions, cts.Token);
         }
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Network error loading feedback widget config for app {AppId}", appId);
             return null;
         }
-        catch (TaskCanceledException ex)
+        catch (OperationCanceledException ex)
         {
-            _logger.LogError(ex, "Request timeout loading feedback widget config for app {AppId}", appId);
+            _logger.LogWarning(ex, "Timed out loading feedback widget config for app {AppId} (>{Timeout}s)",
+                appId, WidgetConfigTimeout.TotalSeconds);
             return null;
         }
         catch (Exception ex)

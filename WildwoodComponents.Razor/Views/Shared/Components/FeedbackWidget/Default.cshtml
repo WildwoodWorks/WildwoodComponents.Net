@@ -116,9 +116,10 @@
             </div>
         </div>
     </div>
-}
 
-<style>
+    @* Styles and widget assets are emitted only when the widget is enabled — a disabled widget
+       renders nothing and loads no CSS/JS. *@
+    <style>
     .ww-feedback {
         font-family: var(--ww-font-family, inherit);
     }
@@ -470,4 +471,5 @@
    .ww-feedback instance on the page. The script POSTs/GETs against the server-side proxy
    (data-proxy-url) — see README.md for the copy-paste proxy controller. *@
 <link rel="stylesheet" href="~/_content/WildwoodComponents.Razor/css/feedback-widget.css" />
-<script src="~/_content/WildwoodComponents.Razor/js/feedback-widget.js"></script>
+    <script src="~/_content/WildwoodComponents.Razor/js/feedback-widget.js"></script>
+}

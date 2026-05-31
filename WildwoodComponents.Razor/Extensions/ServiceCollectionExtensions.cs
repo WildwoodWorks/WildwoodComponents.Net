@@ -72,6 +72,10 @@ public static class ServiceCollectionExtensions
             services.AddHttpClient();
         }
 
+        // Used by the feedback service to cache the per-app widget config (fetched on every page
+        // render). Idempotent — AddMemoryCache uses TryAdd, so it won't clobber a consumer's setup.
+        services.AddMemoryCache();
+
         // Register named HttpClient for WildwoodAPI calls
         var httpClientBuilder = services.AddHttpClient("WildwoodAPI", client =>
         {
@@ -212,7 +216,8 @@ public static class ServiceCollectionExtensions
             var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
             var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
             var logger = sp.GetRequiredService<ILogger<WildwoodFeedbackService>>();
-            return new WildwoodFeedbackService(httpClient, sessionManager, logger);
+            var cache = sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
+            return new WildwoodFeedbackService(httpClient, sessionManager, logger, cache);
         });
     }
 }
