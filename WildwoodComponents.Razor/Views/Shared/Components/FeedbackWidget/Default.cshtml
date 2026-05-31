@@ -462,3 +462,12 @@
         }
     }
 </style>
+
+@* Self-included widget assets (mirrors the Authentication and AIProxy ViewComponents).
+   feedback-widget.css carries the global rules for elements the JS creates at <body>
+   (toast, screenshot-capture overlay, annotation editor) that the scoped <style> above
+   cannot reach; feedback-widget.js wires up all interactivity and auto-initializes every
+   .ww-feedback instance on the page. The script POSTs/GETs against the server-side proxy
+   (data-proxy-url) — see README.md for the copy-paste proxy controller. *@
+<link rel="stylesheet" href="~/_content/WildwoodComponents.Razor/css/feedback-widget.css" />
+<script src="~/_content/WildwoodComponents.Razor/js/feedback-widget.js"></script>
