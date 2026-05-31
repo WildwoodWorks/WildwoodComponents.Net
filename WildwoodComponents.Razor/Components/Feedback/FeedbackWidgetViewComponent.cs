@@ -68,7 +68,16 @@ public class FeedbackWidgetViewComponent : ViewComponent
 
         // When config cannot be loaded, render nothing rather than guessing — matches the
         // Blazor component which only renders when a config was returned and IsEnabled.
-        model.Config = config ?? new FeedbackWidgetConfig { IsEnabled = false };
+        var resolved = config ?? new FeedbackWidgetConfig { IsEnabled = false };
+
+        // Honor AllowAnonymous client-side: if the viewer isn't authenticated and the app doesn't
+        // permit anonymous feedback, render nothing instead of showing a form the API would reject.
+        if (resolved.IsEnabled && !model.IsAuthenticated && !resolved.AllowAnonymous)
+        {
+            resolved.IsEnabled = false;
+        }
+
+        model.Config = resolved;
         model.FeedbackTypes = BuildFeedbackTypes(model.Config);
 
         return View(model);

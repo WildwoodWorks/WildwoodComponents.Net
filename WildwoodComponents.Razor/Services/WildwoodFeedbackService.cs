@@ -25,8 +25,12 @@ public class WildwoodFeedbackService : IWildwoodFeedbackService
     private readonly IMemoryCache? _cache;
     private readonly string _apiRoot;
 
-    /// <summary>How long a successfully-resolved widget config is cached (it changes rarely).</summary>
-    private static readonly TimeSpan WidgetConfigTtl = TimeSpan.FromMinutes(5);
+    /// <summary>
+    /// How long a successfully-resolved widget config is cached. Kept short so admin config changes
+    /// (e.g. toggling "enable widget") are honored quickly even without an explicit cache eviction;
+    /// <see cref="InvalidateWidgetConfig"/> makes a change take effect on the very next render.
+    /// </summary>
+    private static readonly TimeSpan WidgetConfigTtl = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// Short negative-cache TTL when the config endpoint returns nothing (app down / not configured).
@@ -103,6 +107,12 @@ public class WildwoodFeedbackService : IWildwoodFeedbackService
         _cache?.Set(cacheKey, config, config != null ? WidgetConfigTtl : WidgetConfigNegativeTtl);
 
         return config;
+    }
+
+    public void InvalidateWidgetConfig(string appId)
+    {
+        if (!string.IsNullOrEmpty(appId))
+            _cache?.Remove(WidgetCacheKey(appId));
     }
 
     private async Task<FeedbackWidgetConfig?> FetchWidgetConfigAsync(string appId)

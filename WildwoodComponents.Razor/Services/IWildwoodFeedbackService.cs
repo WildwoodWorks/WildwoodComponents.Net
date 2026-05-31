@@ -16,8 +16,17 @@ public interface IWildwoodFeedbackService
 {
     /// <summary>
     /// Loads the anonymous widget configuration for the given app. Returns null if unavailable.
+    /// The result is briefly cached; call <see cref="InvalidateWidgetConfig"/> after changing the
+    /// app's feedback configuration so the change takes effect immediately.
     /// </summary>
     Task<FeedbackWidgetConfig?> GetWidgetConfigAsync(string appId);
+
+    /// <summary>
+    /// Evicts the cached widget configuration for an app so the next <see cref="GetWidgetConfigAsync"/>
+    /// re-fetches it. Call this right after saving the app's feedback configuration so toggles like
+    /// "enable widget" are honored on the very next render instead of waiting for the cache to expire.
+    /// </summary>
+    void InvalidateWidgetConfig(string appId);
 
     /// <summary>
     /// Submits feedback. Returns a result indicating success, rate limiting, or an error message.
