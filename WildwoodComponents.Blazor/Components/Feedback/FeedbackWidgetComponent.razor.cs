@@ -96,6 +96,14 @@ public partial class FeedbackWidgetComponent : BaseWildwoodComponent
 
         if (_config != null)
         {
+            // Honor AllowAnonymous: if the viewer isn't authenticated and the app doesn't permit
+            // anonymous feedback, render nothing instead of showing a form the API would reject.
+            // Mirrors the Razor FeedbackWidgetViewComponent gating so the two stay at parity.
+            if (_config.IsEnabled && !_isAuthenticated && !_config.AllowAnonymous)
+            {
+                _config.IsEnabled = false;
+            }
+
             BuildFeedbackTypes();
         }
     }

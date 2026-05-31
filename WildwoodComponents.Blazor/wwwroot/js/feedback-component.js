@@ -482,10 +482,14 @@ async function captureFullPage(quality, maxSizeKb) {
         try {
             const stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'browser' }, preferCurrentTab: true });
             const track = stream.getVideoTracks()[0];
-            const canvas = await new Promise(function (resolve) {
+            const canvas = await new Promise(function (resolve, reject) {
+                // Any failure must reject (not hang): the panel is hidden during capture, so a
+                // never-settling promise would leave the widget stuck. Rejection falls back below.
+                const fail = function (err) { track.stop(); reject(err || new Error('capture failed')); };
                 setTimeout(function () {
                     const video = document.createElement('video');
                     video.srcObject = stream;
+                    video.onerror = function () { fail(new Error('video error')); };
                     video.onloadedmetadata = function () {
                         video.play().then(function () {
                             const c = document.createElement('canvas');
@@ -494,7 +498,7 @@ async function captureFullPage(quality, maxSizeKb) {
                             c.getContext('2d').drawImage(video, 0, 0);
                             track.stop();
                             resolve(c);
-                        });
+                        }).catch(fail);
                     };
                 }, 200);
             });

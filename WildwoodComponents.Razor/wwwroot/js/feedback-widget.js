@@ -361,10 +361,14 @@
             return navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'browser' }, preferCurrentTab: true })
                 .then(function (stream) {
                     var track = stream.getVideoTracks()[0];
-                    return new Promise(function (resolve) {
+                    return new Promise(function (resolve, reject) {
+                        // Any failure must reject (not hang): the panel is hidden during capture, so a
+                        // never-settling promise would leave the widget stuck. Rejection falls back below.
+                        var fail = function (err) { track.stop(); reject(err || new Error('capture failed')); };
                         setTimeout(function () {
                             var video = document.createElement('video');
                             video.srcObject = stream;
+                            video.onerror = function () { fail(new Error('video error')); };
                             video.onloadedmetadata = function () {
                                 video.play().then(function () {
                                     var c = document.createElement('canvas');
@@ -373,7 +377,7 @@
                                     c.getContext('2d').drawImage(video, 0, 0);
                                     track.stop();
                                     resolve(c);
-                                });
+                                }).catch(fail);
                             };
                         }, 200);
                     });

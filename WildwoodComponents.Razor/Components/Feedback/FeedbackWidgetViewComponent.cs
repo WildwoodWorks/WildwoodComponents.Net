@@ -72,9 +72,12 @@ public class FeedbackWidgetViewComponent : ViewComponent
 
         // Honor AllowAnonymous client-side: if the viewer isn't authenticated and the app doesn't
         // permit anonymous feedback, render nothing instead of showing a form the API would reject.
+        // GetWidgetConfigAsync returns a *cached* instance, so flipping IsEnabled on it would poison
+        // the shared cache and hide the widget for authenticated users too — swap in a disabled
+        // stand-in instead of mutating the cached config.
         if (resolved.IsEnabled && !model.IsAuthenticated && !resolved.AllowAnonymous)
         {
-            resolved.IsEnabled = false;
+            resolved = new FeedbackWidgetConfig { IsEnabled = false };
         }
 
         model.Config = resolved;
