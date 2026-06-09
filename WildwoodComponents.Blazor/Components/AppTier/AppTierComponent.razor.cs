@@ -221,7 +221,7 @@ namespace WildwoodComponents.Blazor.Components.AppTier
                 if (_currentSubscription != null && _currentSubscription.IsActive)
                 {
                     // Change existing tier with payment proof
-                    var result = await AppTierService.ChangeTierAsync(AppId, _selectedTier.Id, _selectedPricing?.Id, true);
+                    var result = await AppTierService.ChangeTierAsync(AppId, _selectedTier.Id, _selectedPricing?.Id, true, args.TransactionId);
 
                     if (result.Success)
                     {
