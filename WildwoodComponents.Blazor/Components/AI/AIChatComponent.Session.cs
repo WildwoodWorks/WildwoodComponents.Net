@@ -202,7 +202,7 @@ public partial class AIChatComponent
                         firstMsg.Content.Length > 100 ? firstMsg.Content.Substring(0, 100) + "..." : firstMsg.Content);
                 }
                 
-                Messages = ConvertToMessageList(CurrentSession.Messages);
+                Messages = ConvertToMessageList(CurrentSession.Messages ?? new List<AIMessage>());
                 Logger?.LogInformation("?? Messages list now has {MessageCount} items", Messages.Count);
 
                 if (Messages.Count > Settings.MaxHistorySize)

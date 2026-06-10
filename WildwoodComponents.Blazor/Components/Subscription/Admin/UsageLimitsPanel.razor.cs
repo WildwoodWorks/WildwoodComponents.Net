@@ -55,7 +55,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 }
                 else if (UseUserScope)
                 {
-                    _limits = await AppTierService.GetUserLimitStatusesAsync(AppId, UserId);
+                    _limits = await AppTierService.GetUserLimitStatusesAsync(AppId, UserId!);
                 }
                 else
                 {
@@ -102,7 +102,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 }
                 else if (UseUserScope)
                 {
-                    success = await AppTierService.UpdateUserUsageLimitAsync(AppId, UserId, limitCode, _editMaxValue);
+                    success = await AppTierService.UpdateUserUsageLimitAsync(AppId, UserId!, limitCode, _editMaxValue);
                 }
                 else
                 {
@@ -149,7 +149,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 }
                 else if (UseUserScope)
                 {
-                    success = await AppTierService.ResetUserUsageAsync(AppId, UserId, limitCode);
+                    success = await AppTierService.ResetUserUsageAsync(AppId, UserId!, limitCode);
                 }
                 else
                 {

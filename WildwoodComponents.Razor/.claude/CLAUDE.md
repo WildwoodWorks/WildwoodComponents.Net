@@ -26,13 +26,10 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 |-----------|--------|-------|----------------|-----------------|------------------------|----------------|
 | Authentication | AuthenticationComponent | AuthenticationViewComponent | authService | AuthenticationComponent | AuthenticationComponent | authMiddleware |
 | AI Chat | AIChatComponent | AIChatViewComponent | aiService | AIChatComponent | -- | -- |
-| AI Flow | AIFlowComponent | AIFlowViewComponent | (via aiService) | -- | -- | -- |
 | AI Proxy | AIProxyComponent | AIProxyViewComponent | (via aiService) | AIProxyComponent | -- | -- |
 | Messaging | SecureMessagingComponent | SecureMessagingViewComponent | messagingService | SecureMessagingComponent | -- | -- |
 | Payment | PaymentComponent | PaymentViewComponent | paymentService | PaymentComponent | -- | -- |
 | Payment Form | PaymentFormComponent | PaymentFormViewComponent | (via paymentService) | PaymentFormComponent | -- | -- |
-| Subscription | SubscriptionComponent | SubscriptionViewComponent | subscriptionService | SubscriptionComponent | -- | -- |
-| Subscription Mgr | SubscriptionManagerComponent | SubscriptionManagerViewComponent | (via subscriptionService) | SubscriptionManagerComponent | -- | -- |
 | Notifications | NotificationComponent | NotificationViewComponent | notificationService | NotificationComponent | -- | -- |
 | Notification Toast | NotificationToastComponent | NotificationToastViewComponent | (via notificationService) | -- | -- | -- |
 | 2FA Settings | TwoFactorSettingsComponent | TwoFactorSettingsViewComponent | twoFactorService | TwoFactorSettingsComponent | -- | -- |
@@ -164,13 +161,12 @@ WildwoodComponents.Razor/
         Payment/                    # Payment + PaymentForm ViewComponents
         Registration/               # Token Registration + Signup ViewComponents
         Security/                   # Two-Factor Settings ViewComponent
-        Subscription/               # Subscription + Manager ViewComponents
+        Subscription/Admin/         # Subscription Admin ViewComponents (status, tiers, features, add-ons, limits, overrides)
         Usage/                      # Usage Dashboard + Overage Summary ViewComponents
     Extensions/
         ServiceCollectionExtensions.cs
     Services/
         IWildwoodAIChatService.cs + WildwoodAIChatService.cs
-        IWildwoodAIFlowService.cs + WildwoodAIFlowService.cs
         IWildwoodAIProxyService.cs + WildwoodAIProxyService.cs
         IWildwoodAppTierService.cs + WildwoodAppTierService.cs
         IWildwoodAuthService.cs + WildwoodAuthService.cs
@@ -179,11 +175,9 @@ WildwoodComponents.Razor/
         IWildwoodPaymentService.cs + WildwoodPaymentService.cs
         IWildwoodRegistrationService.cs + WildwoodRegistrationService.cs
         IWildwoodSessionManager.cs + WildwoodSessionManager.cs
-        IWildwoodSubscriptionService.cs + WildwoodSubscriptionService.cs
         IWildwoodTwoFactorSettingsService.cs + WildwoodTwoFactorSettingsService.cs
     Models/
         AIChatModels.cs
-        AIFlowModels.cs
         AIProxyModels.cs
         AppTierModels.cs
         AuthenticationModels.cs

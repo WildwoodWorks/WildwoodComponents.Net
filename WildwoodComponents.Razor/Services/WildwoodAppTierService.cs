@@ -56,6 +56,28 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         return new List<AppTierModel>();
     }
 
+    public async Task<AppTierModel?> GetTierAsync(string tierId)
+    {
+        try
+        {
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
+            using var response = await _httpClient.GetAsync($"app-tiers/tier/{tierId}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<AppTierModel>(JsonOptions);
+            }
+
+            _logger.LogWarning("Failed to get tier {TierId}: {StatusCode}", tierId, response.StatusCode);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting tier {TierId}", tierId);
+        }
+
+        return null;
+    }
+
     public async Task<List<AppTierAddOnModel>> GetAvailableAddOnsAsync(string appId)
     {
         try
@@ -444,7 +466,8 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"companies/{companyId}/features");
+            // App-scoped variant; companies/{companyId}/features is platform-only and ignores appId
+            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/admin/company-features/{companyId}");
 
             if (response.IsSuccessStatusCode)
             {

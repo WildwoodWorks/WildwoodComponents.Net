@@ -18,7 +18,8 @@ public partial class DisclaimerComponent : BaseWildwoodComponent
 
     [Parameter] public EventCallback<List<DisclaimerAcceptanceResult>> OnDisclaimersAccepted { get; set; }
     [Parameter] public EventCallback OnDisclaimersCancelled { get; set; }
-    [Parameter] public EventCallback<string> OnError { get; set; }
+    // Hides the base ComponentErrorEventArgs callback with a string payload (public API)
+    [Parameter] public new EventCallback<string> OnError { get; set; }
 
     [Inject] private IDisclaimerService? DisclaimerService { get; set; }
 

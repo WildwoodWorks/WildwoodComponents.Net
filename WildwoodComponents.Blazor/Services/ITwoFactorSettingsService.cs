@@ -22,6 +22,15 @@ namespace WildwoodComponents.Blazor.Services
         void SetAuthToken(string token);
 
         // ============================================
+        // Configuration
+        // ============================================
+
+        /// <summary>
+        /// Gets the app-level 2FA configuration (anonymous endpoint).
+        /// </summary>
+        Task<TwoFactorConfiguration?> GetConfigurationAsync(string appId);
+
+        // ============================================
         // Status Operations
         // ============================================
 

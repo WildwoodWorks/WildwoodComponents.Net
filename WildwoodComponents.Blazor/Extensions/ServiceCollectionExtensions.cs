@@ -179,9 +179,6 @@ namespace WildwoodComponents.Blazor.Extensions
                 // Register payment service with HttpClient dependency
                 RegisterPaymentService(services, wildwoodAssembly, options);
 
-                // Register subscription service with HttpClient dependency
-                RegisterSubscriptionService(services, wildwoodAssembly, options);
-
                 // Register configuration service
                 RegisterConfigurationService(services, wildwoodAssembly, options);
 
@@ -365,32 +362,6 @@ namespace WildwoodComponents.Blazor.Extensions
 
                     var logger = serviceProvider.GetService<ILogger<object>>();
                     return Activator.CreateInstance(paymentServiceImpl, httpClient, logger)!;
-                });
-            }
-        }
-
-        /// <summary>
-        /// Registers the subscription service with dynamic constructor resolution
-        /// </summary>
-        private static void RegisterSubscriptionService(IServiceCollection services, Assembly assembly, WildwoodComponentsOptions options)
-        {
-            var subscriptionServiceInterface = assembly.GetType("WildwoodComponents.Blazor.Services.ISubscriptionService");
-            var subscriptionServiceImpl = assembly.GetType("WildwoodComponents.Blazor.Services.SubscriptionService");
-
-            if (subscriptionServiceInterface != null && subscriptionServiceImpl != null)
-            {
-                services.AddScoped(subscriptionServiceInterface, serviceProvider =>
-                {
-                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
-                    httpClient.BaseAddress = new Uri(options.BaseUrl);
-                    
-                    if (!string.IsNullOrEmpty(options.ApiKey))
-                    {
-                        httpClient.DefaultRequestHeaders.Add("X-API-Key", options.ApiKey);
-                    }
-
-                    var logger = serviceProvider.GetService<ILogger<object>>();
-                    return Activator.CreateInstance(subscriptionServiceImpl, httpClient, logger)!;
                 });
             }
         }

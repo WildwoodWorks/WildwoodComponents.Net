@@ -8,7 +8,6 @@
 @inject IPaymentProviderService PaymentProviderService
 @inject IPlatformDetectionService PlatformService
 @inject PaymentScriptLoader ScriptLoader
-@inject IJSRuntime JSRuntime
 
 <div class="@GetRootCssClasses() payment-component">
     @if (IsLoading && ShowLoadingStates)
@@ -441,7 +440,6 @@
     private string _billingCity = string.Empty;
     private string _billingState = string.Empty;
     private string _billingZip = string.Empty;
-    private string _billingCountry = "US";
 
     // Flag for tracking prevention detection
     private bool _trackingPreventionDetected = false;
@@ -475,23 +473,23 @@
         
         // Initialize providers after render - handles both first render and subsequent renders
         // This ensures DOM elements exist and scripts can be loaded
-        if (!_providersInitialized && _availableProviders.Count > 0 && _selectedProvider != null)
+        if (!_providersInitialized && _availableProviders.Count > 0 && _selectedProvider is { } selectedProvider)
         {
             _providersInitialized = true;
             _dotNetRef = DotNetObjectReference.Create(this);
-            
-            Logger?.LogInformation("OnAfterRenderAsync: Initializing {Count} providers, selected: {Selected}", 
-                _availableProviders.Count, _selectedProvider?.Name);
-            await LogToConsoleAsync($"[PaymentComponent] Initializing provider: {_selectedProvider.Name}");
-            
+
+            Logger?.LogInformation("OnAfterRenderAsync: Initializing {Count} providers, selected: {Selected}",
+                _availableProviders.Count, selectedProvider.Name);
+            await LogToConsoleAsync($"[PaymentComponent] Initializing provider: {selectedProvider.Name}");
+
             // Load scripts for all available providers (multi-provider support)
             await LoadProviderScriptsAsync();
-            
+
             // Small delay to ensure DOM is fully ready
             await Task.Delay(100);
-            
+
             // Initialize the selected provider
-            await InitializeProviderJs(_selectedProvider);
+            await InitializeProviderJs(selectedProvider);
         }
     }
 

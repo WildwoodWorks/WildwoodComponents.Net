@@ -29,8 +29,6 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 | Messaging | SecureMessagingComponent | -- | messagingService | SecureMessagingComponent | -- | -- |
 | Payment | PaymentComponent | PaymentViewComponent | paymentService | PaymentComponent | -- | -- |
 | Payment Form | PaymentFormComponent | -- | (via paymentService) | PaymentFormComponent | -- | -- |
-| Subscription | SubscriptionComponent | -- | subscriptionService | SubscriptionComponent | -- | -- |
-| Subscription Mgr | SubscriptionManagerComponent | -- | (via subscriptionService) | SubscriptionManagerComponent | -- | -- |
 | Notifications | NotificationComponent | -- | notificationService | NotificationComponent | -- | -- |
 | 2FA Settings | TwoFactorSettingsComponent | -- | twoFactorService | TwoFactorSettingsComponent | -- | -- |
 | Token Registration | TokenRegistrationComponent | TokenRegistrationViewComponent | (via authService) | TokenRegistrationComponent | -- | -- |

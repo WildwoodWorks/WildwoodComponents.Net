@@ -3,6 +3,58 @@ using System.Text.Json.Serialization;
 namespace WildwoodComponents.Shared.Models;
 
 /// <summary>
+/// App-level 2FA configuration (api/twofactor/configuration/{appId}).
+/// Mirrors the backend TwoFactorConfigurationDto.
+/// </summary>
+public class TwoFactorConfiguration
+{
+    [JsonPropertyName("isEnabled")]
+    public bool IsEnabled { get; set; }
+
+    [JsonPropertyName("isRequired")]
+    public bool IsRequired { get; set; }
+
+    [JsonPropertyName("availableMethods")]
+    public List<TwoFactorConfigurationMethod> AvailableMethods { get; set; } = new();
+
+    [JsonPropertyName("codeValiditySeconds")]
+    public int CodeValiditySeconds { get; set; }
+
+    [JsonPropertyName("maxAttempts")]
+    public int MaxAttempts { get; set; }
+
+    [JsonPropertyName("lockoutMinutes")]
+    public int LockoutMinutes { get; set; }
+
+    [JsonPropertyName("allowRememberDevice")]
+    public bool AllowRememberDevice { get; set; }
+
+    [JsonPropertyName("rememberDeviceDays")]
+    public int RememberDeviceDays { get; set; }
+}
+
+/// <summary>
+/// An available 2FA method in the app-level configuration.
+/// </summary>
+public class TwoFactorConfigurationMethod
+{
+    [JsonPropertyName("providerType")]
+    public string ProviderType { get; set; } = string.Empty;
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("description")]
+    public string Description { get; set; } = string.Empty;
+
+    [JsonPropertyName("icon")]
+    public string Icon { get; set; } = string.Empty;
+
+    [JsonPropertyName("isEnabled")]
+    public bool IsEnabled { get; set; }
+}
+
+/// <summary>
 /// User's 2FA status and overview.
 /// </summary>
 public class TwoFactorUserStatus

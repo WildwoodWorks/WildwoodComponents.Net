@@ -174,15 +174,6 @@ public static class ServiceCollectionExtensions
             return new WildwoodMessagingService(httpClient, sessionManager, logger);
         });
 
-        // Subscription service
-        services.AddScoped<IWildwoodSubscriptionService>(sp =>
-        {
-            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
-            var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
-            var logger = sp.GetRequiredService<ILogger<WildwoodSubscriptionService>>();
-            return new WildwoodSubscriptionService(httpClient, sessionManager, logger);
-        });
-
         // Two-Factor Settings service
         services.AddScoped<IWildwoodTwoFactorSettingsService>(sp =>
         {

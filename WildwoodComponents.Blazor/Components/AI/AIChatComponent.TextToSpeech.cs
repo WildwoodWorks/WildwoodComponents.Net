@@ -184,7 +184,7 @@ public partial class AIChatComponent
         StateHasChanged();
     }
 
-    private async void OnVoiceChanged(ChangeEventArgs e)
+    private async Task OnVoiceChanged(ChangeEventArgs e)
     {
         var newVoice = e.Value?.ToString();
         if (!string.IsNullOrEmpty(newVoice) && newVoice != SelectedVoice)
@@ -199,7 +199,7 @@ public partial class AIChatComponent
         }
     }
 
-    private async void OnSpeedChanged(ChangeEventArgs e)
+    private async Task OnSpeedChanged(ChangeEventArgs e)
     {
         var valueStr = e.Value?.ToString();
         if (!string.IsNullOrEmpty(valueStr) &&

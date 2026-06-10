@@ -395,83 +395,11 @@ namespace WildwoodComponents.Blazor.Models
         Refunded
     }
 
-    // Subscription Models
-    public class SubscriptionPlan
-    {
-        public string Id { get; set; } = Guid.NewGuid().ToString();
-        public string Name { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public decimal Price { get; set; }
-        public string Currency { get; set; } = "USD";
-        public BillingInterval BillingInterval { get; set; } = BillingInterval.Monthly;
-        public decimal? MonthlyEquivalent { get; set; }
-        public bool IsFree { get; set; }
-        public bool IsRecommended { get; set; }
-        public List<string>? Features { get; set; }
-        public List<string>? Limitations { get; set; }
-        public int? TrialDays { get; set; }
-        public Dictionary<string, object>? Metadata { get; set; }
-    }
-
-    public class Subscription
-    {
-        public string Id { get; set; } = Guid.NewGuid().ToString();
-        public string UserId { get; set; } = string.Empty;
-        public string PlanId { get; set; } = string.Empty;
-        public string PlanName { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public decimal Price { get; set; }
-        public string Currency { get; set; } = "USD";
-        public BillingInterval BillingInterval { get; set; }
-        public SubscriptionStatus Status { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public DateTime? StartDate { get; set; }
-        public DateTime? EndDate { get; set; }
-        public DateTime? NextBillingDate { get; set; }
-        public DateTime? CancelledAt { get; set; }
-        public List<string>? Features { get; set; }
-        public Dictionary<string, object>? Metadata { get; set; }
-    }
-
-    public class SubscriptionResult
-    {
-        public bool IsSuccess { get; set; }
-        public string? ErrorMessage { get; set; }
-        public string? ErrorCode { get; set; }
-        public Subscription? Subscription { get; set; }
-        public string? PaymentUrl { get; set; }
-        public Dictionary<string, object>? AdditionalData { get; set; }
-    }
-
-    public enum BillingInterval
-    {
-        Weekly,
-        Monthly,
-        Quarterly,
-        Yearly
-    }
-
-    public enum SubscriptionStatus
-    {
-        Active,
-        Paused,
-        Cancelled,
-        Expired,
-        Trial,
-        PendingPayment
-    }
-
     // Exception Classes
     public class PaymentException : Exception
     {
         public PaymentException(string message) : base(message) { }
         public PaymentException(string message, Exception innerException) : base(message, innerException) { }
-    }
-
-    public class SubscriptionException : Exception
-    {
-        public SubscriptionException(string message) : base(message) { }
-        public SubscriptionException(string message, Exception innerException) : base(message, innerException) { }
     }
 
     public class ValidationException : Exception

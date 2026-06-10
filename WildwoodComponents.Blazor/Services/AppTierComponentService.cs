@@ -71,6 +71,28 @@ namespace WildwoodComponents.Blazor.Services
             return result ?? new List<AppTierModel>();
         }
 
+        public async Task<AppTierModel?> GetTierAsync(string tierId)
+        {
+            try
+            {
+                var url = BuildUrl($"app-tiers/tier/{tierId}");
+                var response = await _httpClient.GetAsync(url);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadFromJsonAsync<AppTierModel>(JsonOptions);
+                }
+
+                _logger.LogWarning("Failed to get tier {TierId}: {StatusCode}", tierId, response.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting tier {TierId}", tierId);
+            }
+
+            return null;
+        }
+
         public async Task<List<AppTierAddOnModel>> GetAvailableAddOnsAsync(string appId)
         {
             var url = BuildUrl($"app-tier-addons/{appId}/available");
@@ -369,7 +391,8 @@ namespace WildwoodComponents.Blazor.Services
 
         public async Task<Dictionary<string, bool>> GetCompanyFeaturesAsync(string appId, string companyId)
         {
-            var url = BuildUrl($"companies/{companyId}/features");
+            // App-scoped variant; companies/{companyId}/features is platform-only and ignores appId
+            var url = BuildUrl($"app-tiers/{appId}/admin/company-features/{companyId}");
             var response = await _httpClient.GetAsync(url);
             await EnsureSuccessAsync(response, $"GetCompanyFeatures({companyId})");
             var result = await response.Content.ReadFromJsonAsync<Dictionary<string, bool>>(JsonOptions);

@@ -64,6 +64,50 @@ namespace WildwoodComponents.Blazor.Services
             }
         }
 
+        public async Task<DisclaimerAcceptanceResponse> AcceptDisclaimerAsync(string appId, string companyDisclaimerId, string companyDisclaimerVersionId)
+        {
+            try
+            {
+                var payload = new
+                {
+                    AppId = appId,
+                    CompanyDisclaimerId = companyDisclaimerId,
+                    CompanyDisclaimerVersionId = companyDisclaimerVersionId
+                };
+
+                var httpResponse = await _httpClient.PostAsJsonAsync("api/disclaimeracceptance/accept", payload);
+
+                if (httpResponse.IsSuccessStatusCode)
+                    return new DisclaimerAcceptanceResponse { Success = true };
+
+                var errorMessage = httpResponse.StatusCode switch
+                {
+                    HttpStatusCode.NotFound => "The disclaimer version was not found. Please refresh and try again.",
+                    HttpStatusCode.BadRequest => "The disclaimer acceptance is invalid. Please refresh and try again.",
+                    HttpStatusCode.TooManyRequests => "Too many requests. Please wait a moment and try again.",
+                    HttpStatusCode.InternalServerError => "The server encountered an error. Please try again later.",
+                    _ => $"Failed to submit acceptance (HTTP {(int)httpResponse.StatusCode})."
+                };
+                _logger.LogWarning("AcceptDisclaimer returned {StatusCode} for app {AppId}", httpResponse.StatusCode, appId);
+                return new DisclaimerAcceptanceResponse { Success = false, ErrorMessage = errorMessage };
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "Network error accepting disclaimer for app {AppId}", appId);
+                return new DisclaimerAcceptanceResponse { Success = false, ErrorMessage = "Unable to connect to the server. Please check your connection." };
+            }
+            catch (TaskCanceledException ex)
+            {
+                _logger.LogError(ex, "Request timeout accepting disclaimer for app {AppId}", appId);
+                return new DisclaimerAcceptanceResponse { Success = false, ErrorMessage = "The request timed out. Please try again." };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error accepting disclaimer for app {AppId}", appId);
+                return new DisclaimerAcceptanceResponse { Success = false, ErrorMessage = "An unexpected error occurred. Please try again." };
+            }
+        }
+
         public async Task<DisclaimerAcceptanceResponse> AcceptDisclaimersAsync(string appId, List<DisclaimerAcceptanceResult> acceptances)
         {
             try

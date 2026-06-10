@@ -6,5 +6,6 @@ namespace WildwoodComponents.Razor.Services;
 public interface IWildwoodDisclaimerService
 {
     Task<PendingDisclaimersResponse?> GetPendingDisclaimersAsync(string appId, string? userId = null, string? showOn = null);
+    Task<ApiResult> AcceptDisclaimerAsync(string appId, string companyDisclaimerId, string companyDisclaimerVersionId);
     Task<ApiResult> AcceptDisclaimersAsync(string appId, List<DisclaimerAcceptanceResult> acceptances);
 }

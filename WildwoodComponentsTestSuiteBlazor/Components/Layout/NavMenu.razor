@@ -84,24 +84,18 @@
     </li>
 
     <!-- Payment -->
-    <li class="@GetParentActiveClass(new[] { "/test/payment", "/test/payment-form", "/test/subscription", "/test/subscription-manager", "/test/subscription-admin" })">
+    <li class="@GetParentActiveClass(new[] { "/test/payment", "/test/payment-form", "/test/subscription-admin" })">
         <a href="#paymentSubmenu" data-bs-toggle="collapse"
-           aria-expanded="@IsParentExpanded(new[] { "/test/payment", "/test/payment-form", "/test/subscription", "/test/subscription-manager", "/test/subscription-admin" })"
+           aria-expanded="@IsParentExpanded(new[] { "/test/payment", "/test/payment-form", "/test/subscription-admin" })"
            class="dropdown-toggle">
             <i class="fas fa-credit-card me-2"></i><span>Payment</span>
         </a>
-        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/payment", "/test/payment-form", "/test/subscription", "/test/subscription-manager", "/test/subscription-admin" })" id="paymentSubmenu">
+        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/payment", "/test/payment-form", "/test/subscription-admin" })" id="paymentSubmenu">
             <li class="@GetActiveClass("/test/payment")">
                 <a href="/test/payment"><span>PaymentComponent</span></a>
             </li>
             <li class="@GetActiveClass("/test/payment-form")">
                 <a href="/test/payment-form"><span>PaymentForm</span></a>
-            </li>
-            <li class="@GetActiveClass("/test/subscription")">
-                <a href="/test/subscription"><span>Subscription</span></a>
-            </li>
-            <li class="@GetActiveClass("/test/subscription-manager")">
-                <a href="/test/subscription-manager"><span>SubscriptionManager</span></a>
             </li>
             <li class="@GetActiveClass("/test/subscription-admin")">
                 <a href="/test/subscription-admin"><span>SubscriptionAdmin</span></a>

@@ -224,7 +224,7 @@ public class WildwoodPaymentService : IWildwoodPaymentService
                 CompanyClientId = companyClientId
             };
             var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync("payment/link-transaction", content);
+            using var response = await _httpClient.PostAsync("paymenttransactions/link-by-external-id", content);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

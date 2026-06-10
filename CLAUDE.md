@@ -59,7 +59,7 @@ WildwoodComponents.Blazor/
         Pricing/             # PricingDisplayComponent
         Registration/        # TokenRegistrationComponent, SignupWithSubscriptionComponent
         Security/            # TwoFactorSettingsComponent
-        Subscription/        # SubscriptionComponent, SubscriptionManagerComponent, SubscriptionAdminComponent
+        Subscription/        # SubscriptionAdminComponent + admin panels (tier-based; legacy Subscription/Manager removed June 2026)
         Usage/               # UsageDashboardComponent, OverageSummaryComponent
     Services/                # AuthenticationService, AIService, PaymentService, etc.
     Extensions/              # ServiceCollectionExtensions (AddWildwoodComponents)
@@ -102,7 +102,7 @@ WildwoodComponents.Razor/
         Payment/             # PaymentViewComponent, PaymentFormViewComponent
         Registration/        # TokenRegistrationViewComponent, SignupWithSubscriptionViewComponent
         Security/            # TwoFactorSettingsViewComponent
-        Subscription/        # SubscriptionViewComponent, SubscriptionManagerViewComponent
+        Subscription/Admin/  # SubscriptionAdmin ViewComponents (status, tiers, features, add-ons, limits, overrides)
         Usage/               # UsageDashboardViewComponent, OverageSummaryViewComponent
     Services/                # Server-side HTTP services (IHttpClientFactory, named client "WildwoodAPI")
     Models/                  # Razor-specific request/response models

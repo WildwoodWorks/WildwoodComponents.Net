@@ -8,6 +8,7 @@ namespace WildwoodComponents.Blazor.Services
     {
         // Tier browsing
         Task<List<AppTierModel>> GetAvailableTiersAsync(string appId);
+        Task<AppTierModel?> GetTierAsync(string tierId);
         Task<List<AppTierAddOnModel>> GetAvailableAddOnsAsync(string appId);
 
         // User subscription

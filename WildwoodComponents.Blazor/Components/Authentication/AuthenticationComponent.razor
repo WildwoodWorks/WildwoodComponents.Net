@@ -502,7 +502,6 @@
     // Passkey/WebAuthn support
     private bool _passkeyEnabled = false;
     private bool _webAuthnSupported = false;
-    private bool _showPasskeyRegistration = false;
 
     // Disclaimer acceptance support
     private bool _showDisclaimers = false;
@@ -1382,17 +1381,8 @@
             // Send credential to server to complete registration
             await AuthService.CompletePasskeyRegistrationAsync(AppId, credential);
 
-            _showPasskeyRegistration = false;
             _successMessage = "Passkey registered successfully! You can now sign in using your biometrics.";
         }, "Registering passkey");
-    }
-
-    /// <summary>
-    /// Skip passkey registration prompt
-    /// </summary>
-    private void SkipPasskeyRegistration()
-    {
-        _showPasskeyRegistration = false;
     }
 
     private bool ShouldShowCaptcha()

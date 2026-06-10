@@ -25,7 +25,8 @@ namespace WildwoodComponents.Blazor.Components.AI;
 public partial class AIChatComponent : BaseWildwoodComponent
 {
     [Inject] private IAIService AIService { get; set; } = default!;
-    [Inject] private ILocalStorageService LocalStorage { get; set; } = default!;
+    // Hides the base nullable LocalStorage with a non-null injection (this component requires it)
+    [Inject] private new ILocalStorageService LocalStorage { get; set; } = default!;
 
     // Storage keys for user preferences
     private const string VoicePreferenceKey = "aicoach_tts_voice";

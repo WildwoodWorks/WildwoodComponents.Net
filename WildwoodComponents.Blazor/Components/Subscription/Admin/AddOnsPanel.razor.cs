@@ -42,11 +42,11 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 // Load active add-on subscriptions
                 if (UseCompanyScope)
                 {
-                    _activeSubscriptions = await AppTierService.GetCompanyAddOnSubscriptionsAsync(AppId, CompanyId);
+                    _activeSubscriptions = await AppTierService.GetCompanyAddOnSubscriptionsAsync(AppId, CompanyId!);
                 }
                 else if (UseUserScope)
                 {
-                    _activeSubscriptions = await AppTierService.GetUserAddOnsAsync(AppId, UserId);
+                    _activeSubscriptions = await AppTierService.GetUserAddOnsAsync(AppId, UserId!);
                 }
                 else
                 {
@@ -85,11 +85,11 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 bool success;
                 if (UseCompanyScope)
                 {
-                    success = await AppTierService.SubscribeCompanyToAddOnAsync(AppId, CompanyId, addOnId);
+                    success = await AppTierService.SubscribeCompanyToAddOnAsync(AppId, CompanyId!, addOnId);
                 }
                 else if (UseUserScope)
                 {
-                    success = await AppTierService.SubscribeUserToAddOnAsync(AppId, UserId, addOnId);
+                    success = await AppTierService.SubscribeUserToAddOnAsync(AppId, UserId!, addOnId);
                 }
                 else
                 {

@@ -66,8 +66,9 @@ public partial class AIProxyComponent : BaseWildwoodComponent
 
     /// <summary>
     /// Callback invoked when an error occurs.
+    /// Hides the base ComponentErrorEventArgs callback with a string payload (public API).
     /// </summary>
-    [Parameter] public EventCallback<string> OnError { get; set; }
+    [Parameter] public new EventCallback<string> OnError { get; set; }
 
     #endregion
 

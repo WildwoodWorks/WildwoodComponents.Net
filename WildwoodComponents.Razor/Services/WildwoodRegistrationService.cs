@@ -138,10 +138,16 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
     {
         try
         {
-            using var response = await _httpClient.GetAsync($"auth/password-requirements/{appId}");
+            // There is no dedicated password-requirements endpoint; derive the text from the
+            // app's auth configuration, matching the Blazor and JS implementations.
+            using var response = await _httpClient.GetAsync($"appcomponentconfigurations/{appId}/auth-configuration");
             if (response.IsSuccessStatusCode)
             {
-                return await response.Content.ReadAsStringAsync();
+                var config = await response.Content.ReadFromJsonAsync<PasswordPolicyConfiguration>(JsonOptions);
+                if (config != null)
+                {
+                    return GetPasswordRequirementsText(config);
+                }
             }
         }
         catch (Exception ex)
@@ -149,6 +155,42 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
             _logger.LogWarning(ex, "Failed to load password requirements");
         }
         return null;
+    }
+
+    /// <summary>Password policy fields of the auth-configuration response.</summary>
+    private sealed class PasswordPolicyConfiguration
+    {
+        public int PasswordMinimumLength { get; set; } = 8;
+        public bool PasswordRequireUppercase { get; set; }
+        public bool PasswordRequireLowercase { get; set; }
+        public bool PasswordRequireDigit { get; set; }
+        public bool PasswordRequireSpecialChar { get; set; }
+    }
+
+    private static string GetPasswordRequirementsText(PasswordPolicyConfiguration config)
+    {
+        var requirements = new List<string>
+        {
+            $"at least {config.PasswordMinimumLength} characters"
+        };
+
+        if (config.PasswordRequireUppercase)
+            requirements.Add("uppercase letters (A-Z)");
+        if (config.PasswordRequireLowercase)
+            requirements.Add("lowercase letters (a-z)");
+        if (config.PasswordRequireDigit)
+            requirements.Add("numbers (0-9)");
+        if (config.PasswordRequireSpecialChar)
+            requirements.Add("special characters (!@#$%^&*)");
+
+        if (requirements.Count == 1)
+            return $"Password must have {requirements[0]}.";
+
+        if (requirements.Count == 2)
+            return $"Password must have {requirements[0]} and {requirements[1]}.";
+
+        var allButLast = string.Join(", ", requirements.Take(requirements.Count - 1));
+        return $"Password must have {allButLast}, and {requirements[^1]}.";
     }
 
     public async Task<PricingModelResponse?> GetPricingModelAsync(string pricingModelId)
@@ -214,7 +256,7 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
                 CompanyClientId = companyClientId
             };
 
-            using var response = await _httpClient.PostAsJsonAsync("payment/link-transaction", request);
+            using var response = await _httpClient.PostAsJsonAsync("paymenttransactions/link-by-external-id", request);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

@@ -410,8 +410,8 @@ namespace WildwoodComponents.Blazor.Components.Registration
 
                     var loginRequest = new LoginRequest
                     {
-                        Username = _collectedFormData.Username,
-                        Email = _collectedFormData.Email,
+                        Username = _collectedFormData.Username ?? string.Empty,
+                        Email = _collectedFormData.Email ?? string.Empty,
                         Password = _collectedFormData.Password,
                         AppId = AppId,
                         Platform = "Web",

@@ -45,6 +45,25 @@ namespace WildwoodComponents.Blazor.Services
         }
 
         // ============================================
+        // Configuration
+        // ============================================
+
+        public async Task<TwoFactorConfiguration?> GetConfigurationAsync(string appId)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"api/twofactor/configuration/{appId}");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<TwoFactorConfiguration>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting 2FA configuration for app {AppId}", appId);
+                return null;
+            }
+        }
+
+        // ============================================
         // Status Operations
         // ============================================
 
