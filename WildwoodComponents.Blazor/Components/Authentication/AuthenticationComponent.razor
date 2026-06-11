@@ -443,11 +443,18 @@
                                 Registration is currently disabled for this application.
                             </small>
                         }
-                        else if (_authConfig == null)
+                        else if (_authConfig == null && IsLoading)
                         {
                             <small class="text-muted">
                                 <i class="fas fa-spinner fa-spin"></i>
                                 Loading authentication configuration...
+                            </small>
+                        }
+                        else if (_authConfig == null)
+                        {
+                            <small class="text-muted">
+                                <i class="fas fa-exclamation-circle"></i>
+                                Unable to load authentication configuration.
                             </small>
                         }
                     }
