@@ -75,4 +75,19 @@ namespace WildwoodComponents.Shared.Models
         public bool Decided { get; set; }
         public bool GpcPresent { get; set; }
     }
+
+    /// <summary>
+    /// A consent decision posted to <c>POST /api/consent/record</c>. Mirrors the core SDK's
+    /// ConsentRecordRequest and the Swift ConsentRecordRequest. Used by the Razor consent service /
+    /// host proxy; the Blazor/Razor client engines post the equivalent shape directly.
+    /// </summary>
+    public class ConsentRecordModel
+    {
+        public string AppId { get; set; } = string.Empty;
+        public string VisitorKey { get; set; } = string.Empty;
+        public string ConsentString { get; set; } = string.Empty;
+        public string Method { get; set; } = string.Empty;
+        public bool GpcPresent { get; set; }
+        public int ConfigVersion { get; set; }
+    }
 }

@@ -210,6 +210,15 @@ public static class ServiceCollectionExtensions
             var cache = sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
             return new WildwoodFeedbackService(httpClient, sessionManager, logger, cache);
         });
+
+        // Consent service (anonymous endpoints; the ConsentBanner client engine calls them directly,
+        // this is provided for parity and same-origin proxy scenarios).
+        services.AddScoped<IWildwoodConsentService>(sp =>
+        {
+            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
+            var logger = sp.GetRequiredService<ILogger<WildwoodConsentService>>();
+            return new WildwoodConsentService(httpClient, logger);
+        });
     }
 }
 

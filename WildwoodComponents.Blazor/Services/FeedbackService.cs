@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Blazor.Models;
+using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Blazor.Services
 {
@@ -32,30 +33,12 @@ namespace WildwoodComponents.Blazor.Services
 
         public void SetApiBaseUrl(string apiBaseUrl)
         {
-            _apiRoot = StripApiSuffix(apiBaseUrl);
+            _apiRoot = UrlHelpers.StripApiSuffix(apiBaseUrl);
         }
 
         public void SetAuthToken(string? token)
         {
             _authToken = string.IsNullOrEmpty(token) ? null : token;
-        }
-
-        /// <summary>
-        /// Removes a trailing <c>/api</c> or <c>/api/</c> from the supplied base URL so the result
-        /// can have per-endpoint <c>/api/...</c> paths appended. Mirrors the vanilla widget's
-        /// <c>apiBase.replace(/\/api\/?$/, '')</c>.
-        /// </summary>
-        private static string StripApiSuffix(string? baseUrl)
-        {
-            if (string.IsNullOrEmpty(baseUrl))
-                return string.Empty;
-
-            var trimmed = baseUrl.TrimEnd('/');
-            if (trimmed.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
-            {
-                trimmed = trimmed.Substring(0, trimmed.Length - 4);
-            }
-            return trimmed.TrimEnd('/');
         }
 
         private string BuildUrl(string path)

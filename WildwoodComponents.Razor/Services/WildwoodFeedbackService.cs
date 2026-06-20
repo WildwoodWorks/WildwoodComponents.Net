@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Razor.Models;
+using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Razor.Services;
 
@@ -59,27 +60,10 @@ public class WildwoodFeedbackService : IWildwoodFeedbackService
         _sessionManager = sessionManager;
         _logger = logger;
         _cache = cache;
-        _apiRoot = StripApiSuffix(_httpClient.BaseAddress?.ToString());
+        _apiRoot = UrlHelpers.StripApiSuffix(_httpClient.BaseAddress?.ToString());
     }
 
     private static string WidgetCacheKey(string appId) => $"ww-feedback-widget-cfg:{appId}";
-
-    /// <summary>
-    /// Removes a trailing <c>/api</c> or <c>/api/</c> from the configured base address so the result
-    /// can have per-endpoint <c>/api/...</c> paths appended (no <c>/api/api</c>).
-    /// </summary>
-    private static string StripApiSuffix(string? baseUrl)
-    {
-        if (string.IsNullOrEmpty(baseUrl))
-            return string.Empty;
-
-        var trimmed = baseUrl.TrimEnd('/');
-        if (trimmed.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
-        {
-            trimmed = trimmed.Substring(0, trimmed.Length - 4);
-        }
-        return trimmed.TrimEnd('/');
-    }
 
     private string BuildUrl(string path)
     {

@@ -1,0 +1,83 @@
+@using WildwoodComponents.Razor.Models
+@model ConsentViewModel
+
+@{
+    var cid = Model.ComponentId;
+}
+
+@* The shell is always rendered (hidden); consent.js fetches the config, applies the show/suppress
+   decision table, injects consented scripts, and reveals the banner/footer as needed. *@
+<div id="ww-consent-@cid"
+     class="ww-consent-component"
+     data-component-id="@cid"
+     data-app-id="@Model.AppId"
+     data-base-url="@Model.BaseUrl"
+     data-proxy-url="@Model.ProxyBaseUrl"
+     data-show-reopen-link="@Model.ShowReopenLink.ToString().ToLower()"
+     data-show-footer-optout="@Model.ShowFooterOptOut.ToString().ToLower()">
+
+    @* ===== Consent banner ===== *@
+    <div class="ww-consent-banner ww-consent-pos-bottomBar" role="region" aria-label="Cookie consent" style="display:none;">
+        <div class="ww-consent-banner-text">
+            <strong class="ww-consent-title"></strong>
+            <p class="ww-consent-body">
+                <span class="ww-consent-body-text"></span>
+                <a class="ww-consent-link ww-consent-privacy-link" target="_blank" rel="noopener" href="#" style="display:none;">Privacy Policy</a>
+            </p>
+        </div>
+        <div class="ww-consent-actions">
+            <button type="button" class="ww-consent-btn ww-consent-btn-secondary ww-consent-manage"></button>
+            <button type="button" class="ww-consent-btn ww-consent-btn-secondary ww-consent-reject"></button>
+            <button type="button" class="ww-consent-btn ww-consent-btn-primary ww-consent-accept"></button>
+        </div>
+    </div>
+
+    @* ===== Preferences modal ===== *@
+    <div class="ww-consent-modal-overlay" style="display:none;">
+        <div class="ww-consent-modal" role="dialog" aria-modal="true" aria-labelledby="ww-consent-modal-title-@cid" tabindex="-1">
+            <div class="ww-consent-modal-header">
+                <h2 id="ww-consent-modal-title-@cid">Privacy preferences</h2>
+                <button type="button" class="ww-consent-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="ww-consent-modal-body">
+                <div class="ww-consent-category">
+                    <div class="ww-consent-category-label">
+                        <strong>Strictly necessary</strong>
+                        <span class="ww-consent-muted">Always on</span>
+                    </div>
+                    <label class="ww-consent-switch">
+                        <input type="checkbox" checked disabled aria-label="Strictly necessary (always on)" />
+                        <span class="ww-consent-slider"></span>
+                    </label>
+                </div>
+
+                @* JS fills one row per active non-necessary category. *@
+                <div class="ww-consent-categories"></div>
+
+                @* Divider before the CCPA opt-out surfaces; JS reveals it with the rights section. *@
+                <hr class="ww-consent-divider" style="display:none;" />
+
+                @* JS fills the CCPA opt-out buttons when the config enables them. *@
+                <div class="ww-consent-rights" style="display:none;"></div>
+
+                @* JS fills the privacy/accessibility links. *@
+                <div class="ww-consent-links"></div>
+            </div>
+            <div class="ww-consent-modal-footer">
+                <button type="button" class="ww-consent-btn ww-consent-btn-secondary ww-consent-reject"></button>
+                <button type="button" class="ww-consent-btn ww-consent-btn-secondary ww-consent-accept"></button>
+                <button type="button" class="ww-consent-btn ww-consent-btn-primary ww-consent-save">Save preferences</button>
+            </div>
+        </div>
+    </div>
+
+    @* ===== Footer entry points (reopen + standalone CCPA opt-out), shown after dismissal ===== *@
+    <div class="ww-consent-footer-links" style="display:none;"></div>
+</div>
+
+@* Self-included assets (mirrors the Feedback and Disclaimer ViewComponents). consent.css carries the
+   banner/modal styling; consent.js is the vanilla port of the @@wildwood/core consent engine and
+   auto-initializes every .ww-consent-component on the page. The engine calls the anonymous
+   /api/consent/* endpoints directly at data-base-url, exactly like the Blazor component. *@
+<link rel="stylesheet" href="~/_content/WildwoodComponents.Razor/css/consent.css" />
+<script src="~/_content/WildwoodComponents.Razor/js/consent.js"></script>
