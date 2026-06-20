@@ -1,0 +1,105 @@
+@page "/test/consent"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.Consent
+@using WildwoodComponents.Shared.Models
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@inject IJSRuntime JS
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="ConsentBanner Test" ComponentName="ConsentBanner" IconClass="fas fa-user-shield"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">AppId</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" @bind="showReopen" id="chkConsentReopen" />
+            <label class="form-check-label small" for="chkConsentReopen">Show "Privacy choices" reopen link</label>
+        </div>
+        <hr class="my-2" />
+        <button class="btn btn-sm btn-outline-warning w-100 mb-2" @onclick="ClearCookieAndReload">
+            Clear consent cookie &amp; reload
+        </button>
+        <p class="small text-muted mb-0">
+            Open the Network tab and confirm no analytics/pixel request fires before you click Accept.
+            Reject loads only Strictly Necessary; Accept loads all enabled categories.
+        </p>
+    </Settings>
+    <Component>
+        <div style="min-height: 200px;">
+            <p class="text-muted">The consent banner renders fixed to the viewport. Use the settings panel to reset the cookie.</p>
+            @if (!string.IsNullOrEmpty(appId))
+            {
+                <ConsentBanner @key="bannerKey" AppId="@appId" ShowReopenLink="showReopen" OnConsentChanged="HandleConsentChanged" />
+            }
+        </div>
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string appId = "";
+    private bool showReopen = true;
+    private int bannerKey = 0;
+    private List<EventEntry> events = new();
+
+    protected override void OnInitialized()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        LifecycleTracker.TrackInitialized("ConsentBanner");
+        AddEvent("ConsentBanner test initialized");
+    }
+
+    private void HandleConsentChanged(ConsentStateModel state)
+    {
+        var granted = new List<string>();
+        foreach (var kv in state.Categories)
+        {
+            if (kv.Value) granted.Add(kv.Key);
+        }
+        var msg = $"Consent changed - granted: {string.Join(", ", granted)} (visitorKey {state.VisitorKey[..Math.Min(8, state.VisitorKey.Length)]}…, v{state.ConfigVersion}, GPC {state.GpcPresent})";
+        AddEvent(msg);
+        LifecycleTracker.TrackCallback("ConsentBanner", "OnConsentChanged", msg);
+        StateHasChanged();
+    }
+
+    private async Task ClearCookieAndReload()
+    {
+        await JS.InvokeVoidAsync("eval", "document.cookie = 'ww_consent=; Max-Age=0; Path=/'; location.reload();");
+    }
+
+    private void ApplySettings()
+    {
+        bannerKey++; // force the banner to re-initialize with new settings
+        AddEvent($"Settings applied - AppId: {appId}, ShowReopen: {showReopen}");
+        StateHasChanged();
+    }
+
+    private void ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        showReopen = true;
+        events.Clear();
+        bannerKey++;
+        AddEvent("Settings reset to defaults");
+        StateHasChanged();
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}

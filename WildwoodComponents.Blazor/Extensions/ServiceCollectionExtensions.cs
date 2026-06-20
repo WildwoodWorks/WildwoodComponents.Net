@@ -467,6 +467,33 @@ namespace WildwoodComponents.Blazor.Extensions
             {
                 // Service may not exist, ignore
             }
+
+            // Register Consent service if available
+            try
+            {
+                RegisterConsentService(services, options);
+            }
+            catch
+            {
+                // Service may not exist, ignore
+            }
+        }
+
+        /// <summary>
+        /// Registers the Consent service. The consent engine runs in JS (loaded via JS isolation);
+        /// the service only needs IJSRuntime and the configured base URL.
+        /// </summary>
+        private static void RegisterConsentService(IServiceCollection services, WildwoodComponentsOptions options)
+        {
+            services.AddScoped<WildwoodComponents.Blazor.Services.IConsentService>(serviceProvider =>
+            {
+                var js = serviceProvider.GetRequiredService<Microsoft.JSInterop.IJSRuntime>();
+                var loggerFactory = serviceProvider.GetService<ILoggerFactory>();
+                var logger = loggerFactory?.CreateLogger<WildwoodComponents.Blazor.Services.ConsentService>()
+                    ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.ConsentService>.Instance;
+
+                return new WildwoodComponents.Blazor.Services.ConsentService(js, logger, options.BaseUrl ?? string.Empty);
+            });
         }
 
         /// <summary>

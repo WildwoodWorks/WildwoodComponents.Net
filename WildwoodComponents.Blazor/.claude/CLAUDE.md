@@ -35,8 +35,15 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 | App Tier | AppTierComponent | AppTierViewComponent | appTierService | AppTierComponent | -- | -- |
 | Disclaimer | DisclaimerComponent | -- | disclaimerService | DisclaimerComponent | -- | -- |
 | Feedback | FeedbackWidgetComponent | FeedbackWidgetViewComponent | feedbackService | FeedbackComponent | FeedbackComponent | -- |
+| Consent Management | ConsentBanner | -- | ConsentService (consent engine) | ConsentBanner | ConsentComponent (UI+state only, no script injection) | -- |
 
 *`--` = not yet implemented on that platform*
+
+> **Consent Management note:** the block-before-consent script-injection engine is inherently browser
+> JS. The Blazor wrapper ships it as an ES module (`wwwroot/js/wildwood-consent.js`) loaded via JS
+> isolation; `@wildwood/core` ships the canonical `ConsentService`. React Native has no DOM/pixels, so
+> its `ConsentComponent` is UI + consent-state + gating hook only (native SDKs check `useConsent` before
+> initializing).
 
 When adding a new component:
 1. Create the component in this project (Blazor)

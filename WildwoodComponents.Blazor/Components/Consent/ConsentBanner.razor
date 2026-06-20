@@ -1,0 +1,133 @@
+@namespace WildwoodComponents.Blazor.Components.Consent
+@inherits WildwoodComponents.Blazor.Components.Base.BaseWildwoodComponent
+
+@if (Config != null && Config.Enabled)
+{
+    @* Consent banner *@
+    @if (ShowBanner)
+    {
+        <div class="ww-consent-banner ww-consent-pos-@BannerPosition" role="region" aria-label="Cookie consent">
+            <div class="ww-consent-banner-text">
+                <strong class="ww-consent-title">@BannerTitle</strong>
+                <p class="ww-consent-body">
+                    @BannerBody
+                    @if (!string.IsNullOrEmpty(Config.PrivacyPolicyUrl))
+                    {
+                        <a href="@Config.PrivacyPolicyUrl" target="_blank" rel="noopener" class="ww-consent-link">Privacy Policy</a>
+                    }
+                </p>
+            </div>
+            <div class="ww-consent-actions">
+                <button type="button" class="ww-consent-btn ww-consent-btn-secondary" @onclick="OpenPreferences">@ManageLabel</button>
+                <button type="button" class="ww-consent-btn ww-consent-btn-secondary" @onclick="RejectAll">@RejectLabel</button>
+                <button type="button" class="ww-consent-btn ww-consent-btn-primary" @onclick="AcceptAll">@AcceptLabel</button>
+            </div>
+        </div>
+    }
+
+    @* Preferences modal *@
+    @if (ShowPreferences)
+    {
+        <div class="ww-consent-modal-overlay" @onclick="ClosePreferences" @onkeydown="OnModalKeyDown">
+            <div class="ww-consent-modal" role="dialog" aria-modal="true" aria-labelledby="ww-consent-modal-title"
+                 tabindex="-1" @ref="_modalRef" @onclick:stopPropagation="true">
+                <div class="ww-consent-modal-header">
+                    <h2 id="ww-consent-modal-title">Privacy preferences</h2>
+                    <button type="button" class="ww-consent-close" aria-label="Close" @onclick="ClosePreferences">&times;</button>
+                </div>
+                <div class="ww-consent-modal-body">
+                    <div class="ww-consent-category">
+                        <div class="ww-consent-category-label">
+                            <strong>Strictly necessary</strong>
+                            <span class="ww-consent-muted">Always on</span>
+                        </div>
+                        <label class="ww-consent-switch">
+                            <input type="checkbox" checked disabled aria-label="Strictly necessary (always on)" />
+                            <span class="ww-consent-slider"></span>
+                        </label>
+                    </div>
+
+                    @foreach (var category in NonNecessaryCategories)
+                    {
+                        if (!CategoryActive(category)) { continue; }
+                        <div class="ww-consent-category">
+                            <div class="ww-consent-category-label">
+                                <strong>@category</strong>
+                            </div>
+                            <label class="ww-consent-switch">
+                                <input type="checkbox"
+                                       checked="@(Selection.TryGetValue(category, out var on) && on)"
+                                       @onchange="@(e => ToggleSelection(category, (bool)(e.Value ?? false)))"
+                                       aria-label="@category" />
+                                <span class="ww-consent-slider"></span>
+                            </label>
+                        </div>
+                    }
+
+                    @if (Config.ShowDoNotSell || Config.ShowLimitSensitive)
+                    {
+                        <hr class="ww-consent-divider" />
+                        <div class="ww-consent-rights">
+                            @if (Config.ShowDoNotSell)
+                            {
+                                <button type="button" class="ww-consent-btn ww-consent-btn-secondary"
+                                        @onclick="@(() => OptOut("Advertising"))">
+                                    Do Not Sell or Share My Personal Information
+                                </button>
+                            }
+                            @if (Config.ShowLimitSensitive)
+                            {
+                                <button type="button" class="ww-consent-btn ww-consent-btn-secondary"
+                                        @onclick="@(() => OptOut("Sensitive"))">
+                                    Limit the Use of My Sensitive Personal Information
+                                </button>
+                            }
+                        </div>
+                    }
+
+                    <div class="ww-consent-links">
+                        @if (!string.IsNullOrEmpty(Config.PrivacyPolicyUrl))
+                        {
+                            <a href="@Config.PrivacyPolicyUrl" target="_blank" rel="noopener" class="ww-consent-link">Privacy Policy</a>
+                        }
+                        @if (!string.IsNullOrEmpty(Config.AccessibilityUrl))
+                        {
+                            <a href="@Config.AccessibilityUrl" target="_blank" rel="noopener" class="ww-consent-link">Accessibility</a>
+                        }
+                    </div>
+                </div>
+                <div class="ww-consent-modal-footer">
+                    <button type="button" class="ww-consent-btn ww-consent-btn-secondary" @onclick="RejectAll">@RejectLabel</button>
+                    <button type="button" class="ww-consent-btn ww-consent-btn-secondary" @onclick="AcceptAll">@AcceptLabel</button>
+                    <button type="button" class="ww-consent-btn ww-consent-btn-primary" @onclick="SavePreferences">Save preferences</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Footer entry points, available once the banner is dismissed: reopen preferences plus the
+       standalone CCPA opt-out links the App can surface in its footer. *@
+    @if (!ShowBanner && (ShowReopenLink || ShowFooterOptOut))
+    {
+        <div class="ww-consent-footer-links">
+            @if (ShowReopenLink)
+            {
+                <button type="button" class="ww-consent-reopen" @onclick="ReopenPreferences" aria-label="Privacy choices">
+                    Privacy choices
+                </button>
+            }
+            @if (ShowFooterOptOut && Config.ShowDoNotSell)
+            {
+                <button type="button" class="ww-consent-reopen" @onclick="@(() => OptOut("Advertising"))">
+                    Do Not Sell or Share
+                </button>
+            }
+            @if (ShowFooterOptOut && Config.ShowLimitSensitive)
+            {
+                <button type="button" class="ww-consent-reopen" @onclick="@(() => OptOut("Sensitive"))">
+                    Limit Use of Sensitive PI
+                </button>
+            }
+        </div>
+    }
+}
