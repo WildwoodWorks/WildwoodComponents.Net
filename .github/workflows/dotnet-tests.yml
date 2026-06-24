@@ -16,14 +16,11 @@ on:
       - 'WildwoodComponents.Razor/**'
       - 'WildwoodComponents.Tests/**'
       - '.github/workflows/dotnet-tests.yml'
+  # No paths filter on PRs: this check is required by branch protection, and a
+  # required check that is skipped (paths don't match) stays "pending" forever
+  # and blocks the merge. Running on every PR to main keeps the gate reliable.
   pull_request:
     branches: [ main ]
-    paths:
-      - 'WildwoodComponents.Shared/**'
-      - 'WildwoodComponents.Blazor/**'
-      - 'WildwoodComponents.Razor/**'
-      - 'WildwoodComponents.Tests/**'
-      - '.github/workflows/dotnet-tests.yml'
   workflow_dispatch:
 
 # Cancel superseded runs for the same branch/PR when new commits are pushed
