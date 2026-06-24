@@ -1,0 +1,67 @@
+name: .NET Tests
+
+# Builds the component libraries and runs the xUnit test suite
+# (WildwoodComponents.Tests covers the Shared, Blazor, and Razor service layers).
+# The tests reference Shared/Blazor/Razor directly and stub HTTP with
+# FakeHttpMessageHandler, so no backend and no database are required.
+#
+# Note: there is currently no separate functional-test project for .NET — these
+# are unit/service tests. Add a functional step here if one is introduced.
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'WildwoodComponents.Shared/**'
+      - 'WildwoodComponents.Blazor/**'
+      - 'WildwoodComponents.Razor/**'
+      - 'WildwoodComponents.Tests/**'
+      - '.github/workflows/dotnet-tests.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'WildwoodComponents.Shared/**'
+      - 'WildwoodComponents.Blazor/**'
+      - 'WildwoodComponents.Razor/**'
+      - 'WildwoodComponents.Tests/**'
+      - '.github/workflows/dotnet-tests.yml'
+  workflow_dispatch:
+
+# Cancel superseded runs for the same branch/PR when new commits are pushed
+concurrency:
+  group: dotnet-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore WildwoodComponents.Tests/WildwoodComponents.Tests.csproj
+
+      - name: Unit tests
+        run: >
+          dotnet test WildwoodComponents.Tests/WildwoodComponents.Tests.csproj -c Release --no-restore
+          --logger "trx;LogFileName=unit.trx" --results-directory TestResults
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/*.trx
+          if-no-files-found: ignore
