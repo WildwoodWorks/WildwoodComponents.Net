@@ -1,0 +1,136 @@
+@using WildwoodComponents.Shared.Models
+@inherits WildwoodComponents.Blazor.Components.Base.BaseWildwoodComponent
+
+<div class="ww-flow-component">
+    <div class="ww-flow-header">
+        <h3>@Settings.Title</h3>
+    </div>
+
+    @if (_loadingFlows)
+    {
+        <div class="ww-flow-loading">Loading flows…</div>
+    }
+    else if (_flows.Count == 0)
+    {
+        <div class="ww-flow-empty">No published flows are available for this app.</div>
+    }
+    else
+    {
+        @if (Settings.ShowFlowPicker && string.IsNullOrEmpty(Settings.FlowId))
+        {
+            <div class="ww-flow-field">
+                <label>Flow</label>
+                <select value="@_selectedFlowId" @onchange="OnFlowSelected" disabled="@_running">
+                    <option value="">Choose a flow…</option>
+                    @foreach (var flow in _flows)
+                    {
+                        <option value="@flow.Id">@flow.Name</option>
+                    }
+                </select>
+            </div>
+        }
+
+        @if (_selectedFlow != null)
+        {
+            @if (!string.IsNullOrEmpty(_selectedFlow.Description))
+            {
+                <p class="ww-flow-description">@_selectedFlow.Description</p>
+            }
+
+            <div class="ww-flow-inputs">
+                @foreach (var field in _selectedFlow.InputFields)
+                {
+                    <div class="ww-flow-field">
+                        <label>@field.Name</label>
+                        <input type="text" value="@GetInput(field.Name)"
+                               @oninput="e => SetInput(field.Name, e.Value?.ToString())"
+                               disabled="@_running" />
+                    </div>
+                }
+                @if (_selectedFlow.InputFields.Count == 0)
+                {
+                    <div class="ww-flow-field">
+                        <label>Input (JSON)</label>
+                        <textarea rows="3" value="@_rawInput"
+                                  @oninput="e => _rawInput = e.Value?.ToString() ?? string.Empty"
+                                  disabled="@_running"></textarea>
+                    </div>
+                }
+            </div>
+
+            <div class="ww-flow-actions">
+                @if (!_running)
+                {
+                    <button class="ww-flow-btn ww-flow-btn--primary" @onclick="RunAsync">@Settings.RunLabel</button>
+                }
+                else
+                {
+                    <button class="ww-flow-btn ww-flow-btn--danger" @onclick="Cancel">Stop</button>
+                }
+            </div>
+        }
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="ww-flow-alert ww-flow-alert--error">@_error</div>
+    }
+
+    @if (Settings.ShowLiveProgress && _running && _activeNode != null)
+    {
+        <div class="ww-flow-progress">
+            <span class="ww-flow-spinner"></span> Running <strong>@_activeNode</strong>…
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_streamText))
+    {
+        <div class="ww-flow-stream">
+            <div class="ww-flow-label">Output</div>
+            <pre>@_streamText</pre>
+        </div>
+    }
+
+    @if (_pendingInterrupt != null)
+    {
+        <div class="ww-flow-alert ww-flow-alert--warn">
+            <div class="ww-flow-label">Human review needed</div>
+            <pre>@_pendingInterrupt</pre>
+            <div class="ww-flow-actions">
+                <button class="ww-flow-btn ww-flow-btn--primary" @onclick="() => ResolveAsync(true)" disabled="@_running">Approve</button>
+                <button class="ww-flow-btn ww-flow-btn--danger" @onclick="() => ResolveAsync(false)" disabled="@_running">Reject</button>
+            </div>
+        </div>
+    }
+
+    @if (_result != null && _pendingInterrupt == null)
+    {
+        <div class="ww-flow-result ww-flow-result--@_result.Status">
+            <div class="ww-flow-label">
+                Result — @_result.Status
+                @if (_result.TotalTokens > 0)
+                {
+                    <span> · @_result.TotalTokens tokens</span>
+                }
+            </div>
+            @if (!string.IsNullOrEmpty(_result.ErrorMessage))
+            {
+                <div class="ww-flow-alert ww-flow-alert--error">@_result.ErrorMessage</div>
+            }
+            else if (!string.IsNullOrEmpty(_result.OutputJson))
+            {
+                <pre>@_result.OutputJson</pre>
+            }
+        </div>
+    }
+
+    @if (Settings.ShowDebugInfo && _events.Count > 0)
+    {
+        <div class="ww-flow-events">
+            @foreach (var line in _events)
+            {
+                <div class="ww-flow-event">@line</div>
+            }
+        </div>
+    }
+</div>

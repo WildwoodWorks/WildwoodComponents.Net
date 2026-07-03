@@ -33,18 +33,21 @@
     </li>
 
     <!-- AI -->
-    <li class="@GetParentActiveClass(new[] { "/test/ai-chat", "/test/ai-chat-demo" })">
+    <li class="@GetParentActiveClass(new[] { "/test/ai-chat", "/test/ai-chat-demo", "/test/ai-flow" })">
         <a href="#aiSubmenu" data-bs-toggle="collapse"
-           aria-expanded="@IsParentExpanded(new[] { "/test/ai-chat", "/test/ai-chat-demo" })"
+           aria-expanded="@IsParentExpanded(new[] { "/test/ai-chat", "/test/ai-chat-demo", "/test/ai-flow" })"
            class="dropdown-toggle">
             <i class="fas fa-robot me-2"></i><span>AI</span>
         </a>
-        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/ai-chat", "/test/ai-chat-demo" })" id="aiSubmenu">
+        <ul class="collapse list-unstyled @GetParentShowClass(new[] { "/test/ai-chat", "/test/ai-chat-demo", "/test/ai-flow" })" id="aiSubmenu">
             <li class="@GetActiveClass("/test/ai-chat")">
                 <a href="/test/ai-chat"><span>AIChatComponent</span></a>
             </li>
             <li class="@GetActiveClass("/test/ai-chat-demo")">
                 <a href="/test/ai-chat-demo"><span>AIChatDemo</span></a>
+            </li>
+            <li class="@GetActiveClass("/test/ai-flow")">
+                <a href="/test/ai-flow"><span>AIFlowComponent</span></a>
             </li>
         </ul>
     </li>

@@ -1,0 +1,183 @@
+.ww-flow-component {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    color: var(--ww-text-primary, #212529);
+    font-family: var(--ww-font-family, system-ui, -apple-system, "Segoe UI", sans-serif);
+}
+
+.ww-flow-header h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-flow-loading,
+.ww-flow-empty {
+    padding: 1rem;
+    text-align: center;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-flow-description {
+    color: var(--ww-text-secondary, #495057);
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.ww-flow-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.ww-flow-field label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ww-text-secondary, #495057);
+}
+
+.ww-flow-field input,
+.ww-flow-field select,
+.ww-flow-field textarea {
+    border: 1px solid var(--ww-border-color, #ced4da);
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    padding: 0.45rem 0.6rem;
+    font-size: 0.9rem;
+    background: var(--ww-input-bg, #ffffff);
+    color: var(--ww-text-primary, #212529);
+    font-family: inherit;
+}
+
+.ww-flow-field input:focus,
+.ww-flow-field select:focus,
+.ww-flow-field textarea:focus {
+    outline: none;
+    border-color: var(--ww-focus-border, #86b7fe);
+    box-shadow: 0 0 0 0.2rem var(--ww-focus-ring, rgba(13, 110, 253, 0.25));
+}
+
+.ww-flow-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.ww-flow-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.ww-flow-btn {
+    border: 1px solid var(--ww-border-color, #ced4da);
+    background: var(--ww-bg-primary, #ffffff);
+    color: var(--ww-text-primary, #212529);
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    padding: 0.45rem 1rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.ww-flow-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.ww-flow-btn--primary {
+    background: var(--ww-primary, #0d6efd);
+    border-color: var(--ww-primary, #0d6efd);
+    color: var(--ww-btn-primary-text, #ffffff);
+}
+
+.ww-flow-btn--danger {
+    background: var(--ww-danger, #dc3545);
+    border-color: var(--ww-danger, #dc3545);
+    color: var(--ww-btn-primary-text, #ffffff);
+}
+
+.ww-flow-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--ww-text-secondary, #495057);
+    font-size: 0.9rem;
+}
+
+.ww-flow-spinner {
+    width: 0.9rem;
+    height: 0.9rem;
+    border: 2px solid var(--ww-primary, #0d6efd);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: ww-flow-spin 0.7s linear infinite;
+}
+
+@keyframes ww-flow-spin {
+    to { transform: rotate(360deg); }
+}
+
+.ww-flow-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--ww-text-muted, #6c757d);
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.ww-flow-stream pre,
+.ww-flow-result pre {
+    background: var(--ww-bg-tertiary, #0f172a);
+    color: var(--ww-text-inverse, #e2e8f0);
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    padding: 0.6rem;
+    font-size: 0.8rem;
+    max-height: 260px;
+    overflow: auto;
+    white-space: pre-wrap;
+    margin: 0;
+}
+
+.ww-flow-alert {
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    font-size: 0.85rem;
+}
+
+.ww-flow-alert--error {
+    background: var(--ww-danger-bg, #f8d7da);
+    color: var(--ww-danger-text, #842029);
+    border: 1px solid var(--ww-danger-border, #f5c2c7);
+}
+
+.ww-flow-alert--warn {
+    background: var(--ww-warning-bg, #fff3cd);
+    color: var(--ww-warning-text, #664d03);
+    border: 1px solid var(--ww-warning-border, #ffecb5);
+}
+
+.ww-flow-alert--warn pre {
+    background: var(--ww-bg-primary, #ffffff);
+    color: var(--ww-text-primary, #212529);
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    padding: 0.5rem;
+    font-size: 0.8rem;
+    max-height: 160px;
+    overflow: auto;
+    margin: 0.4rem 0;
+    white-space: pre-wrap;
+}
+
+.ww-flow-events {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    max-height: 200px;
+    overflow: auto;
+}
+
+.ww-flow-event {
+    font-size: 0.75rem;
+    color: var(--ww-text-muted, #6c757d);
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}

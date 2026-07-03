@@ -1,0 +1,134 @@
+@page "/test/ai-flow"
+@rendermode InteractiveServer
+@using WildwoodComponents.Blazor.Components.AI
+@using WildwoodComponents.Blazor.Services
+@using WildwoodComponents.Shared.Models
+@inject CircuitStateStorageService StateStorage
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@inject IAIFlowService FlowService
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="AI Flows" ComponentName="AIFlowComponent" IconClass="fas fa-diagram-project"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">Auth Token</label>
+            <input type="password" class="form-control form-control-sm" @bind="authToken" />
+        </div>
+        <hr class="my-2" />
+        <h6 class="small fw-bold">AIFlowSettings</h6>
+        <div class="mb-2">
+            <label class="form-label">API Base URL</label>
+            <input class="form-control form-control-sm" @bind="settings.ApiBaseUrl" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">App ID (optional)</label>
+            <input class="form-control form-control-sm" @bind="settings.AppId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Fixed Flow ID (optional)</label>
+            <input class="form-control form-control-sm" @bind="settings.FlowId" placeholder="Leave blank to show picker" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Title</label>
+            <input class="form-control form-control-sm" @bind="settings.Title" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Run Button Label</label>
+            <input class="form-control form-control-sm" @bind="settings.RunLabel" />
+        </div>
+        <hr class="my-2" />
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="showPicker" @bind="settings.ShowFlowPicker" />
+            <label class="form-check-label" for="showPicker">Show Flow Picker</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="showProgress" @bind="settings.ShowLiveProgress" />
+            <label class="form-check-label" for="showProgress">Show Live Progress</label>
+        </div>
+        <div class="mb-1 form-check">
+            <input type="checkbox" class="form-check-input" id="showDebug" @bind="settings.ShowDebugInfo" />
+            <label class="form-check-label" for="showDebug">Show Debug Info</label>
+        </div>
+    </Settings>
+    <Component>
+        <div style="min-height: 500px;">
+            <AIFlowComponent @key="componentKey"
+                             AuthToken="@authToken"
+                             Settings="@settings"
+                             OnRunCompleted="HandleRunCompleted" />
+        </div>
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private string authToken = "";
+    private AIFlowSettings settings = new();
+    private int componentKey = 0;
+
+    private List<EventEntry> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        authToken = await StateStorage.GetItemAsync("wildwood_auth_token") ?? "";
+        settings.ApiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "https://localhost:7046/api";
+
+        if (!string.IsNullOrEmpty(settings.ApiBaseUrl))
+            FlowService.SetApiBaseUrl(settings.ApiBaseUrl);
+        if (!string.IsNullOrEmpty(authToken))
+            FlowService.SetAuthToken(authToken);
+
+        LifecycleTracker.TrackInitialized("AIFlowComponent");
+        AddEvent("AIFlowComponent test page initialized");
+    }
+
+    private void ApplySettings()
+    {
+        if (!string.IsNullOrEmpty(authToken))
+            FlowService.SetAuthToken(authToken);
+        if (!string.IsNullOrEmpty(settings.ApiBaseUrl))
+            FlowService.SetApiBaseUrl(settings.ApiBaseUrl);
+
+        // Re-key the component so it re-initializes with the new settings.
+        componentKey++;
+        AddEvent("Applied settings — component re-initialized");
+    }
+
+    private void ResetSettings()
+    {
+        settings = new AIFlowSettings
+        {
+            ApiBaseUrl = Configuration["WildwoodAPI:BaseUrl"] ?? "https://localhost:7046/api"
+        };
+        componentKey++;
+        AddEvent("Settings reset to defaults");
+    }
+
+    private void HandleRunCompleted(AIFlowRunResult result)
+    {
+        AddEvent($"Run completed: {result.Status} ({result.TotalTokens} tokens)"
+                 + (string.IsNullOrEmpty(result.ErrorMessage) ? "" : $" — {result.ErrorMessage}"));
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry { Time = DateTime.Now, Message = message });
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private class EventEntry
+    {
+        public DateTime Time { get; set; }
+        public string Message { get; set; } = "";
+    }
+}
