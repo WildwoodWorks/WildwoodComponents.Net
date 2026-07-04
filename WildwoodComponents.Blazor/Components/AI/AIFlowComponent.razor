@@ -96,10 +96,25 @@
         <div class="ww-flow-alert ww-flow-alert--warn">
             <div class="ww-flow-label">Human review needed</div>
             <pre>@_pendingInterrupt</pre>
-            <div class="ww-flow-actions">
-                <button class="ww-flow-btn ww-flow-btn--primary" @onclick="() => ResolveAsync(true)" disabled="@_running">Approve</button>
-                <button class="ww-flow-btn ww-flow-btn--danger" @onclick="() => ResolveAsync(false)" disabled="@_running">Reject</button>
-            </div>
+            @if (_editingResume)
+            {
+                <div class="ww-flow-field">
+                    <label>Edited resume value (JSON)</label>
+                    <textarea rows="5" @bind="_resumeEditValue"></textarea>
+                </div>
+                <div class="ww-flow-actions">
+                    <button class="ww-flow-btn ww-flow-btn--primary" @onclick="SubmitResumeEditAsync" disabled="@_running">Resume with edit</button>
+                    <button class="ww-flow-btn" @onclick="CancelResumeEdit" disabled="@_running">Cancel</button>
+                </div>
+            }
+            else
+            {
+                <div class="ww-flow-actions">
+                    <button class="ww-flow-btn ww-flow-btn--primary" @onclick="() => ResolveAsync(true)" disabled="@_running">Approve</button>
+                    <button class="ww-flow-btn" @onclick="StartResumeEdit" disabled="@_running">Edit &amp; resume</button>
+                    <button class="ww-flow-btn ww-flow-btn--danger" @onclick="() => ResolveAsync(false)" disabled="@_running">Reject</button>
+                </div>
+            }
         </div>
     }
 

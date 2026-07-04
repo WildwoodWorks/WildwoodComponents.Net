@@ -45,6 +45,8 @@ namespace WildwoodComponents.Blazor.Components.AI
         private int _lastRenderTick;
         private string? _activeNode;
         private string? _pendingInterrupt;
+        private bool _editingResume;
+        private string _resumeEditValue = string.Empty;
         private string? _error;
         private string? _threadId;
         private string? _activeRunId;
@@ -159,15 +161,18 @@ namespace WildwoodComponents.Blazor.Components.AI
             }
         }
 
-        private async Task ResolveAsync(bool approve)
+        private Task ResolveAsync(bool approve) => ResolveAsync(approve, null);
+
+        private async Task ResolveAsync(bool approve, string? valueJson)
         {
             if (string.IsNullOrEmpty(_activeRunId)) return;
             _pendingInterrupt = null;
+            _editingResume = false;
             _running = true;
             ResetCts();
             try
             {
-                _result = await FlowService.ResolveInterruptAsync(_activeRunId, approve, null, HandleEventAsync, _cts!.Token);
+                _result = await FlowService.ResolveInterruptAsync(_activeRunId, approve, valueJson, HandleEventAsync, _cts!.Token);
                 await FinishRunAsync();
             }
             finally
@@ -175,6 +180,36 @@ namespace WildwoodComponents.Blazor.Components.AI
                 _running = false;
                 SafeStateHasChanged();
             }
+        }
+
+        private void StartResumeEdit()
+        {
+            _editingResume = true;
+            _error = null;
+            // A langchain HITL decision list; edit the type or add args before resuming.
+            _resumeEditValue = "{\n  \"decisions\": [\n    { \"type\": \"approve\" }\n  ]\n}";
+        }
+
+        private void CancelResumeEdit() => _editingResume = false;
+
+        private async Task SubmitResumeEditAsync()
+        {
+            var trimmed = _resumeEditValue?.Trim() ?? string.Empty;
+            if (trimmed.Length == 0)
+            {
+                await ResolveAsync(true, null); // empty edit → default approve
+                return;
+            }
+            try
+            {
+                using var _ = JsonDocument.Parse(trimmed); // fail fast on malformed JSON
+            }
+            catch (JsonException)
+            {
+                _error = "Edited resume value must be valid JSON.";
+                return;
+            }
+            await ResolveAsync(true, trimmed);
         }
 
         private async Task HandleEventAsync(AIFlowRunEvent evt)
