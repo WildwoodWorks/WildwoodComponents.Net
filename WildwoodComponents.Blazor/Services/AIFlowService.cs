@@ -54,6 +54,7 @@ namespace WildwoodComponents.Blazor.Services
         private string _authToken = string.Empty;
         private string _apiBaseUrl = string.Empty;
         private string? _appId;
+        private bool _authFailureFired;
 
         public event EventHandler? AuthenticationFailed;
 
@@ -66,6 +67,7 @@ namespace WildwoodComponents.Blazor.Services
         public void SetAuthToken(string token)
         {
             _authToken = token ?? string.Empty;
+            _authFailureFired = false; // re-arm the one-shot 401 signal for the new token
             _httpClient.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", _authToken);
         }
@@ -215,16 +217,25 @@ namespace WildwoodComponents.Blazor.Services
             JsonElement data = default;
             if (dataText.Length > 0)
             {
-                try { data = JsonDocument.Parse(dataText).RootElement.Clone(); }
-                catch (JsonException) { /* leave default */ }
+                try
+                {
+                    // Dispose the document so its pooled buffer is recycled; Clone()
+                    // detaches the element we keep past the using scope.
+                    using var doc = JsonDocument.Parse(dataText);
+                    data = doc.RootElement.Clone();
+                }
+                catch (JsonException) { /* leave default (ValueKind.Undefined) */ }
             }
 
+            // A truncated/unparseable frame leaves data as Undefined; TryGetProperty
+            // throws on anything but an Object, so guard every property read.
+            var obj = data.ValueKind == JsonValueKind.Object;
             switch (eventName)
             {
                 case "run_started":
                     // Server emits this first, carrying the run + thread ids the
                     // client needs for resume and thread continuity.
-                    if (data.ValueKind == JsonValueKind.Object)
+                    if (obj)
                     {
                         if (data.TryGetProperty("runId", out var runIdEl) && runIdEl.ValueKind == JsonValueKind.String)
                             result.RunId = runIdEl.GetString();
@@ -233,21 +244,21 @@ namespace WildwoodComponents.Blazor.Services
                     }
                     break;
                 case "done":
-                    result.Status = data.TryGetProperty("status", out var s) ? s.GetString() ?? "succeeded" : "succeeded";
-                    if (data.TryGetProperty("output", out var output) && output.ValueKind != JsonValueKind.Null)
+                    result.Status = obj && data.TryGetProperty("status", out var s) ? s.GetString() ?? "succeeded" : "succeeded";
+                    if (obj && data.TryGetProperty("output", out var output) && output.ValueKind != JsonValueKind.Null)
                         result.OutputJson = output.GetRawText();
                     break;
                 case "interrupt":
                     result.Status = "interrupted";
-                    if (data.TryGetProperty("payload", out var payload))
+                    if (obj && data.TryGetProperty("payload", out var payload))
                         result.InterruptPayloadJson = payload.GetRawText();
                     break;
                 case "error":
                     result.Status = "failed";
-                    result.ErrorMessage = data.TryGetProperty("message", out var m) ? m.GetString() : "Run failed";
+                    result.ErrorMessage = obj && data.TryGetProperty("message", out var m) ? m.GetString() : "Run failed";
                     break;
                 case "usage":
-                    if (data.TryGetProperty("totalTokens", out var t) && t.TryGetInt32(out var tokens))
+                    if (obj && data.TryGetProperty("totalTokens", out var t) && t.TryGetInt32(out var tokens))
                         result.TotalTokens += tokens;
                     break;
             }
@@ -263,7 +274,13 @@ namespace WildwoodComponents.Blazor.Services
             // fire AuthenticationFailed (which prompts re-login).
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
-                AuthenticationFailed?.Invoke(this, EventArgs.Empty);
+                // Fire once per token lifetime — a long SSE run can hit many 401s
+                // and we don't want to flood a shared re-login handler.
+                if (!_authFailureFired)
+                {
+                    _authFailureFired = true;
+                    AuthenticationFailed?.Invoke(this, EventArgs.Empty);
+                }
                 return Task.FromResult(false);
             }
             if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)

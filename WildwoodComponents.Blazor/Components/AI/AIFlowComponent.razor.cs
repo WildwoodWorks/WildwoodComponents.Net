@@ -38,6 +38,11 @@ namespace WildwoodComponents.Blazor.Components.AI
         private AIFlow? _selectedFlow;
         private string _rawInput = "{}";
         private string _streamText = string.Empty;
+        // Streamed tokens accumulate here (O(1) append); _streamText is materialized
+        // from it only on a throttled render to avoid O(n²) string concat + a render
+        // per token on a long stream.
+        private readonly StringBuilder _streamBuilder = new();
+        private int _lastRenderTick;
         private string? _activeNode;
         private string? _pendingInterrupt;
         private string? _error;
@@ -107,6 +112,10 @@ namespace WildwoodComponents.Blazor.Components.AI
             _selectedFlow = null;
             _inputs.Clear();
             _rawInput = "{}";
+            // A thread's checkpoint holds one flow's state — switching flows must
+            // start a fresh thread, not resume the previous flow's checkpoint.
+            _threadId = null;
+            _activeRunId = null;
             ResetRunState();
 
             if (string.IsNullOrEmpty(flowId)) return;
@@ -184,7 +193,7 @@ namespace WildwoodComponents.Blazor.Components.AI
                     if (_activeNode == ReadString(evt.Data, "node")) _activeNode = null;
                     break;
                 case "token":
-                    _streamText += ReadString(evt.Data, "content") ?? string.Empty;
+                    _streamBuilder.Append(ReadString(evt.Data, "content") ?? string.Empty);
                     break;
                 case "interrupt":
                     if (evt.Data.ValueKind == JsonValueKind.Object &&
@@ -201,11 +210,22 @@ namespace WildwoodComponents.Blazor.Components.AI
                 if (_events.Count > 200) _events.RemoveAt(0);
             }
 
-            await InvokeAsync(StateHasChanged);
+            // Render immediately for structural events; throttle token-only renders
+            // to ~10/s so a long stream doesn't fire thousands of SignalR diffs.
+            var isToken = evt.Event == "token";
+            var now = Environment.TickCount;
+            if (!isToken || now - _lastRenderTick >= 100)
+            {
+                _lastRenderTick = now;
+                _streamText = _streamBuilder.ToString();
+                await InvokeAsync(StateHasChanged);
+            }
         }
 
         private async Task FinishRunAsync()
         {
+            // Materialize any tokens that arrived since the last throttled render.
+            _streamText = _streamBuilder.ToString();
             if (_result != null)
             {
                 if (!string.IsNullOrEmpty(_result.RunId)) _activeRunId = _result.RunId;
@@ -238,6 +258,7 @@ namespace WildwoodComponents.Blazor.Components.AI
         private void ResetRunState()
         {
             _streamText = string.Empty;
+            _streamBuilder.Clear();
             _activeNode = null;
             _pendingInterrupt = null;
             _error = null;
