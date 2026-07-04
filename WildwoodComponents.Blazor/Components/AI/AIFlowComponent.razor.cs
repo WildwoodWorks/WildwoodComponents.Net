@@ -186,8 +186,11 @@ namespace WildwoodComponents.Blazor.Components.AI
         {
             _editingResume = true;
             _error = null;
-            // A langchain HITL decision list; edit the type or add args before resuming.
-            _resumeEditValue = "{\n  \"decisions\": [\n    { \"type\": \"approve\" }\n  ]\n}";
+            // Start empty: an unchanged submit falls back to the server's default
+            // resolution (BuildApprovalResolution), which is shape-correct for BOTH
+            // agent HITL and plain interrupt nodes. The textarea shows an example
+            // via its placeholder for anyone who does want to craft a value.
+            _resumeEditValue = string.Empty;
         }
 
         private void CancelResumeEdit() => _editingResume = false;
@@ -296,6 +299,8 @@ namespace WildwoodComponents.Blazor.Components.AI
             _streamBuilder.Clear();
             _activeNode = null;
             _pendingInterrupt = null;
+            _editingResume = false;
+            _resumeEditValue = string.Empty;
             _error = null;
             _result = null;
             _events.Clear();

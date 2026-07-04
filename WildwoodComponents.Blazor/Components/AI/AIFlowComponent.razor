@@ -99,8 +99,9 @@
             @if (_editingResume)
             {
                 <div class="ww-flow-field">
-                    <label>Edited resume value (JSON)</label>
-                    <textarea rows="5" @bind="_resumeEditValue"></textarea>
+                    <label>Edited resume value (JSON) — leave blank to approve as-is</label>
+                    <textarea rows="5" @bind="_resumeEditValue"
+                              placeholder='{ "decisions": [ { "type": "approve" } ] }'></textarea>
                 </div>
                 <div class="ww-flow-actions">
                     <button class="ww-flow-btn ww-flow-btn--primary" @onclick="SubmitResumeEditAsync" disabled="@_running">Resume with edit</button>
