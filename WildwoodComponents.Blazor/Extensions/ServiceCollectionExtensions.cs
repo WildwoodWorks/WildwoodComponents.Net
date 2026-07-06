@@ -406,6 +406,16 @@ namespace WildwoodComponents.Blazor.Extensions
                 // Service may not exist, ignore
             }
 
+            // Register AI Flows (LangGraph) service
+            try
+            {
+                RegisterAIFlowService(services, assembly, options);
+            }
+            catch
+            {
+                // Service may not exist, ignore
+            }
+
             // Register session manager for automatic token refresh and session monitoring
             try
             {
@@ -572,6 +582,35 @@ namespace WildwoodComponents.Blazor.Extensions
                     return aiService;
                 });
             }
+        }
+
+        /// <summary>
+        /// Registers the AI Flows (LangGraph) service with URL/app configuration,
+        /// mirroring RegisterAIService.
+        /// </summary>
+        private static void RegisterAIFlowService(IServiceCollection services, Assembly assembly, WildwoodComponentsOptions options)
+        {
+            var serviceInterface = assembly.GetType("WildwoodComponents.Blazor.Services.IAIFlowService");
+            var serviceImplementation = assembly.GetType("WildwoodComponents.Blazor.Services.AIFlowService");
+            if (serviceInterface == null || serviceImplementation == null) return;
+
+            services.AddScoped(serviceInterface, serviceProvider =>
+            {
+                var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                httpClient.BaseAddress = new Uri(options.BaseUrl);
+                httpClient.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds > 0 ? options.RequestTimeoutSeconds : 300);
+                if (!string.IsNullOrEmpty(options.ApiKey))
+                    httpClient.DefaultRequestHeaders.Add("X-API-Key", options.ApiKey);
+
+                var loggerFactory = serviceProvider.GetService<ILoggerFactory>();
+                var logger = loggerFactory?.CreateLogger<WildwoodComponents.Blazor.Services.AIFlowService>()
+                             ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.AIFlowService>.Instance;
+
+                var flowService = new WildwoodComponents.Blazor.Services.AIFlowService(httpClient, logger);
+                flowService.SetApiBaseUrl(options.BaseUrl?.TrimEnd('/') + "/api");
+                flowService.SetAppId(options.AppId);
+                return flowService;
+            });
         }
 
         /// <summary>
