@@ -71,6 +71,10 @@ namespace WildwoodComponents.Shared.Models
         public bool ShowFlowPicker { get; set; } = true;
         public bool ShowLiveProgress { get; set; } = true;
         public bool ShowDebugInfo { get; set; } = false;
+
+        /// <summary>Shows the current thread's prior runs beneath the result.</summary>
+        public bool ShowRunHistory { get; set; } = true;
+
         public string Title { get; set; } = "AI Flows";
         public string RunLabel { get; set; } = "Run";
     }

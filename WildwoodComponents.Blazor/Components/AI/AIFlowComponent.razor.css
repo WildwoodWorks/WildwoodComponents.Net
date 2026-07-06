@@ -181,3 +181,38 @@
     color: var(--ww-text-muted, #6c757d);
     font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
 }
+
+.ww-flow-history {
+    margin-top: 0.75rem;
+    border-top: 1px solid var(--ww-border-color, #dee2e6);
+    padding-top: 0.5rem;
+}
+
+.ww-flow-history-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.8rem;
+    padding: 0.2rem 0;
+    color: var(--ww-text-secondary, #495057);
+}
+
+.ww-flow-history-status {
+    min-width: 5.5rem;
+    font-weight: 600;
+}
+
+.ww-flow-history-row--succeeded .ww-flow-history-status { color: var(--ww-success, #198754); }
+.ww-flow-history-row--failed .ww-flow-history-status { color: var(--ww-danger, #dc3545); }
+.ww-flow-history-row--interrupted .ww-flow-history-status { color: var(--ww-warning, #ffc107); }
+.ww-flow-history-row--cancelled .ww-flow-history-status { color: var(--ww-text-muted, #6c757d); }
+
+.ww-flow-history-time,
+.ww-flow-history-meta {
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-flow-history-error {
+    color: var(--ww-danger, #dc3545);
+    cursor: help;
+}

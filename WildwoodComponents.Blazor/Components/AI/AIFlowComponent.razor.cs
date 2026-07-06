@@ -31,6 +31,7 @@ namespace WildwoodComponents.Blazor.Components.AI
         private readonly List<AIFlow> _flows = new();
         private readonly Dictionary<string, string> _inputs = new();
         private readonly List<string> _events = new();
+        private readonly List<AIFlowRunSummary> _history = new();
 
         private bool _loadingFlows = true;
         private bool _running;
@@ -118,6 +119,7 @@ namespace WildwoodComponents.Blazor.Components.AI
             // start a fresh thread, not resume the previous flow's checkpoint.
             _threadId = null;
             _activeRunId = null;
+            _history.Clear();
             ResetRunState();
 
             if (string.IsNullOrEmpty(flowId)) return;
@@ -273,6 +275,27 @@ namespace WildwoodComponents.Blazor.Components.AI
                     _pendingInterrupt = null;
                 if (OnRunCompleted.HasDelegate && _result.Status != "interrupted")
                     await OnRunCompleted.InvokeAsync(_result);
+            }
+            await LoadHistoryAsync();
+        }
+
+        /// <summary>
+        /// Refreshes the current thread's run history (this run + prior runs on
+        /// the same conversation). Best-effort: history is an enrichment and a
+        /// lookup failure must never disturb the run result already on screen.
+        /// </summary>
+        private async Task LoadHistoryAsync()
+        {
+            if (!Settings.ShowRunHistory || string.IsNullOrEmpty(_threadId)) return;
+            try
+            {
+                var runs = await FlowService.GetThreadRunsAsync(_threadId);
+                _history.Clear();
+                _history.AddRange(runs);
+            }
+            catch
+            {
+                // keep whatever history was shown before
             }
         }
 

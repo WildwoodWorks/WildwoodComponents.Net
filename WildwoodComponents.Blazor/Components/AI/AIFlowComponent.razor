@@ -140,6 +140,27 @@
         </div>
     }
 
+    @if (Settings.ShowRunHistory && _history.Count > 0)
+    {
+        <div class="ww-flow-history">
+            <div class="ww-flow-label">Run history (this conversation)</div>
+            @foreach (var run in _history)
+            {
+                <div class="ww-flow-history-row ww-flow-history-row--@run.Status">
+                    <span class="ww-flow-history-status">@run.Status</span>
+                    <span class="ww-flow-history-time">@run.CreatedAt.ToLocalTime().ToString("g")</span>
+                    <span class="ww-flow-history-meta">
+                        @run.TotalTokens tokens@(run.DurationMs.HasValue ? $" · {run.DurationMs.Value / 1000.0:0.0}s" : "")
+                    </span>
+                    @if (!string.IsNullOrEmpty(run.ErrorMessage))
+                    {
+                        <span class="ww-flow-history-error" title="@run.ErrorMessage">⚠</span>
+                    }
+                </div>
+            }
+        </div>
+    }
+
     @if (Settings.ShowDebugInfo && _events.Count > 0)
     {
         <div class="ww-flow-events">
