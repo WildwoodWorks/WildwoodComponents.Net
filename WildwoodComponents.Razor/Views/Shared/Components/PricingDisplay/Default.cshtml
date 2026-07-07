@@ -69,9 +69,19 @@
 
                     @if (!string.IsNullOrEmpty(tier.CustomBadgeText))
                     {
-                        <div class="ww-pricing-badge @ViewHelpers.GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
-                            <small>@tier.CustomBadgeText</small>
-                        </div>
+                        @* Raw CSS badge colors ("#c9a227") can't be class names — inline style. *@
+                        @if (ViewHelpers.IsRawCssColor(tier.BadgeColor))
+                        {
+                            <div class="ww-pricing-badge text-white text-center py-1" style="background-color: @tier.BadgeColor;">
+                                <small>@tier.CustomBadgeText</small>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="ww-pricing-badge @ViewHelpers.GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
+                                <small>@tier.CustomBadgeText</small>
+                            </div>
+                        }
                     }
                     else if (tier.IsDefault)
                     {
@@ -149,14 +159,12 @@
                             <ul class="ww-pricing-limits list-unstyled text-start">
                                 @foreach (var limit in tier.Limits)
                                 {
+                                    @* Unit is intentionally omitted: the value + display name already
+                                       carry it. Units still show in usage dashboards. *@
                                     <li class="mb-1 small text-muted">
                                         <i class="bi bi-speedometer2 me-1"></i>
                                         @(string.IsNullOrEmpty(limit.DisplayName) ? limit.LimitCode : limit.DisplayName):
                                         <strong>@limit.MaxValueDisplay</strong>
-                                        @if (!string.IsNullOrEmpty(limit.Unit))
-                                        {
-                                            <text> @limit.Unit</text>
-                                        }
                                     </li>
                                 }
                             </ul>

@@ -468,6 +468,18 @@ namespace WildwoodComponents.Blazor.Extensions
                 // Service may not exist, ignore
             }
 
+            // Register the shared feature-entitlement cache backing FeatureGateComponent
+            try
+            {
+                RegisterService(services, assembly,
+                    "WildwoodComponents.Blazor.Services.IFeatureEntitlementService",
+                    "WildwoodComponents.Blazor.Services.FeatureEntitlementService");
+            }
+            catch
+            {
+                // Service may not exist, ignore
+            }
+
             // Register Feedback service if available
             try
             {

@@ -1,0 +1,14 @@
+@inherits WildwoodComponents.Blazor.Components.Base.BaseWildwoodComponent
+
+@if (_loading)
+{
+    @LoadingFallback
+}
+else if (_hasFeature)
+{
+    @ChildContent
+}
+else
+{
+    @Fallback
+}

@@ -40,6 +40,32 @@ public static class FormatHelpers
         };
     }
 
+    /// <summary>
+    /// True when a tier badge color is a raw CSS color ("#c9a227", "rgb(...)", "hsl(...)")
+    /// rather than a semantic token ("success"). Raw colors can't be class names, so
+    /// callers render them as an inline background-color with white text instead.
+    /// </summary>
+    public static bool IsRawCssColor(string? color)
+    {
+        if (string.IsNullOrWhiteSpace(color)) return false;
+        var trimmed = color.Trim();
+        return trimmed.StartsWith("#", StringComparison.Ordinal)
+            || trimmed.StartsWith("rgb", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("hsl", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether a tier card should show its lifecycle status badge. "Active" is every publicly
+    /// listed tier's lifecycle status — only non-default statuses (Beta, Deprecated, ...) are
+    /// informative, so an Active badge is hidden.
+    /// </summary>
+    public static bool ShouldShowTierStatusBadge(string? badgeColor, string? status)
+    {
+        return !string.IsNullOrEmpty(badgeColor)
+            && !string.IsNullOrEmpty(status)
+            && !string.Equals(status.Trim(), "Active", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static string GetStatusBadgeClass(string status)
     {
         return status.ToLowerInvariant() switch

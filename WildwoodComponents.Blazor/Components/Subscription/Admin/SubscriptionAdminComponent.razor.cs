@@ -13,6 +13,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
     public partial class SubscriptionAdminComponent : BaseWildwoodComponent
     {
         [Inject] private IAppTierComponentService AppTierService { get; set; } = default!;
+        [Inject] private IFeatureEntitlementService EntitlementService { get; set; } = default!;
 
         #region Parameters
 
@@ -46,6 +47,11 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         private UserTierSubscriptionModel? _subscription;
         private string _activeTab = "subscription";
         private bool _isProcessing;
+
+        // Post-cancellation notice (scheduled-vs-immediate messaging + store-billing follow-up)
+        private string? _cancelNotice;
+        private string? _cancelActionInstructions;
+        private string? _cancelActionUrl;
         private bool _isCompanyMode;
         private int _overrideCount;
         private TierChangePreviewModel? _preview;
@@ -302,6 +308,9 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 {
                     _subscription = result.Subscription;
                     await RefreshAllPanels();
+                    // Entitlements changed with the plan — refresh FeatureGate instances
+                    // elsewhere in the app so they don't serve the old plan for the cache TTL.
+                    EntitlementService.Invalidate();
                     await NotifySubscriptionChanged(args.TierName, args.IsChange ? "changed" : "subscribed");
                 }
                 else
@@ -332,29 +341,34 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
             try
             {
-                bool success;
+                AppTierCancelResultModel result;
                 if (UseCompanyScope)
                 {
-                    success = await AppTierService.CancelCompanySubscriptionAsync(AppId, CompanyId!);
+                    result = await AppTierService.CancelCompanySubscriptionAsync(AppId, CompanyId!);
                 }
                 else if (UseUserScope)
                 {
-                    success = await AppTierService.CancelUserSubscriptionAsync(AppId, UserId!);
+                    result = await AppTierService.CancelUserSubscriptionAsync(AppId, UserId!);
                 }
                 else
                 {
-                    success = await AppTierService.CancelSubscriptionAsync(AppId);
+                    result = await AppTierService.CancelSubscriptionAsync(AppId);
                 }
 
-                if (success)
+                if (result.Success)
                 {
-                    _subscription = null;
+                    // A scheduled cancellation keeps the subscription (status PendingCancellation)
+                    // until the period ends — the refresh reloads whatever state the server has now.
                     await RefreshAllPanels();
+                    EntitlementService.Invalidate();
+                    BuildCancelNotice(result);
                     await NotifySubscriptionChanged("", "cancelled");
                 }
                 else
                 {
-                    await HandleErrorAsync(new Exception("Failed to cancel subscription"), "Cancelling subscription");
+                    await HandleErrorAsync(
+                        new Exception(string.IsNullOrEmpty(result.ErrorMessage) ? "Failed to cancel subscription" : result.ErrorMessage),
+                        "Cancelling subscription");
                 }
             }
             catch (Exception ex)
@@ -366,6 +380,30 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 _isProcessing = false;
                 StateHasChanged();
             }
+        }
+
+        /// <summary>
+        /// Builds the post-cancellation notice: scheduled-vs-immediate messaging plus, for
+        /// store-billed subscriptions (RequiresUserAction), the store-billing follow-up
+        /// instructions/link — the platform cannot stop the store's billing itself.
+        /// </summary>
+        private void BuildCancelNotice(AppTierCancelResultModel result)
+        {
+            _cancelNotice = result.IsScheduled
+                ? result.EffectiveDate.HasValue
+                    ? $"Your cancellation is scheduled — access continues until {result.EffectiveDate.Value.ToLocalTime():MMM d, yyyy}."
+                    : "Your cancellation is scheduled for the end of the current billing period."
+                : "Your subscription has been cancelled.";
+            _cancelActionInstructions = result.RequiresUserAction ? result.UserActionInstructions : null;
+            _cancelActionUrl = result.RequiresUserAction ? result.UserActionUrl : null;
+        }
+
+        private void ClearCancelNotice()
+        {
+            _cancelNotice = null;
+            _cancelActionInstructions = null;
+            _cancelActionUrl = null;
+            StateHasChanged();
         }
 
         #endregion
@@ -386,6 +424,8 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 await _featuresPanel.LoadFeaturesAsync();
             }
 
+            // Add-ons grant features — refresh FeatureGate instances elsewhere in the app.
+            EntitlementService.Invalidate();
             await NotifySubscriptionChanged("", "addon_changed");
         }
 
@@ -401,6 +441,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 await _featuresPanel.LoadFeaturesAsync();
             }
             await LoadOverrideCountAsync();
+            EntitlementService.Invalidate();
             StateHasChanged();
         }
 
@@ -412,6 +453,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 await _overridesPanel.LoadDataAsync();
             }
             await LoadOverrideCountAsync();
+            EntitlementService.Invalidate();
             StateHasChanged();
         }
 

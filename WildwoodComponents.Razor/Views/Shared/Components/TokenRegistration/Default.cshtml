@@ -15,6 +15,7 @@
      data-allow-open="@Model.AllowOpenRegistration.ToString().ToLower()"
      data-token-required="@Model.TokenIsRequired.ToString().ToLower()"
      data-token-optional="@Model.TokenIsOptional.ToString().ToLower()"
+     data-show-optional-token="@Model.ShowOptionalTokenEntry.ToString().ToLower()"
      data-default-pricing-id="@(Model.DefaultPricingModelId ?? "")"
      data-auto-login="@Model.AutoLogin.ToString().ToLower()"
      data-redirect-url="@(Model.RedirectUrl ?? "")"

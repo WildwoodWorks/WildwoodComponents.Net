@@ -22,13 +22,15 @@
                     <div>
                         <h5 class="card-title mb-1">
                             @sub.TierName
-                            <span class="badge @Model.StatusBadgeClass ms-2">@sub.Status</span>
+                            <span class="badge @Model.StatusBadgeClass ms-2">@Model.StatusLabel</span>
                         </h5>
                         @if (!string.IsNullOrEmpty(sub.TierDescription))
                         {
                             <p class="text-muted mb-0 small">@sub.TierDescription</p>
                         }
                     </div>
+                    @* IsActive covers Active/Trialing/PastDue — the statuses a subscription can
+                       still be cancelled from. Pending* changes are cancelled via the Plans tab. *@
                     @if (Model.IsAdmin && sub.IsActive)
                     {
                         <button type="button" class="btn btn-outline-danger btn-sm ww-cancel-sub-btn"
@@ -75,6 +77,15 @@
                         {
                             <span> on @sub.PendingChangeDate.Value.ToString("MMM d, yyyy")</span>
                         }
+                    </div>
+                }
+
+                @* Scheduled cancellation notice *@
+                @if (Model.IsPendingCancellation)
+                {
+                    <div class="alert alert-warning mt-3 mb-0 small">
+                        <i class="bi bi-clock me-1"></i>
+                        Your plan is cancelled@(Model.CancellationAccessEndDate.HasValue ? $" and access continues until {Model.CancellationAccessEndDate.Value:MMM d, yyyy}" : ""). Choose a plan from the Plans tab to stay subscribed.
                     </div>
                 }
             </div>

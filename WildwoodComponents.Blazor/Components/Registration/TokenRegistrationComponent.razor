@@ -108,7 +108,7 @@
             }
             
             <!-- Optional Token Field - Show when both modes are allowed and no token validated yet -->
-            @if (_tokenIsOptional && !_useToken)
+            @if (_tokenIsOptional && ShowOptionalTokenEntry && !_useToken)
             {
                 <div class="card mb-3 border-info">
                     <div class="card-body">
@@ -567,6 +567,12 @@
     /// This is now computed from AllowTokenRegistration and AllowOpenRegistration.
     /// </summary>
     [Parameter] public bool RequireToken { get; set; } = true;
+
+    /// <summary>
+    /// Show the optional "Have a Registration Token?" card when tokens are optional.
+    /// Default is true. Set false to hide it for public signups.
+    /// </summary>
+    [Parameter] public bool ShowOptionalTokenEntry { get; set; } = true;
     
     /// <summary>
     /// Default pricing model ID for open registration (when no token is used).

@@ -45,10 +45,39 @@ public class SubscriptionStatusPanelViewModel
                 "pastdue" => "bg-warning",
                 "cancelled" => "bg-danger",
                 "expired" => "bg-secondary",
+                "pendingupgrade" => "bg-info",
+                "pendingdowngrade" => "bg-info",
+                "pendingcancellation" => "bg-warning",
                 _ => "bg-secondary"
             };
         }
     }
+
+    /// <summary>Friendly display label for raw subscription statuses.</summary>
+    public string StatusLabel
+    {
+        get
+        {
+            if (Subscription == null) return string.Empty;
+            return Subscription.Status?.ToLower() switch
+            {
+                "pastdue" => "Past Due",
+                "pendingupgrade" => "Upgrade Scheduled",
+                "pendingdowngrade" => "Downgrade Scheduled",
+                "pendingcancellation" => "Cancellation Scheduled",
+                _ => Subscription.Status ?? string.Empty
+            };
+        }
+    }
+
+    public bool IsPendingCancellation =>
+        string.Equals(Subscription?.Status, "PendingCancellation", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// End of access for a scheduled cancellation: the pending change date when the server
+    /// set one, otherwise the subscription's end date.
+    /// </summary>
+    public DateTime? CancellationAccessEndDate => Subscription?.PendingChangeDate ?? Subscription?.EndDate;
 }
 
 /// <summary>

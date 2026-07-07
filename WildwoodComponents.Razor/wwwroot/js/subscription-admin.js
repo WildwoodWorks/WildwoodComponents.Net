@@ -39,6 +39,25 @@
             setTimeout(function () { if (messageEl) messageEl.style.display = 'none'; }, 5000);
         }
 
+        // Like showMessage, but supports a trailing link and does not auto-hide — used for
+        // store-billing follow-up instructions the user must be able to read and click.
+        function showPersistentMessage(text, type, linkUrl, linkText) {
+            if (!messageEl) return;
+            messageEl.textContent = text;
+            if (linkUrl) {
+                var link = document.createElement('a');
+                link.href = linkUrl;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.className = 'alert-link ms-1';
+                link.textContent = linkText || linkUrl;
+                messageEl.appendChild(document.createTextNode(' '));
+                messageEl.appendChild(link);
+            }
+            messageEl.className = 'ww-sub-admin-message alert alert-' + type;
+            messageEl.style.display = '';
+        }
+
         function setLoading(loading, msg) {
             if (loadingEl) loadingEl.style.display = loading ? '' : 'none';
             if (loadingMsg && msg) loadingMsg.textContent = msg;
@@ -148,10 +167,35 @@
             }
 
             apiPost(path)
-                .then(function () {
-                    showMessage('Subscription cancelled successfully.', 'success');
+                .then(function (result) {
+                    // The cancel endpoints report failures via success/errorMessage on a 2xx
+                    // body too — surface them instead of celebrating a failed cancel.
+                    if (result && result.success === false) {
+                        showMessage('Failed to cancel: ' + (result.errorMessage || 'Unknown error'), 'danger');
+                        return;
+                    }
+
+                    var scheduled = result && result.isScheduled;
+                    var message = scheduled
+                        ? (result.effectiveDate
+                            ? 'Your cancellation is scheduled — access continues until ' + new Date(result.effectiveDate).toLocaleDateString() + '.'
+                            : 'Your cancellation is scheduled for the end of the current billing period.')
+                        : 'Your subscription has been cancelled.';
+
                     dispatchChanged('cancelled');
-                    setTimeout(function () { window.location.reload(); }, 1500);
+
+                    if (result && result.requiresUserAction) {
+                        // Store-billed subscription (App Store / Google Play): the platform
+                        // cannot stop the store's billing, so keep the instructions on screen
+                        // and give the user time to follow them before the page reloads.
+                        showPersistentMessage(
+                            message + ' ' + (result.userActionInstructions || 'Also cancel the subscription in your store settings.'),
+                            'warning', result.userActionUrl, 'Manage your store subscription');
+                        setTimeout(function () { window.location.reload(); }, 10000);
+                    } else {
+                        showMessage(message, 'success');
+                        setTimeout(function () { window.location.reload(); }, 1500);
+                    }
                 })
                 .catch(function (err) {
                     showMessage('Failed to cancel: ' + err.message, 'danger');

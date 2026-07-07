@@ -29,6 +29,7 @@ public class TokenRegistrationViewComponent : ViewComponent
     /// <param name="token">Pre-supplied registration token (auto-validated on load)</param>
     /// <param name="allowTokenRegistration">Whether token-based registration is allowed (default true)</param>
     /// <param name="allowOpenRegistration">Whether open registration without token is allowed (default false)</param>
+    /// <param name="showOptionalTokenEntry">Whether to show the optional "Have a Registration Token?" card when tokens are optional (default true)</param>
     /// <param name="defaultPricingModelId">Default pricing model ID for open registration (null = free)</param>
     /// <param name="autoLogin">Whether to auto-login after successful registration (default true)</param>
     /// <param name="redirectUrl">URL to redirect to after successful auto-login</param>
@@ -39,6 +40,7 @@ public class TokenRegistrationViewComponent : ViewComponent
         string? token = null,
         bool allowTokenRegistration = true,
         bool allowOpenRegistration = false,
+        bool showOptionalTokenEntry = true,
         string? defaultPricingModelId = null,
         bool autoLogin = true,
         string? redirectUrl = null,
@@ -51,6 +53,7 @@ public class TokenRegistrationViewComponent : ViewComponent
             Token = token,
             AllowTokenRegistration = allowTokenRegistration,
             AllowOpenRegistration = allowOpenRegistration,
+            ShowOptionalTokenEntry = showOptionalTokenEntry,
             DefaultPricingModelId = defaultPricingModelId,
             AutoLogin = autoLogin,
             RedirectUrl = redirectUrl,

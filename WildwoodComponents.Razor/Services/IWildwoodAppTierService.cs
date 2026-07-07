@@ -14,6 +14,13 @@ public interface IWildwoodAppTierService
     Task<List<AppTierAddOnModel>> GetAvailableAddOnsAsync(string appId);
 
     // User subscription
+
+    /// <summary>
+    /// The user's active subscription, or null when none exists (204/no-content). THROWS on
+    /// transport/HTTP failure so callers can distinguish "no subscription" from a failed
+    /// lookup — swallowing both as null made subscribed users look unsubscribed during
+    /// transient errors.
+    /// </summary>
     Task<UserTierSubscriptionModel?> GetMySubscriptionAsync(string appId);
     Task<List<UserAddOnSubscriptionModel>> GetMyAddOnsAsync(string appId);
 
@@ -21,7 +28,13 @@ public interface IWildwoodAppTierService
     Task<AppTierChangeResultModel> SubscribeToTierAsync(string appId, string tierId, string? pricingId, string? paymentTransactionId);
     Task<AppTierChangeResultModel> ChangeTierAsync(string appId, string newTierId, string? newPricingId, bool immediate, string? paymentTransactionId = null);
     Task<TierChangePreviewModel?> PreviewTierChangeAsync(string appId, string newTierId, string? newPricingId);
-    Task<bool> CancelSubscriptionAsync(string appId);
+
+    /// <summary>
+    /// Self-service cancellation. Returns whether the cancellation is scheduled for the end
+    /// of the billing period (IsScheduled + EffectiveDate) or took effect immediately.
+    /// Failures are reported via Success/ErrorMessage instead of being silently swallowed.
+    /// </summary>
+    Task<AppTierCancelResultModel> CancelSubscriptionAsync(string appId);
 
     // Add-on subscription actions
     Task<bool> SubscribeToAddOnAsync(string appId, string addOnId, string? pricingId, string? paymentTransactionId);
@@ -31,7 +44,23 @@ public interface IWildwoodAppTierService
     Task<List<AppTierLimitStatusModel>> GetAllLimitStatusesAsync(string appId);
 
     // Feature gating
+
+    /// <summary>
+    /// The user's feature entitlement map. THROWS on transport/HTTP failure: an empty map is
+    /// a real "no access" answer, so failures must stay distinguishable from it — swallowing
+    /// them would make feature gates lock entitled users out during transient errors.
+    /// </summary>
     Task<Dictionary<string, bool>> GetUserFeaturesAsync(string appId);
+
+    /// <summary>
+    /// Feature-gating check for server-rendered views (use in @if blocks). Fetches the user's
+    /// entitlement map ONCE per request (the service is scoped, so the map is cached on the
+    /// instance) and looks up the code case-insensitively. FAILS OPEN when entitlements can't
+    /// be loaded: gating markup is UX only — the WildwoodAPI enforces the real entitlement —
+    /// and wrongly hiding paid features is worse than briefly showing them.
+    /// </summary>
+    Task<bool> HasFeatureAsync(string appId, string featureCode);
+
     Task<AppFeatureCheckResultModel?> CheckFeatureAsync(string appId, string featureCode);
     Task<AppTierLimitStatusModel?> CheckLimitAsync(string appId, string limitCode);
     Task<AppTierLimitStatusModel?> IncrementUsageAsync(string appId, string limitCode);
@@ -51,7 +80,7 @@ public interface IWildwoodAppTierService
     // Company-scoped admin actions
     Task<AppTierChangeResultModel> SubscribeCompanyToTierAsync(string appId, string companyId, string tierId, string? pricingId);
     Task<AppTierChangeResultModel> ChangeCompanyTierAsync(string appId, string companyId, string newTierId, string? pricingId, bool immediate);
-    Task<bool> CancelCompanySubscriptionAsync(string appId, string companyId);
+    Task<AppTierCancelResultModel> CancelCompanySubscriptionAsync(string appId, string companyId);
     Task<bool> SubscribeCompanyToAddOnAsync(string appId, string companyId, string addOnId);
     Task<bool> CancelCompanyAddOnAsync(string subscriptionId, bool immediate);
 
@@ -63,7 +92,7 @@ public interface IWildwoodAppTierService
     Task<Dictionary<string, bool>> GetUserFeaturesAdminAsync(string appId, string userId);
     Task<List<AppTierLimitStatusModel>> GetUserLimitStatusesAsync(string appId, string userId);
     Task<List<UserAddOnSubscriptionModel>> GetUserAddOnsAsync(string appId, string userId);
-    Task<bool> CancelUserSubscriptionAsync(string appId, string userId);
+    Task<AppTierCancelResultModel> CancelUserSubscriptionAsync(string appId, string userId);
 
     // Admin user-scoped write actions
     Task<AppTierChangeResultModel> SubscribeUserToTierAsync(string appId, string userId, string tierId, string? pricingId);
