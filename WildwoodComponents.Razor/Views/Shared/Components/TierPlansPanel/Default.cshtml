@@ -43,6 +43,12 @@
                                 <i class="bi bi-check-circle me-1"></i> Current Plan
                             </div>
                         }
+                        else if (!string.IsNullOrEmpty(tier.CustomBadgeText))
+                        {
+                            @* Custom marketing badge banner (mirrors the Blazor ww-tier-default-badge).
+                               The tier's BadgeColor belongs to the lifecycle status badge below. *@
+                            <div class="card-header bg-primary text-white text-center py-1 small">@tier.CustomBadgeText</div>
+                        }
                         <div class="card-body d-flex flex-column">
                             <h6 class="card-title text-center">
                                 @if (!string.IsNullOrEmpty(tier.IconClass))
@@ -50,18 +56,7 @@
                                     <i class="@tier.IconClass me-1"></i>
                                 }
                                 @tier.Name
-                                @if (!string.IsNullOrEmpty(tier.CustomBadgeText))
-                                {
-                                    @* Raw CSS badge colors ("#c9a227") can't be class names — inline style. *@
-                                    @if (ViewHelpers.IsRawCssColor(tier.BadgeColor))
-                                    {
-                                        <span class="badge text-white ms-1" style="background-color: @tier.BadgeColor;">@tier.CustomBadgeText</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge @ViewHelpers.GetBadgeColorClass(tier.BadgeColor) ms-1">@tier.CustomBadgeText</span>
-                                    }
-                                }
+                                @await Html.PartialAsync("_TierStatusBadge", tier)
                             </h6>
 
                             @if (!string.IsNullOrEmpty(tier.Description))

@@ -39,6 +39,27 @@
         setTimeout(function () { msg.style.display = 'none'; }, 5000);
     }
 
+    // Like showMessage, but supports a trailing link and does not auto-hide — used for
+    // store-billing follow-up instructions the user must be able to read and click.
+    // Mirrors showPersistentMessage in subscription-admin.js — keep the two in sync.
+    function showPersistentMessage(text, type, linkUrl, linkText) {
+        const msg = document.getElementById('ww-tier-message');
+        if (!msg) return;
+        msg.textContent = text;
+        if (linkUrl) {
+            const link = document.createElement('a');
+            link.href = linkUrl;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.className = 'alert-link ms-1';
+            link.textContent = linkText || linkUrl;
+            msg.appendChild(document.createTextNode(' '));
+            msg.appendChild(link);
+        }
+        msg.className = 'ww-alert ww-alert-' + type;
+        msg.style.display = '';
+    }
+
     function clearMessage() {
         const msg = document.getElementById('ww-tier-message');
         if (msg) msg.style.display = 'none';
@@ -193,17 +214,22 @@
                 var result = r.result;
                 // The cancel endpoint also reports failures via success/errorMessage.
                 if (r.ok && (!result || result.success !== false)) {
+                    // Cancel-result wording is mirrored in subscription-admin.js
+                    // (confirm-cancel handler) — keep the two in sync.
                     var message = result && result.isScheduled
                         ? (result.effectiveDate
                             ? 'Your cancellation is scheduled — access continues until ' + new Date(result.effectiveDate).toLocaleDateString() + '.'
                             : 'Your cancellation is scheduled for the end of the current billing period.')
-                        : 'Subscription cancelled successfully.';
-                    // Store-billed subscriptions need a follow-up in the store's settings —
-                    // the platform cannot stop the store's billing itself.
-                    if (result && result.requiresUserAction && result.userActionInstructions) {
-                        message += ' ' + result.userActionInstructions;
+                        : 'Your subscription has been cancelled.';
+                    if (result && result.requiresUserAction) {
+                        // Store-billed subscription (App Store / Google Play): the platform
+                        // cannot stop the store's billing, so keep the instructions on screen.
+                        showPersistentMessage(
+                            message + ' ' + (result.userActionInstructions || 'Also cancel the subscription in your store settings.'),
+                            'warning', result.userActionUrl, 'Manage your store subscription');
+                    } else {
+                        showMessage(message, 'success');
                     }
-                    showMessage(message, 'success');
                     showView('ww-tier-selection-view');
 
                     // Hide current subscription section

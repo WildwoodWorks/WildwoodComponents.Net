@@ -1,6 +1,7 @@
 @using WildwoodComponents.Blazor.Components.Base
 @using WildwoodComponents.Blazor.Components.Authentication
 @using WildwoodComponents.Blazor.Components.Payment
+@using WildwoodComponents.Blazor.Components.Shared
 @using WildwoodComponents.Blazor.Models
 @using WildwoodComponents.Blazor.Services
 @inherits BaseWildwoodComponent
@@ -76,20 +77,7 @@
                                 <span class="ww-tier-icon @tier.IconClass"></span>
                             }
                             <h3>@tier.Name</h3>
-                            @* "Active" is every listed tier's lifecycle status — only non-default
-                               statuses (Beta, Deprecated, ...) are informative. Raw CSS badge
-                               colors can't be class names, so they render as an inline style. *@
-                            @if (FormatHelpers.ShouldShowTierStatusBadge(tier.BadgeColor, tier.Status))
-                            {
-                                @if (FormatHelpers.IsRawCssColor(tier.BadgeColor))
-                                {
-                                    <span class="ww-badge" style="background-color: @tier.BadgeColor; color: #fff;">@tier.Status</span>
-                                }
-                                else
-                                {
-                                    <span class="ww-badge ww-badge-@tier.BadgeColor">@tier.Status</span>
-                                }
-                            }
+                            <TierStatusBadge Status="@tier.Status" BadgeColor="@tier.BadgeColor" />
                             @if (tier.ShowPrice)
                             {
                                 <div class="ww-tier-price">

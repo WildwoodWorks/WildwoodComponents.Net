@@ -49,8 +49,22 @@ public class UsageDashboardViewComponent : ViewComponent
         UserTierSubscriptionModel? subscription = null;
         try
         {
-            var raw = await _appTierService.GetAllLimitStatusesAsync(appId);
-            subscription = await _appTierService.GetMySubscriptionAsync(appId);
+            var raw = await _appTierService.GetAllLimitStatusesAsync(appId) ?? new();
+            // Commit the fetched usage data before the subscription lookup so a
+            // failed lookup can't discard it.
+            limitStatuses = limitStatusesOverride ?? raw;
+
+            // The subscription is an enrichment — degrade to "no plan shown"
+            // instead of discarding the usage data already fetched.
+            try
+            {
+                subscription = await _appTierService.GetMySubscriptionAsync(appId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load subscription for app {AppId}; rendering usage without it", appId);
+            }
+
             var merged = (onMergeUsage != null ? await onMergeUsage(raw, subscription) : raw) ?? new();
             limitStatuses = limitStatusesOverride ?? merged;
         }

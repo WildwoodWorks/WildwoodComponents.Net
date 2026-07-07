@@ -4,6 +4,12 @@
  * SSE run streaming with live progress, human-in-the-loop approve/edit/reject,
  * thread run history, and cancellation.
  * Razor Pages equivalent of the Blazor AIFlowComponent interactivity.
+ *
+ * Every API path is relative to data-proxy-url and starts with '/flows'
+ * ('/flows', '/flows/{id}/runs/stream', '/flows/runs/{id}/resume',
+ * '/flows/threads/{id}/runs'), so a host proxy can forward
+ * '{proxyBaseUrl}/flows/*' to WildwoodAPI 'api/ai/flows/*' with a single
+ * prefix rewrite.
  */
 (function () {
     'use strict';
@@ -69,8 +75,8 @@
         var abortController = null;
         var streamBuffer = '';    // token accumulator; flushed to the DOM throttled
         var lastRenderTime = 0;
-        var totalTokens = 0;
-        var eventCount = 0;
+        var totalTokens = 0;      // single source for the token total (display + completed event)
+        var lastInterruptPayload = null; // kept so a failed resume can restore the review panel
 
         // ===== HELPERS =====
 
@@ -274,7 +280,7 @@
         function resetRunState() {
             streamBuffer = '';
             totalTokens = 0;
-            eventCount = 0;
+            lastInterruptPayload = null;
             if (els.streamText) els.streamText.textContent = '';
             show(els.stream, false);
             show(els.progress, false);
@@ -318,7 +324,6 @@
 
         function logDebugEvent(eventName, dataText) {
             if (!showDebug || !els.events) return;
-            eventCount++;
             var line = document.createElement('div');
             line.className = 'ww-flow-event';
             var shortData = (dataText || '').length > 120 ? dataText.substring(0, 120) + '…' : (dataText || '');
@@ -336,7 +341,7 @@
         // reader (EventSource can't POST). Resolves with the terminal result object.
         function streamRun(path, body) {
             abortController = new AbortController();
-            var result = { status: 'unknown', totalTokens: 0, errorMessage: null, outputJson: null, interruptPayload: null };
+            var result = { status: 'unknown', errorMessage: null, outputJson: null, interruptPayload: null };
             var terminal = false;
 
             return fetch(proxyUrl + path, {
@@ -402,7 +407,6 @@
                         case 'usage':
                             if (data && typeof data.totalTokens === 'number') {
                                 totalTokens += data.totalTokens;
-                                result.totalTokens = totalTokens;
                             }
                             break;
                         case 'interrupt':
@@ -425,41 +429,49 @@
                     }
                 }
 
+                function handleLine(line) {
+                    if (line.indexOf('event: ') === 0) {
+                        eventName = line.substring('event: '.length);
+                    } else if (line.indexOf('data: ') === 0) {
+                        dataText += line.substring('data: '.length);
+                    } else if (line.length === 0 && eventName) {
+                        dispatch(eventName, dataText);
+                        eventName = null;
+                        dataText = '';
+                    }
+                }
+
                 function pump() {
                     return reader.read().then(function (chunk) {
-                        if (chunk.done) return result;
+                        if (chunk.done) {
+                            // Mirror @wildwood/core's end-of-stream ordering: flush the
+                            // decoder, run any residual partial line through the same line
+                            // handler, then dispatch a final buffered event that lacked its
+                            // trailing blank line — with its accumulated data.
+                            pending += decoder.decode();
+                            if (pending) handleLine(pending);
+                            if (!terminal && eventName) dispatch(eventName, dataText);
+                            return result;
+                        }
 
                         pending += decoder.decode(chunk.value, { stream: true });
                         var lines = pending.split(/\r?\n/);
                         pending = lines.pop(); // last element may be a partial line
 
                         for (var i = 0; i < lines.length; i++) {
-                            var line = lines[i];
-                            if (line.indexOf('event: ') === 0) {
-                                eventName = line.substring('event: '.length);
-                            } else if (line.indexOf('data: ') === 0) {
-                                dataText += line.substring('data: '.length);
-                            } else if (line.length === 0 && eventName) {
-                                dispatch(eventName, dataText);
-                                eventName = null;
-                                dataText = '';
-                                if (terminal) {
-                                    // Stop at the first terminal event — nothing meaningful
-                                    // follows and cancelling frees the connection.
-                                    reader.cancel().catch(function () { /* already closed */ });
-                                    return result;
-                                }
+                            handleLine(lines[i]);
+                            if (terminal) {
+                                // Stop at the first terminal event — nothing meaningful
+                                // follows and cancelling frees the connection.
+                                reader.cancel().catch(function () { /* already closed */ });
+                                return result;
                             }
                         }
                         return pump();
                     });
                 }
 
-                return pump().then(function () {
-                    // Dispatch a final event that arrived without a trailing blank line.
-                    if (!terminal && eventName) dispatch(eventName, dataText);
-                    return result;
-                });
+                return pump();
             }).catch(function (err) {
                 if (err && err.name === 'AbortError') {
                     if (result.status === 'unknown') result.status = 'cancelled';
@@ -538,6 +550,7 @@
 
         function showReview(payload) {
             if (!els.review) return;
+            lastInterruptPayload = payload;
             if (els.reviewPayload) {
                 els.reviewPayload.textContent = payload === null || payload === undefined
                     ? ''
@@ -550,12 +563,18 @@
 
         function resolveInterrupt(approve, valueJson) {
             if (!activeRunId || running) return;
+            var interruptPayload = lastInterruptPayload;
             show(els.review, false);
             showError(null);
             setRunning(true);
-            streamRun('/runs/' + encodeURIComponent(activeRunId) + '/resume' + appQuery(),
+            streamRun('/flows/runs/' + encodeURIComponent(activeRunId) + '/resume' + appQuery(),
                 { action: approve ? 'approve' : 'reject', valueJson: valueJson || null })
-                .then(finishRun);
+                .then(function (result) {
+                    finishRun(result);
+                    // A failed resume leaves the interrupt unresolved server-side —
+                    // restore the review panel so Approve/Reject can be retried.
+                    if (result.status === 'failed') showReview(interruptPayload);
+                });
         }
 
         if (els.approveBtn) {

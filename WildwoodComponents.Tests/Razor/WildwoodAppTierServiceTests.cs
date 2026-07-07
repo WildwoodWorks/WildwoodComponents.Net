@@ -95,6 +95,11 @@ public class WildwoodAppTierServiceTests
         handler.When("my-subscription", System.Net.HttpStatusCode.NoContent, "");
         Assert.Null(await service.GetMySubscriptionAsync("app-1"));
 
+        // 404 = no subscription (pre-July-2026 backend behavior) — NOT an error.
+        var (notFoundService, notFoundHandler, _) = CreateService();
+        notFoundHandler.When("my-subscription", System.Net.HttpStatusCode.NotFound, """{"error":"not found"}""");
+        Assert.Null(await notFoundService.GetMySubscriptionAsync("app-1"));
+
         var (failingService, failingHandler, _) = CreateService();
         failingHandler.When("my-subscription", System.Net.HttpStatusCode.InternalServerError, """{"error":"boom"}""");
         await Assert.ThrowsAsync<HttpRequestException>(() => failingService.GetMySubscriptionAsync("app-1"));

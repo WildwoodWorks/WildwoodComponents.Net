@@ -109,9 +109,13 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         _sessionManager.ApplyAuthorizationHeader(_httpClient);
         using var response = await _httpClient.GetAsync($"app-tiers/{appId}/my-subscription");
 
-        // 204/no-content is the API's "no subscription" answer. Any other failure THROWS
-        // so a transient error can't masquerade as "no plan".
+        // 204/no-content is the API's "no subscription" answer; 404 = no subscription
+        // (pre-July-2026 backend behavior); other failures throw so transient errors
+        // don't render as "no plan".
         if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+            return null;
+
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             return null;
 
         if (!response.IsSuccessStatusCode)

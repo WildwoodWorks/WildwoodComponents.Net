@@ -128,6 +128,18 @@ public class AppTierComponentServiceTests
     }
 
     [Fact]
+    public async Task GetMySubscriptionAsync_ReturnsNull_OnNotFound()
+    {
+        // 404 = no subscription (pre-July-2026 backend behavior) — NOT an error.
+        var (service, handler) = CreateService();
+        handler.When("my-subscription", System.Net.HttpStatusCode.NotFound, """{"error":"not found"}""");
+
+        var subscription = await service.GetMySubscriptionAsync("app-1");
+
+        Assert.Null(subscription);
+    }
+
+    [Fact]
     public async Task GetMySubscriptionAsync_Throws_OnLookupFailure()
     {
         // A failed lookup must be distinguishable from "no subscription" — subscribed users

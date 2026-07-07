@@ -69,19 +69,11 @@
 
                     @if (!string.IsNullOrEmpty(tier.CustomBadgeText))
                     {
-                        @* Raw CSS badge colors ("#c9a227") can't be class names — inline style. *@
-                        @if (ViewHelpers.IsRawCssColor(tier.BadgeColor))
-                        {
-                            <div class="ww-pricing-badge text-white text-center py-1" style="background-color: @tier.BadgeColor;">
-                                <small>@tier.CustomBadgeText</small>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="ww-pricing-badge @ViewHelpers.GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
-                                <small>@tier.CustomBadgeText</small>
-                            </div>
-                        }
+                        @* Custom marketing badge banner (mirrors the Blazor ww-tier-default-badge).
+                           The tier's BadgeColor belongs to the lifecycle status badge by the name. *@
+                        <div class="ww-pricing-badge bg-primary text-white text-center py-1">
+                            <small>@tier.CustomBadgeText</small>
+                        </div>
                     }
                     else if (tier.IsDefault)
                     {
@@ -97,7 +89,7 @@
                                 <i class="@tier.IconClass" style="font-size: 2rem;"></i>
                             </div>
                         }
-                        <h5 class="ww-pricing-tier-name">@tier.Name</h5>
+                        <h5 class="ww-pricing-tier-name">@tier.Name @await Html.PartialAsync("_TierStatusBadge", tier)</h5>
 
                         @if (tier.ShowPrice)
                         {

@@ -18,7 +18,11 @@ public class AIFlowViewModel
     /// <summary>Fixed flow to run; when null the component shows a flow picker.</summary>
     public string? FlowId { get; set; }
 
-    /// <summary>Base URL for the host app's AI flow proxy endpoints.</summary>
+    /// <summary>
+    /// Base URL for the host app's AI flow proxy endpoints. Every route ai-flow.js calls
+    /// starts with /flows, so the host proxy forwards {ProxyBaseUrl}/flows/* to
+    /// WildwoodAPI api/ai/flows/* with a single prefix rewrite.
+    /// </summary>
     public string ProxyBaseUrl { get; set; } = "/api/wildwood-ai-flows";
 
     public string Title { get; set; } = "AI Flows";

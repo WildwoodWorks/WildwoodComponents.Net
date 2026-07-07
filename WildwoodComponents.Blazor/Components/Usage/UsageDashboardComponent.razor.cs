@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Logging;
 using WildwoodComponents.Blazor.Components.Base;
 using WildwoodComponents.Blazor.Models;
 using WildwoodComponents.Blazor.Services;
@@ -86,12 +87,29 @@ namespace WildwoodComponents.Blazor.Components.Usage
             await SetLoadingAsync(true);
             try
             {
-                var raw = await AppTierService.GetAllLimitStatusesAsync(AppId);
-                _subscription = await AppTierService.GetMySubscriptionAsync(AppId);
-                _fetchedLimitStatuses = (OnMergeUsage != null
-                    ? await OnMergeUsage(raw, _subscription)
-                    : raw) ?? new();
+                var raw = await AppTierService.GetAllLimitStatusesAsync(AppId) ?? new();
+                // Commit the fetched usage data before the subscription lookup so a
+                // failed lookup can't discard it.
+                _fetchedLimitStatuses = raw;
                 ApplyEffectiveStatuses();
+
+                // The subscription is an enrichment — degrade to "no plan shown"
+                // instead of discarding the usage data already fetched.
+                try
+                {
+                    _subscription = await AppTierService.GetMySubscriptionAsync(AppId);
+                }
+                catch (Exception ex)
+                {
+                    Logger?.LogWarning(ex, "Failed to load subscription for usage dashboard; rendering usage without it");
+                    _subscription = null;
+                }
+
+                if (OnMergeUsage != null)
+                {
+                    _fetchedLimitStatuses = (await OnMergeUsage(raw, _subscription)) ?? new();
+                    ApplyEffectiveStatuses();
+                }
             }
             catch (Exception ex)
             {

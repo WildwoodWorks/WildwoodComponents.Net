@@ -1,0 +1,24 @@
+@* Lifecycle status badge for a tier card. "Active" is every listed tier's lifecycle
+   status — only non-default statuses (Beta, Deprecated, ...) are informative, so
+   FormatHelpers.ShouldShowTierStatusBadge (the single predicate source, shared with
+   the Razor _TierStatusBadge partial) hides the Active badge. Raw CSS badge colors
+   ("#c9a227") can't be class names, so they render as an inline style. *@
+@if (FormatHelpers.ShouldShowTierStatusBadge(BadgeColor, Status))
+{
+    @if (FormatHelpers.IsRawCssColor(BadgeColor))
+    {
+        <span class="ww-badge" style="background-color: @BadgeColor; color: var(--ww-btn-primary-text, #fff);">@Status</span>
+    }
+    else
+    {
+        <span class="ww-badge ww-badge-@BadgeColor">@Status</span>
+    }
+}
+
+@code {
+    /// <summary>Tier lifecycle status (Active, Beta, Deprecated, ...).</summary>
+    [Parameter] public string? Status { get; set; }
+
+    /// <summary>Semantic token ("success") or raw CSS color ("#c9a227").</summary>
+    [Parameter] public string? BadgeColor { get; set; }
+}

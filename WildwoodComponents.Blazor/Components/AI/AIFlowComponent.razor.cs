@@ -168,6 +168,8 @@ namespace WildwoodComponents.Blazor.Components.AI
         private async Task ResolveAsync(bool approve, string? valueJson)
         {
             if (string.IsNullOrEmpty(_activeRunId)) return;
+            // Keep the payload so a failed resume can restore the review panel.
+            var interruptPayload = _pendingInterrupt;
             _pendingInterrupt = null;
             _editingResume = false;
             _running = true;
@@ -176,6 +178,10 @@ namespace WildwoodComponents.Blazor.Components.AI
             {
                 _result = await FlowService.ResolveInterruptAsync(_activeRunId, approve, valueJson, HandleEventAsync, _cts!.Token);
                 await FinishRunAsync();
+                // A failed resume leaves the interrupt unresolved server-side — restore
+                // the review panel so Approve/Reject can be retried.
+                if (_result?.Status == "failed")
+                    _pendingInterrupt = interruptPayload;
             }
             finally
             {

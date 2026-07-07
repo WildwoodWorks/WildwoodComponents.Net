@@ -30,7 +30,10 @@ public class AIFlowViewComponent : ViewComponent
     /// </summary>
     /// <param name="appId">Optional app scope forwarded to the API as ?requestedAppId=</param>
     /// <param name="flowId">Fixed flow to run; when null the component shows a flow picker</param>
-    /// <param name="proxyBaseUrl">Base URL for AI flow proxy endpoints (default: /api/wildwood-ai-flows)</param>
+    /// <param name="proxyBaseUrl">Base URL for AI flow proxy endpoints (default: /api/wildwood-ai-flows).
+    /// Every route the component calls starts with /flows (/flows, /flows/{id}/runs/stream,
+    /// /flows/runs/{id}/resume, /flows/threads/{id}/runs), so the host proxy forwards
+    /// {proxyBaseUrl}/flows/* to WildwoodAPI api/ai/flows/* with a single prefix rewrite.</param>
     /// <param name="title">Header title (default: "AI Flows")</param>
     /// <param name="runLabel">Run button label (default: "Run")</param>
     /// <param name="showFlowPicker">Whether to show the flow picker (default true)</param>
