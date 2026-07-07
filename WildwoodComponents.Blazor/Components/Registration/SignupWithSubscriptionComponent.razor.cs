@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -131,18 +130,49 @@ namespace WildwoodComponents.Blazor.Components.Registration
                 try
                 {
                     var tiers = await AppTierService.GetPublicTiersAsync(AppId);
-                    var tier = tiers?.FirstOrDefault(t => string.Equals(t.Id, PreSelectedTierId, StringComparison.OrdinalIgnoreCase));
+                    AppTierModel? tier = null;
+                    if (tiers != null)
+                    {
+                        foreach (var candidate in tiers)
+                        {
+                            if (string.Equals(candidate.Id, PreSelectedTierId, StringComparison.OrdinalIgnoreCase))
+                            {
+                                tier = candidate;
+                                break;
+                            }
+                        }
+                    }
                     if (tier != null)
                     {
                         _preSelectedTier = tier;
                         // Honor the pricing choice carried from the pricing page (e.g. annual),
                         // falling back to the tier's default and then its first option.
-                        _preSelectedTierPricing =
-                            (!string.IsNullOrEmpty(PreSelectedPricingId)
-                                ? tier.PricingOptions?.FirstOrDefault(p => string.Equals(p.Id, PreSelectedPricingId, StringComparison.OrdinalIgnoreCase))
-                                : null)
-                            ?? tier.PricingOptions?.FirstOrDefault(p => p.IsDefault)
-                            ?? tier.PricingOptions?.FirstOrDefault();
+                        AppTierPricingModel? pricing = null;
+                        if (!string.IsNullOrEmpty(PreSelectedPricingId))
+                        {
+                            foreach (var option in tier.PricingOptions)
+                            {
+                                if (string.Equals(option.Id, PreSelectedPricingId, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    pricing = option;
+                                    break;
+                                }
+                            }
+                        }
+                        if (pricing == null)
+                        {
+                            foreach (var option in tier.PricingOptions)
+                            {
+                                if (option.IsDefault)
+                                {
+                                    pricing = option;
+                                    break;
+                                }
+                            }
+                        }
+                        if (pricing == null && tier.PricingOptions.Count > 0)
+                            pricing = tier.PricingOptions[0];
+                        _preSelectedTierPricing = pricing;
                         _selectedTier = tier;
                         _selectedPricing = _preSelectedTierPricing;
                         // Without this the pre-selected flow subscribes with a null pricing id

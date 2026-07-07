@@ -26,8 +26,8 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 | Authentication | AuthenticationComponent | AuthenticationViewComponent | authService | AuthenticationComponent | AuthenticationComponent | authMiddleware |
 | AI Chat | AIChatComponent | -- | aiService | AIChatComponent | -- | -- |
 | AI Proxy | AIProxyComponent | AIProxyViewComponent | (via aiService) | AIProxyComponent | -- | -- |
-| AI Flow | AIFlowComponent | AIFlowViewComponent | -- | -- | -- | -- |
-| Feature Gate | FeatureGateComponent | (IWildwoodAppTierService.HasFeatureAsync) | (via appTierService) | FeatureGate + useFeatures | useFeatures | -- |
+| AI Flow | AIFlowComponent | AIFlowViewComponent | aiFlowService | AIFlowComponent + useAIFlow | AIFlowComponent + useAIFlow | -- |
+| Feature Gate | FeatureGateComponent | (IWildwoodAppTierService.HasFeatureAsync) | (via appTierService) | FeatureGate + useFeatures | FeatureGate + useFeatures | -- |
 | Messaging | SecureMessagingComponent | -- | messagingService | SecureMessagingComponent | -- | -- |
 | Payment | PaymentComponent | PaymentViewComponent | paymentService | PaymentComponent | -- | -- |
 | Payment Form | PaymentFormComponent | -- | (via paymentService) | PaymentFormComponent | -- | -- |

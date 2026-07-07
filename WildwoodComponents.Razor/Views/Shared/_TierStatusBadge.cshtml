@@ -1,0 +1,20 @@
+@using WildwoodComponents.Shared.Models
+@using WildwoodComponents.Shared.Utilities
+@model AppTierModel
+
+@* Lifecycle status badge for a tier card. "Active" is every listed tier's lifecycle
+   status — only non-default statuses (Beta, Deprecated, ...) are informative, so
+   FormatHelpers.ShouldShowTierStatusBadge (the single predicate source, shared with
+   the Blazor TierStatusBadge component) hides the Active badge. Raw CSS badge colors
+   ("#c9a227") can't be class names, so they render as an inline style. *@
+@if (FormatHelpers.ShouldShowTierStatusBadge(Model.BadgeColor, Model.Status))
+{
+    @if (FormatHelpers.IsRawCssColor(Model.BadgeColor))
+    {
+        <span class="badge ms-1" style="background-color: @Model.BadgeColor; color: var(--ww-btn-primary-text, #fff);">@Model.Status</span>
+    }
+    else
+    {
+        <span class="badge @FormatHelpers.GetBadgeColorClass(Model.BadgeColor) ms-1">@Model.Status</span>
+    }
+}

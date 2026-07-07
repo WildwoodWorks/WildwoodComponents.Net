@@ -146,9 +146,12 @@ namespace WildwoodComponents.Blazor.Services
         {
             var url = BuildUrl($"app-tiers/{appId}/my-subscription");
             var response = await _httpClient.GetAsync(url);
-            // 204/no-content is the API's "no subscription" answer. Any other failure THROWS
-            // (via EnsureSuccessAsync) so a transient error can't masquerade as "no plan".
+            // 204/no-content is the API's "no subscription" answer; 404 = no subscription
+            // (pre-July-2026 backend behavior); other failures throw so transient errors
+            // don't render as "no plan".
             if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+                return null;
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 return null;
             await EnsureSuccessAsync(response, $"GetMySubscription({appId})");
             if (response.Content.Headers.ContentLength == 0)

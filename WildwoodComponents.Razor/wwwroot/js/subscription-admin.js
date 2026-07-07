@@ -175,6 +175,8 @@
                         return;
                     }
 
+                    // Cancel-result wording is mirrored in apptier.js (cancelSubscription) —
+                    // keep the two in sync.
                     var scheduled = result && result.isScheduled;
                     var message = scheduled
                         ? (result.effectiveDate
@@ -186,12 +188,13 @@
 
                     if (result && result.requiresUserAction) {
                         // Store-billed subscription (App Store / Google Play): the platform
-                        // cannot stop the store's billing, so keep the instructions on screen
-                        // and give the user time to follow them before the page reloads.
+                        // cannot stop the store's billing, so keep the instructions on screen.
+                        // No reload — it would wipe this persistent notice before the user can
+                        // read and follow it; hosts listening for ww-subscription-admin-changed
+                        // can refresh their own state.
                         showPersistentMessage(
                             message + ' ' + (result.userActionInstructions || 'Also cancel the subscription in your store settings.'),
                             'warning', result.userActionUrl, 'Manage your store subscription');
-                        setTimeout(function () { window.location.reload(); }, 10000);
                     } else {
                         showMessage(message, 'success');
                         setTimeout(function () { window.location.reload(); }, 1500);
