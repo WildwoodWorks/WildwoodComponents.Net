@@ -106,27 +106,24 @@ public class WildwoodAppTierService : IWildwoodAppTierService
 
     public async Task<UserTierSubscriptionModel?> GetMySubscriptionAsync(string appId)
     {
-        try
+        _sessionManager.ApplyAuthorizationHeader(_httpClient);
+        using var response = await _httpClient.GetAsync($"app-tiers/{appId}/my-subscription");
+
+        // 204/no-content is the API's "no subscription" answer. Any other failure THROWS
+        // so a transient error can't masquerade as "no plan".
+        if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+            return null;
+
+        if (!response.IsSuccessStatusCode)
         {
-            _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/my-subscription");
-
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadFromJsonAsync<UserTierSubscriptionModel>(JsonOptions);
-            }
-
-            if ((int)response.StatusCode == 404)
-                return null;
-
             _logger.LogWarning("Failed to get subscription for app {AppId}: {StatusCode}", appId, response.StatusCode);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting subscription for app {AppId}", appId);
+            throw new HttpRequestException($"GetMySubscription({appId}) failed: HTTP {(int)response.StatusCode} {response.StatusCode}");
         }
 
-        return null;
+        if (response.Content.Headers.ContentLength == 0)
+            return null;
+
+        return await response.Content.ReadFromJsonAsync<UserTierSubscriptionModel>(JsonOptions);
     }
 
     public async Task<List<UserAddOnSubscriptionModel>> GetMyAddOnsAsync(string appId)
@@ -250,18 +247,51 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         }
     }
 
-    public async Task<bool> CancelSubscriptionAsync(string appId)
+    public Task<AppTierCancelResultModel> CancelSubscriptionAsync(string appId)
+    {
+        return PostCancelAsync($"app-tiers/{appId}/my-subscription/cancel", $"CancelSubscription({appId})");
+    }
+
+    /// <summary>
+    /// Shared POST for the three cancel endpoints: on 2xx the cancellation succeeded (the
+    /// server payload carries IsScheduled/EffectiveDate/RequiresUserAction); failures are
+    /// reported via Success/ErrorMessage instead of being silently swallowed. Never throws.
+    /// </summary>
+    private async Task<AppTierCancelResultModel> PostCancelAsync(string url, string operation)
     {
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/my-subscription/cancel", null);
-            return response.IsSuccessStatusCode;
+            using var response = await _httpClient.PostAsync(url, null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                AppTierCancelResultModel? result = null;
+                try
+                {
+                    if (response.Content.Headers.ContentLength != 0)
+                        result = await response.Content.ReadFromJsonAsync<AppTierCancelResultModel>(JsonOptions);
+                }
+                catch (JsonException)
+                {
+                    // Empty/non-JSON 2xx body — the cancellation itself still succeeded.
+                }
+                result ??= new AppTierCancelResultModel();
+                result.Success = true;
+                return result;
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync();
+            var message = string.IsNullOrEmpty(errorBody)
+                ? $"{operation} failed: HTTP {(int)response.StatusCode} {response.StatusCode}"
+                : errorBody;
+            _logger.LogWarning("{Operation} failed: {Message}", operation, message);
+            return new AppTierCancelResultModel { Success = false, ErrorMessage = message };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error cancelling subscription for app {AppId}", appId);
-            return false;
+            _logger.LogError(ex, "Error during {Operation}", operation);
+            return new AppTierCancelResultModel { Success = false, ErrorMessage = ex.Message };
         }
     }
 
@@ -539,19 +569,9 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         }
     }
 
-    public async Task<bool> CancelCompanySubscriptionAsync(string appId, string companyId)
+    public Task<AppTierCancelResultModel> CancelCompanySubscriptionAsync(string appId, string companyId)
     {
-        try
-        {
-            _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/cancel/company/{companyId}", null);
-            return response.IsSuccessStatusCode;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error cancelling company {CompanyId} subscription", companyId);
-            return false;
-        }
+        return PostCancelAsync($"app-tiers/{appId}/cancel/company/{companyId}", $"CancelCompanySubscription({companyId})");
     }
 
     public async Task<bool> SubscribeCompanyToAddOnAsync(string appId, string companyId, string addOnId)
@@ -703,19 +723,9 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         return new List<UserAddOnSubscriptionModel>();
     }
 
-    public async Task<bool> CancelUserSubscriptionAsync(string appId, string userId)
+    public Task<AppTierCancelResultModel> CancelUserSubscriptionAsync(string appId, string userId)
     {
-        try
-        {
-            _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"app-tiers/{appId}/cancel/{userId}", null);
-            return response.IsSuccessStatusCode;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error cancelling subscription for user {UserId} in app {AppId}", userId, appId);
-            return false;
-        }
+        return PostCancelAsync($"app-tiers/{appId}/cancel/{userId}", $"CancelUserSubscription({userId})");
     }
 
     #endregion
@@ -1025,25 +1035,66 @@ public class WildwoodAppTierService : IWildwoodAppTierService
 
     #region Feature Gating
 
+    // Per-request feature-map cache for HasFeatureAsync. The service is scoped, so one
+    // instance (and therefore one fetch per appId) serves every gate check in the request.
+    private readonly Dictionary<string, Task<Dictionary<string, bool>?>> _featureMapCache = new();
+
     public async Task<Dictionary<string, bool>> GetUserFeaturesAsync(string appId)
+    {
+        // THROWS on failure: an empty map is a real "no access" answer, so failures must
+        // stay distinguishable from it — swallowing them would make feature gates lock
+        // entitled users out during transient errors.
+        _sessionManager.ApplyAuthorizationHeader(_httpClient);
+        using var response = await _httpClient.GetAsync($"app-tiers/{appId}/user-features");
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Failed to get user features for app {AppId}: {StatusCode}", appId, response.StatusCode);
+            throw new HttpRequestException($"GetUserFeatures({appId}) failed: HTTP {(int)response.StatusCode} {response.StatusCode}");
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<Dictionary<string, bool>>(JsonOptions);
+        return result ?? new Dictionary<string, bool>();
+    }
+
+    public async Task<bool> HasFeatureAsync(string appId, string featureCode)
+    {
+        if (string.IsNullOrEmpty(appId)) return true; // unknown → fail open
+
+        if (!_featureMapCache.TryGetValue(appId, out var task))
+        {
+            task = LoadNormalizedFeatureMapAsync(appId);
+            _featureMapCache[appId] = task;
+        }
+
+        var features = await task;
+        if (features == null) return true; // fetch failed → fail open; the server enforces
+        return features.TryGetValue(featureCode.ToUpperInvariant(), out var enabled) && enabled;
+    }
+
+    /// <summary>
+    /// Loads the entitlement map with keys normalized to upper case so lookups are
+    /// case-insensitive. Returns null (never throws) when the fetch fails — HasFeatureAsync
+    /// treats null as "unknown" and fails open.
+    /// </summary>
+    private async Task<Dictionary<string, bool>?> LoadNormalizedFeatureMapAsync(string appId)
     {
         try
         {
-            _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.GetAsync($"app-tiers/{appId}/user-features");
-
-            if (response.IsSuccessStatusCode)
+            var map = await GetUserFeaturesAsync(appId);
+            var normalized = new Dictionary<string, bool>();
+            foreach (var pair in map)
             {
-                var result = await response.Content.ReadFromJsonAsync<Dictionary<string, bool>>(JsonOptions);
-                return result ?? new Dictionary<string, bool>();
+                normalized[pair.Key.ToUpperInvariant()] = pair.Value;
             }
+            return normalized;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting user features for app {AppId}", appId);
+            _logger.LogWarning(ex, "Failed to load feature entitlements for app {AppId} — gates fail open", appId);
+            _featureMapCache.Remove(appId); // don't pin the failure for later checks in the request
+            return null;
         }
-
-        return new Dictionary<string, bool>();
     }
 
     public async Task<AppFeatureCheckResultModel?> CheckFeatureAsync(string appId, string featureCode)

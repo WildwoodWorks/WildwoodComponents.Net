@@ -12,6 +12,13 @@ namespace WildwoodComponents.Blazor.Services
         Task<List<AppTierAddOnModel>> GetAvailableAddOnsAsync(string appId);
 
         // User subscription
+
+        /// <summary>
+        /// The user's active subscription, or null when none exists (204/no-content). THROWS on
+        /// transport/HTTP failure so callers can distinguish "no subscription" from a failed
+        /// lookup — swallowing both as null made subscribed users look unsubscribed during
+        /// transient errors.
+        /// </summary>
         Task<UserTierSubscriptionModel?> GetMySubscriptionAsync(string appId);
         Task<List<UserAddOnSubscriptionModel>> GetMyAddOnsAsync(string appId);
 
@@ -20,7 +27,13 @@ namespace WildwoodComponents.Blazor.Services
         Task<AppTierChangeResultModel> ChangeTierAsync(string appId, string newTierId, string? newPricingId, bool immediate, string? paymentTransactionId = null);
         Task<TierChangePreviewModel?> PreviewTierChangeAsync(string appId, string newTierId, string? newPricingId);
         Task<TierChangePreviewModel?> PreviewTierChangeAdminAsync(string appId, string userId, string newTierId, string? newPricingId);
-        Task<bool> CancelSubscriptionAsync(string appId);
+
+        /// <summary>
+        /// Self-service cancellation. Returns whether the cancellation is scheduled for the end
+        /// of the billing period (IsScheduled + EffectiveDate) or took effect immediately.
+        /// Failures are reported via Success/ErrorMessage instead of being silently swallowed.
+        /// </summary>
+        Task<AppTierCancelResultModel> CancelSubscriptionAsync(string appId);
 
         // Add-on subscription actions
         Task<bool> SubscribeToAddOnAsync(string appId, string addOnId, string? pricingId, string? paymentTransactionId);
@@ -33,6 +46,13 @@ namespace WildwoodComponents.Blazor.Services
         Task<List<AppTierLimitStatusModel>> GetAllLimitStatusesAsync(string appId);
 
         // Feature gating
+
+        /// <summary>
+        /// The user's feature entitlement map. THROWS on transport/HTTP failure: an empty map
+        /// is a real "no access" answer, so failures must stay distinguishable from it —
+        /// swallowing them would make feature gates lock entitled users out during transient
+        /// errors.
+        /// </summary>
         Task<Dictionary<string, bool>> GetUserFeaturesAsync(string appId);
         Task<AppFeatureCheckResultModel?> CheckFeatureAsync(string appId, string featureCode);
         Task<AppTierLimitStatusModel?> CheckLimitAsync(string appId, string limitCode);
@@ -50,7 +70,7 @@ namespace WildwoodComponents.Blazor.Services
         // Company-scoped admin actions
         Task<AppTierChangeResultModel> SubscribeCompanyToTierAsync(string appId, string companyId, string tierId, string? pricingId);
         Task<AppTierChangeResultModel> ChangeCompanyTierAsync(string appId, string companyId, string newTierId, string? pricingId, bool immediate);
-        Task<bool> CancelCompanySubscriptionAsync(string appId, string companyId);
+        Task<AppTierCancelResultModel> CancelCompanySubscriptionAsync(string appId, string companyId);
         Task<bool> SubscribeCompanyToAddOnAsync(string appId, string companyId, string addOnId);
         Task<bool> CancelCompanyAddOnAsync(string subscriptionId, bool immediate);
 
@@ -62,7 +82,7 @@ namespace WildwoodComponents.Blazor.Services
         Task<Dictionary<string, bool>> GetUserFeaturesAdminAsync(string appId, string userId);
         Task<List<AppTierLimitStatusModel>> GetUserLimitStatusesAsync(string appId, string userId);
         Task<List<UserAddOnSubscriptionModel>> GetUserAddOnsAsync(string appId, string userId);
-        Task<bool> CancelUserSubscriptionAsync(string appId, string userId);
+        Task<AppTierCancelResultModel> CancelUserSubscriptionAsync(string appId, string userId);
 
         // Admin user-scoped write actions (for managing a specific user's subscription)
         Task<AppTierChangeResultModel> SubscribeUserToTierAsync(string appId, string userId, string tierId, string? pricingId);

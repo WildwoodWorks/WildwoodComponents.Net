@@ -70,4 +70,88 @@ public class AppTierComponentServiceTests
         Assert.Equal("Free", tiers[0].Name);
         Assert.Contains("/api/app-tiers/app-1", handler.Requests[0].Url);
     }
+
+    [Fact]
+    public async Task CancelSubscriptionAsync_SurfacesScheduledCancelPayload()
+    {
+        var (service, handler) = CreateService();
+        handler.WhenOk("my-subscription/cancel",
+            """{"success":true,"isScheduled":true,"effectiveDate":"2026-08-01T00:00:00Z"}""");
+
+        var result = await service.CancelSubscriptionAsync("app-1");
+
+        Assert.True(result.Success);
+        Assert.True(result.IsScheduled);
+        Assert.Equal(new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc), result.EffectiveDate!.Value.ToUniversalTime());
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Contains("/api/app-tiers/app-1/my-subscription/cancel", request.Url);
+    }
+
+    [Fact]
+    public async Task CancelSubscriptionAsync_ReportsFailure_WithoutThrowing()
+    {
+        var (service, handler) = CreateService();
+        handler.When("my-subscription/cancel", System.Net.HttpStatusCode.InternalServerError, """{"error":"boom"}""");
+
+        var result = await service.CancelSubscriptionAsync("app-1");
+
+        Assert.False(result.Success);
+        Assert.False(string.IsNullOrEmpty(result.ErrorMessage));
+    }
+
+    [Fact]
+    public async Task CancelUserSubscriptionAsync_SurfacesStoreBillingFollowUp()
+    {
+        var (service, handler) = CreateService();
+        handler.WhenOk("cancel/user-7",
+            """{"requiresUserAction":true,"userActionUrl":"https://apps.apple.com/account/subscriptions","userActionInstructions":"Also cancel in your App Store settings."}""");
+
+        var result = await service.CancelUserSubscriptionAsync("app-1", "user-7");
+
+        Assert.True(result.Success);
+        Assert.True(result.RequiresUserAction);
+        Assert.Equal("https://apps.apple.com/account/subscriptions", result.UserActionUrl);
+        Assert.Contains("/api/app-tiers/app-1/cancel/user-7", handler.Requests[0].Url);
+    }
+
+    [Fact]
+    public async Task GetMySubscriptionAsync_ReturnsNull_OnNoContent()
+    {
+        // 204/no-content is the API's "no subscription" answer — NOT an error.
+        var (service, handler) = CreateService();
+        handler.When("my-subscription", System.Net.HttpStatusCode.NoContent, "");
+
+        var subscription = await service.GetMySubscriptionAsync("app-1");
+
+        Assert.Null(subscription);
+    }
+
+    [Fact]
+    public async Task GetMySubscriptionAsync_Throws_OnLookupFailure()
+    {
+        // A failed lookup must be distinguishable from "no subscription" — subscribed users
+        // were shown "no plan" on transient errors when both resolved to null.
+        var (service, handler) = CreateService();
+        handler.When("my-subscription", System.Net.HttpStatusCode.InternalServerError, """{"error":"boom"}""");
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => service.GetMySubscriptionAsync("app-1"));
+    }
+
+    [Fact]
+    public async Task GetUserFeaturesAsync_ReturnsMap_ButThrowsOnFailure()
+    {
+        // Failures must not masquerade as an empty (= no access) map — feature gates would
+        // lock entitled users out during transient errors.
+        var (service, handler) = CreateService();
+        handler.WhenOk("user-features", """{"CHAT":true,"PAYMENTS":false}""");
+
+        var features = await service.GetUserFeaturesAsync("app-1");
+        Assert.True(features["CHAT"]);
+        Assert.False(features["PAYMENTS"]);
+
+        var (failingService, failingHandler) = CreateService();
+        failingHandler.When("user-features", System.Net.HttpStatusCode.InternalServerError, """{"error":"boom"}""");
+        await Assert.ThrowsAsync<HttpRequestException>(() => failingService.GetUserFeaturesAsync("app-1"));
+    }
 }

@@ -250,6 +250,24 @@ else
         IsLoading="_isProcessing" />
 }
 
+@if (!string.IsNullOrEmpty(_cancelNotice))
+{
+    <div class="alert alert-info alert-dismissible fade show mt-3" role="alert">
+        <i class="fas fa-info-circle me-2"></i>@_cancelNotice
+        @if (!string.IsNullOrEmpty(_cancelActionInstructions))
+        {
+            <div class="mt-2">@_cancelActionInstructions</div>
+        }
+        @if (!string.IsNullOrEmpty(_cancelActionUrl))
+        {
+            <div class="mt-2">
+                <a href="@_cancelActionUrl" target="_blank" rel="noopener noreferrer">Manage your store subscription</a>
+            </div>
+        }
+        <button type="button" class="btn-close" @onclick="ClearCancelNotice"></button>
+    </div>
+}
+
 @if (!string.IsNullOrEmpty(ErrorMessage))
 {
     <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">

@@ -36,9 +36,22 @@ namespace WildwoodComponents.Blazor.Components.Registration
         public string AppId { get; set; } = string.Empty;
 
         [Parameter] public string? PreSelectedTierId { get; set; }
+
+        /// <summary>
+        /// Pricing option to preselect within the pre-selected tier (e.g. the annual option
+        /// chosen on a pricing page). Falls back to the tier's default, then first, option.
+        /// </summary>
+        [Parameter] public string? PreSelectedPricingId { get; set; }
+
         [Parameter] public string? RegistrationToken { get; set; }
         [Parameter] public bool RequireToken { get; set; }
         [Parameter] public bool AllowOpenRegistration { get; set; } = true;
+
+        /// <summary>
+        /// Show the optional "Have a Registration Token?" card on the registration step.
+        /// Default true. Set false to hide it for public signups.
+        /// </summary>
+        [Parameter] public bool ShowOptionalTokenEntry { get; set; } = true;
 
         /// <summary>
         /// If true, skips the tier selection step and goes directly to processing after registration.
@@ -122,10 +135,19 @@ namespace WildwoodComponents.Blazor.Components.Registration
                     if (tier != null)
                     {
                         _preSelectedTier = tier;
-                        _preSelectedTierPricing = tier.PricingOptions?.FirstOrDefault(p => p.IsDefault)
+                        // Honor the pricing choice carried from the pricing page (e.g. annual),
+                        // falling back to the tier's default and then its first option.
+                        _preSelectedTierPricing =
+                            (!string.IsNullOrEmpty(PreSelectedPricingId)
+                                ? tier.PricingOptions?.FirstOrDefault(p => string.Equals(p.Id, PreSelectedPricingId, StringComparison.OrdinalIgnoreCase))
+                                : null)
+                            ?? tier.PricingOptions?.FirstOrDefault(p => p.IsDefault)
                             ?? tier.PricingOptions?.FirstOrDefault();
                         _selectedTier = tier;
                         _selectedPricing = _preSelectedTierPricing;
+                        // Without this the pre-selected flow subscribes with a null pricing id
+                        // and the server re-defaults, losing the monthly/annual choice.
+                        _selectedPricingId = _preSelectedTierPricing?.Id;
                     }
                 }
                 catch (Exception ex)

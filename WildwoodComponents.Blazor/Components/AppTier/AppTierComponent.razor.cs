@@ -342,11 +342,13 @@ namespace WildwoodComponents.Blazor.Components.AppTier
 
             try
             {
-                var success = await AppTierService.CancelSubscriptionAsync(AppId);
+                var result = await AppTierService.CancelSubscriptionAsync(AppId);
 
-                if (success)
+                if (result.Success)
                 {
                     var tierName = _currentSubscription?.TierName ?? "Unknown";
+                    // A scheduled cancellation keeps the subscription until the period ends —
+                    // LoadTierData re-fetches whatever state the server has now.
                     _currentSubscription = null;
                     _currentStep = AppTierComponentStep.TierSelection;
 
@@ -355,7 +357,9 @@ namespace WildwoodComponents.Blazor.Components.AppTier
                 }
                 else
                 {
-                    await HandleErrorAsync(new Exception("Failed to cancel subscription"), "Cancelling subscription");
+                    await HandleErrorAsync(
+                        new Exception(string.IsNullOrEmpty(result.ErrorMessage) ? "Failed to cancel subscription" : result.ErrorMessage),
+                        "Cancelling subscription");
                 }
             }
             catch (Exception ex)

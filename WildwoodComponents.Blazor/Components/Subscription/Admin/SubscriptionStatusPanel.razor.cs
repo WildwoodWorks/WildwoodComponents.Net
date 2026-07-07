@@ -101,6 +101,15 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             }
         }
 
+        /// <summary>
+        /// End of access for a scheduled cancellation: the pending change date when the server
+        /// set one, otherwise the subscription's end date.
+        /// </summary>
+        private DateTime? CancellationAccessEndDate => _subscription?.PendingChangeDate ?? _subscription?.EndDate;
+
+        private bool IsPendingCancellation =>
+            string.Equals(_subscription?.Status, "PendingCancellation", StringComparison.OrdinalIgnoreCase);
+
         private static string GetStatusBadgeClass(string status)
         {
             if (string.Equals(status, "Active", StringComparison.OrdinalIgnoreCase)) return "bg-success";
@@ -108,7 +117,20 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             if (string.Equals(status, "PastDue", StringComparison.OrdinalIgnoreCase)) return "bg-warning text-dark";
             if (string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase)) return "bg-danger";
             if (string.Equals(status, "Expired", StringComparison.OrdinalIgnoreCase)) return "bg-secondary";
+            if (string.Equals(status, "PendingUpgrade", StringComparison.OrdinalIgnoreCase)) return "bg-info";
+            if (string.Equals(status, "PendingDowngrade", StringComparison.OrdinalIgnoreCase)) return "bg-info";
+            if (string.Equals(status, "PendingCancellation", StringComparison.OrdinalIgnoreCase)) return "bg-warning text-dark";
             return "bg-secondary";
+        }
+
+        /// <summary>Friendly display label for raw subscription statuses.</summary>
+        private static string GetStatusLabel(string status)
+        {
+            if (string.Equals(status, "PastDue", StringComparison.OrdinalIgnoreCase)) return "Past Due";
+            if (string.Equals(status, "PendingUpgrade", StringComparison.OrdinalIgnoreCase)) return "Upgrade Scheduled";
+            if (string.Equals(status, "PendingDowngrade", StringComparison.OrdinalIgnoreCase)) return "Downgrade Scheduled";
+            if (string.Equals(status, "PendingCancellation", StringComparison.OrdinalIgnoreCase)) return "Cancellation Scheduled";
+            return status;
         }
     }
 }

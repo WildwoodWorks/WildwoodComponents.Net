@@ -21,6 +21,9 @@
         this.allowOpen = root.dataset.allowOpen === 'true';
         this.tokenRequired = root.dataset.tokenRequired === 'true';
         this.tokenOptional = root.dataset.tokenOptional === 'true';
+        // Whether the optional "Have a Registration Token?" card is shown at all
+        // (defaults to true; public signups hide it).
+        this.showOptionalTokenEntry = root.dataset.showOptionalToken !== 'false';
         this.defaultPricingId = root.dataset.defaultPricingId || '';
 
         // State
@@ -517,7 +520,7 @@
         }
 
         // Optional token card
-        if (this.tokenOptional && !this.useToken) {
+        if (this.tokenOptional && this.showOptionalTokenEntry && !this.useToken) {
             this.els.optTokenCard.style.display = '';
         } else {
             this.els.optTokenCard.style.display = 'none';

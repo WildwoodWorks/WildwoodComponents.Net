@@ -80,9 +80,19 @@
 
                         @if (!string.IsNullOrEmpty(tier.CustomBadgeText))
                         {
-                            <div class="ww-plan-badge @ViewHelpers.GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
-                                <small>@tier.CustomBadgeText</small>
-                            </div>
+                            @* Raw CSS badge colors ("#c9a227") can't be class names — inline style. *@
+                            @if (ViewHelpers.IsRawCssColor(tier.BadgeColor))
+                            {
+                                <div class="ww-plan-badge text-white text-center py-1" style="background-color: @tier.BadgeColor;">
+                                    <small>@tier.CustomBadgeText</small>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="ww-plan-badge @ViewHelpers.GetBadgeColorClass(tier.BadgeColor) text-white text-center py-1">
+                                    <small>@tier.CustomBadgeText</small>
+                                </div>
+                            }
                         }
                         else if (tier.IsDefault)
                         {

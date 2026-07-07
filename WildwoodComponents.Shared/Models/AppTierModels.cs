@@ -272,6 +272,24 @@ public class AppTierChangeResultModel
     public DateTime? EffectiveDate { get; set; }
 }
 
+/// <summary>
+/// Result of a subscription cancellation. IsScheduled=true means access continues until
+/// EffectiveDate (the end of the current billing period); false means access ended immediately.
+/// RequiresUserAction is set for store-billed subscriptions (Apple App Store / Google Play):
+/// the platform cannot stop the store's billing — show UserActionInstructions/UserActionUrl
+/// so the user cancels in their store settings too.
+/// </summary>
+public class AppTierCancelResultModel
+{
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+    public bool IsScheduled { get; set; }
+    public DateTime? EffectiveDate { get; set; }
+    public bool RequiresUserAction { get; set; }
+    public string? UserActionUrl { get; set; }
+    public string? UserActionInstructions { get; set; }
+}
+
 public class TierChangePreviewModel
 {
     public bool Success { get; set; }

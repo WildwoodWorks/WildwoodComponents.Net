@@ -1,0 +1,106 @@
+@using System.Text.Json
+@using WildwoodComponents.Razor.Models
+@model AIFlowViewModel
+
+@{
+    var cid = Model.ComponentId;
+}
+
+<div id="ww-flow-@cid"
+     class="ww-flow-component"
+     data-component-id="@cid"
+     data-app-id="@(Model.AppId ?? "")"
+     data-flow-id="@(Model.FlowId ?? "")"
+     data-proxy-url="@Model.ProxyBaseUrl"
+     data-run-label="@Model.RunLabel"
+     data-show-picker="@Model.ShowFlowPicker.ToString().ToLower()"
+     data-show-progress="@Model.ShowLiveProgress.ToString().ToLower()"
+     data-show-debug="@Model.ShowDebugInfo.ToString().ToLower()"
+     data-show-history="@Model.ShowRunHistory.ToString().ToLower()"
+     data-flows='@JsonSerializer.Serialize(Model.Flows, new JsonSerializerOptions(JsonSerializerDefaults.Web))'>
+
+    <div class="ww-flow-header">
+        <h3>@Model.Title</h3>
+    </div>
+
+    @* Loading / empty states (toggled by ai-flow.js) *@
+    <div class="ww-flow-loading" style="@(Model.Flows.Count > 0 ? "display:none;" : "")">Loading flows…</div>
+    <div class="ww-flow-empty" style="display:none;">No published flows are available for this app.</div>
+
+    @* Flow picker (server-rendered options; ai-flow.js refreshes them after auth) *@
+    <div class="ww-flow-field ww-flow-picker" style="@(Model.ShowFlowPicker && string.IsNullOrEmpty(Model.FlowId) ? "" : "display:none;")">
+        <label for="ww-flow-select-@cid">Flow</label>
+        <select id="ww-flow-select-@cid" class="ww-flow-select">
+            <option value="">Choose a flow…</option>
+            @foreach (var flow in Model.Flows)
+            {
+                <option value="@flow.Id">@flow.Name</option>
+            }
+        </select>
+    </div>
+
+    <p class="ww-flow-description" style="display:none;"></p>
+
+    @* Dynamic input area (built from the flow's inputFields by ai-flow.js) *@
+    <div class="ww-flow-inputs" style="display:none;"></div>
+
+    <div class="ww-flow-actions ww-flow-run-actions" style="display:none;">
+        <button type="button" class="ww-flow-btn ww-flow-btn--primary ww-flow-run-btn">@Model.RunLabel</button>
+        <button type="button" class="ww-flow-btn ww-flow-btn--danger ww-flow-stop-btn" style="display:none;">Stop</button>
+    </div>
+
+    <div class="ww-flow-alert ww-flow-alert--error ww-flow-error" style="display:none;"></div>
+
+    @* Live progress *@
+    <div class="ww-flow-progress" style="display:none;">
+        <span class="ww-flow-spinner"></span> Running <strong class="ww-flow-active-node"></strong>…
+    </div>
+
+    @* Streamed output *@
+    <div class="ww-flow-stream" style="display:none;">
+        <div class="ww-flow-label">Output</div>
+        <pre class="ww-flow-stream-text"></pre>
+    </div>
+
+    @* Human review (interrupt) panel *@
+    <div class="ww-flow-alert ww-flow-alert--warn ww-flow-review" style="display:none;">
+        <div class="ww-flow-label">Human review needed</div>
+        <pre class="ww-flow-review-payload"></pre>
+        <div class="ww-flow-review-edit" style="display:none;">
+            <div class="ww-flow-field">
+                <label>Edited resume value (JSON) — leave blank to approve as-is</label>
+                <textarea rows="5" class="ww-flow-resume-value" placeholder='{ "decisions": [ { "type": "approve" } ] }'></textarea>
+            </div>
+            <div class="ww-flow-actions">
+                <button type="button" class="ww-flow-btn ww-flow-btn--primary ww-flow-resume-edit-btn">Resume with edit</button>
+                <button type="button" class="ww-flow-btn ww-flow-cancel-edit-btn">Cancel</button>
+            </div>
+        </div>
+        <div class="ww-flow-actions ww-flow-review-actions">
+            <button type="button" class="ww-flow-btn ww-flow-btn--primary ww-flow-approve-btn">Approve</button>
+            <button type="button" class="ww-flow-btn ww-flow-edit-btn">Edit &amp; resume</button>
+            <button type="button" class="ww-flow-btn ww-flow-btn--danger ww-flow-reject-btn">Reject</button>
+        </div>
+    </div>
+
+    @* Terminal result *@
+    <div class="ww-flow-result" style="display:none;">
+        <div class="ww-flow-label">
+            <span class="ww-flow-result-status"></span><span class="ww-flow-result-tokens"></span>
+        </div>
+        <div class="ww-flow-alert ww-flow-alert--error ww-flow-result-error" style="display:none;"></div>
+        <pre class="ww-flow-result-output" style="display:none;"></pre>
+    </div>
+
+    @* Run history (this conversation) *@
+    <div class="ww-flow-history" style="display:none;">
+        <div class="ww-flow-label">Run history (this conversation)</div>
+        <div class="ww-flow-history-rows"></div>
+    </div>
+
+    @* Debug event log *@
+    <div class="ww-flow-events" style="display:none;"></div>
+</div>
+
+<link rel="stylesheet" href="~/_content/WildwoodComponents.Razor/css/ai-flow.css" />
+<script src="~/_content/WildwoodComponents.Razor/js/ai-flow.js"></script>

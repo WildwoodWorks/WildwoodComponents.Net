@@ -62,4 +62,32 @@ public class FormatHelpersTests
     {
         Assert.Equal(expected, FormatHelpers.GetStatusBadgeClass(status));
     }
+
+    [Theory]
+    [InlineData("#c9a227", true)]
+    [InlineData("rgb(201, 162, 39)", true)]
+    [InlineData("RGBA(0,0,0,0.5)", true)]
+    [InlineData("hsl(45, 68%, 47%)", true)]
+    [InlineData(" #c9a227 ", true)]
+    [InlineData("success", false)]
+    [InlineData("primary", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsRawCssColor_DetectsRawColors(string? color, bool expected)
+    {
+        Assert.Equal(expected, FormatHelpers.IsRawCssColor(color));
+    }
+
+    [Theory]
+    [InlineData("success", "Beta", true)]
+    [InlineData("#c9a227", "Deprecated", true)]
+    [InlineData("success", "Active", false)]   // Active is the default lifecycle status — not informative
+    [InlineData("success", "active", false)]   // case-insensitive
+    [InlineData("success", " Active ", false)] // whitespace-tolerant
+    [InlineData("", "Beta", false)]            // no color -> no badge
+    [InlineData("success", "", false)]         // no status -> no badge
+    public void ShouldShowTierStatusBadge_HidesActiveAndEmpty(string badgeColor, string status, bool expected)
+    {
+        Assert.Equal(expected, FormatHelpers.ShouldShowTierStatusBadge(badgeColor, status));
+    }
 }

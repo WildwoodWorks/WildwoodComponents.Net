@@ -14,6 +14,8 @@ public static class ViewHelpers
 
     public static string GetBadgeColorClass(string badgeColor) => FormatHelpers.GetBadgeColorClass(badgeColor);
 
+    public static bool IsRawCssColor(string? color) => FormatHelpers.IsRawCssColor(color);
+
     public static string GetStatusBadgeClass(string status) => FormatHelpers.GetStatusBadgeClass(status);
 
     public static string GetInvoiceStatusBadge(string status) => FormatHelpers.GetInvoiceStatusBadge(status);

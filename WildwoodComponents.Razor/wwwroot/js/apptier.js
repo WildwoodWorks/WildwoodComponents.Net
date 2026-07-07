@@ -185,8 +185,25 @@
             headers: { 'Content-Type': 'application/json' }
         })
             .then(function (response) {
-                if (response.ok) {
-                    showMessage('Subscription cancelled successfully.', 'success');
+                return response.json().catch(function () { return null; }).then(function (result) {
+                    return { ok: response.ok, result: result };
+                });
+            })
+            .then(function (r) {
+                var result = r.result;
+                // The cancel endpoint also reports failures via success/errorMessage.
+                if (r.ok && (!result || result.success !== false)) {
+                    var message = result && result.isScheduled
+                        ? (result.effectiveDate
+                            ? 'Your cancellation is scheduled — access continues until ' + new Date(result.effectiveDate).toLocaleDateString() + '.'
+                            : 'Your cancellation is scheduled for the end of the current billing period.')
+                        : 'Subscription cancelled successfully.';
+                    // Store-billed subscriptions need a follow-up in the store's settings —
+                    // the platform cannot stop the store's billing itself.
+                    if (result && result.requiresUserAction && result.userActionInstructions) {
+                        message += ' ' + result.userActionInstructions;
+                    }
+                    showMessage(message, 'success');
                     showView('ww-tier-selection-view');
 
                     // Hide current subscription section
@@ -199,7 +216,7 @@
                     });
                     root.dispatchEvent(event);
                 } else {
-                    showMessage('Failed to cancel subscription.', 'danger');
+                    showMessage('Failed to cancel subscription' + (result && result.errorMessage ? ': ' + result.errorMessage : '.'), 'danger');
                     showView('ww-tier-selection-view');
                 }
             })

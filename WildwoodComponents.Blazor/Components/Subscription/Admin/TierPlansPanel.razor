@@ -51,9 +51,19 @@ else
                         <span class="ww-tier-icon @tier.IconClass"></span>
                     }
                     <h3>@tier.Name</h3>
-                    @if (!string.IsNullOrEmpty(tier.BadgeColor))
+                    @* "Active" is every listed tier's lifecycle status — only non-default
+                       statuses (Beta, Deprecated, ...) are informative. Raw CSS badge
+                       colors can't be class names, so they render as an inline style. *@
+                    @if (FormatHelpers.ShouldShowTierStatusBadge(tier.BadgeColor, tier.Status))
                     {
-                        <span class="ww-badge ww-badge-@tier.BadgeColor">@tier.Status</span>
+                        @if (FormatHelpers.IsRawCssColor(tier.BadgeColor))
+                        {
+                            <span class="ww-badge" style="background-color: @tier.BadgeColor; color: #fff;">@tier.Status</span>
+                        }
+                        else
+                        {
+                            <span class="ww-badge ww-badge-@tier.BadgeColor">@tier.Status</span>
+                        }
                     }
                     @if (tier.ShowPrice)
                     {
@@ -114,12 +124,11 @@ else
                         {
                             <div class="ww-tier-limit-item">
                                 <span class="ww-tier-limit-value">@l.MaxValueDisplay</span>
+                                @* Unit is intentionally omitted: "5 Active Pursuits (pursuits)" reads
+                                   as noise — the value + display name already carry it. Units still
+                                   show in usage dashboards. *@
                                 <span class="ww-tier-limit-name">
                                     @(string.IsNullOrEmpty(l.DisplayName) ? l.LimitCode : l.DisplayName)
-                                    @if (!string.IsNullOrEmpty(l.Unit))
-                                    {
-                                        <text> (@l.Unit)</text>
-                                    }
                                 </span>
                             </div>
                         }

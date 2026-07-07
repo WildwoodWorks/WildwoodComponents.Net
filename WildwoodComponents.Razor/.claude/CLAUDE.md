@@ -26,6 +26,7 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 |-----------|--------|-------|----------------|-----------------|------------------------|----------------|
 | Authentication | AuthenticationComponent | AuthenticationViewComponent | authService | AuthenticationComponent | AuthenticationComponent | authMiddleware |
 | AI Chat | AIChatComponent | AIChatViewComponent | aiService | AIChatComponent | -- | -- |
+| AI Flow | AIFlowComponent | AIFlowViewComponent | -- | -- | -- | -- |
 | AI Proxy | AIProxyComponent | AIProxyViewComponent | (via aiService) | AIProxyComponent | -- | -- |
 | Messaging | SecureMessagingComponent | SecureMessagingViewComponent | messagingService | SecureMessagingComponent | -- | -- |
 | Payment | PaymentComponent | PaymentViewComponent | paymentService | PaymentComponent | -- | -- |
@@ -167,6 +168,7 @@ WildwoodComponents.Razor/
         ServiceCollectionExtensions.cs
     Services/
         IWildwoodAIChatService.cs + WildwoodAIChatService.cs
+        IWildwoodAIFlowService.cs + WildwoodAIFlowService.cs
         IWildwoodAIProxyService.cs + WildwoodAIProxyService.cs
         IWildwoodAppTierService.cs + WildwoodAppTierService.cs
         IWildwoodAuthService.cs + WildwoodAuthService.cs
@@ -178,6 +180,7 @@ WildwoodComponents.Razor/
         IWildwoodTwoFactorSettingsService.cs + WildwoodTwoFactorSettingsService.cs
     Models/
         AIChatModels.cs
+        AIFlowModels.cs
         AIProxyModels.cs
         AppTierModels.cs
         AuthenticationModels.cs

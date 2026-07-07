@@ -29,6 +29,12 @@ public class TokenRegistrationViewModel
     public bool AllowOpenRegistration { get; set; }
 
     /// <summary>
+    /// Show the optional "Have a Registration Token?" card when tokens are optional
+    /// (default true). Set false to hide it for public signups.
+    /// </summary>
+    public bool ShowOptionalTokenEntry { get; set; } = true;
+
+    /// <summary>
     /// Default pricing model ID for open registration (null = free)
     /// </summary>
     public string? DefaultPricingModelId { get; set; }
