@@ -458,6 +458,16 @@ namespace WildwoodComponents.Blazor.Extensions
                 // Service may not exist, ignore
             }
 
+            // Register the notification inbox service if available
+            try
+            {
+                RegisterNotificationInboxService(services, assembly, options);
+            }
+            catch
+            {
+                // Service may not exist, ignore
+            }
+
             // Register App Tier component service if available
             try
             {
@@ -682,6 +692,37 @@ namespace WildwoodComponents.Blazor.Extensions
                                 ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.DisclaimerService>.Instance;
 
                     return new WildwoodComponents.Blazor.Services.DisclaimerService(httpClient, logger);
+                });
+            }
+        }
+
+        /// <summary>
+        /// Registers the notification inbox service (backend-connected inbox + delivery preferences).
+        /// BaseAddress is the API root; the bearer token is set at runtime by the consuming component
+        /// via SetAuthToken (the current user's session JWT), mirroring the AppTier service pattern.
+        /// </summary>
+        private static void RegisterNotificationInboxService(IServiceCollection services, Assembly assembly, WildwoodComponentsOptions options)
+        {
+            var serviceInterface = assembly.GetType("WildwoodComponents.Blazor.Services.INotificationInboxService");
+            var serviceImplementation = assembly.GetType("WildwoodComponents.Blazor.Services.NotificationInboxService");
+
+            if (serviceInterface != null && serviceImplementation != null)
+            {
+                services.AddScoped(serviceInterface, serviceProvider =>
+                {
+                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                    httpClient.BaseAddress = new Uri(options.BaseUrl);
+
+                    if (!string.IsNullOrEmpty(options.ApiKey))
+                    {
+                        httpClient.DefaultRequestHeaders.Add("X-API-Key", options.ApiKey);
+                    }
+
+                    var loggerFactory = serviceProvider.GetService<ILoggerFactory>();
+                    var logger = loggerFactory?.CreateLogger<WildwoodComponents.Blazor.Services.NotificationInboxService>()
+                                ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.NotificationInboxService>.Instance;
+
+                    return new WildwoodComponents.Blazor.Services.NotificationInboxService(httpClient, logger);
                 });
             }
         }

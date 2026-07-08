@@ -22,6 +22,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
         [Inject] private IAuthenticationService AuthService { get; set; } = default!;
         [Inject] private IAppTierComponentService AppTierService { get; set; } = default!;
         [Inject] private IPaymentProviderService PaymentProviderService { get; set; } = default!;
+        [Inject] private IDisclaimerService DisclaimerService { get; set; } = default!;
         [Inject] private IWildwoodSessionManager SessionManager { get; set; } = default!;
         [Inject] private IHttpClientFactory HttpClientFactory { get; set; } = default!;
         [Inject] private IOptions<WildwoodComponentsOptions> OptionsAccessor { get; set; } = default!;
@@ -87,6 +88,10 @@ namespace WildwoodComponents.Blazor.Components.Registration
         private string? _paymentTransactionId;
         private string? _paymentExternalId;
 
+        // Registration disclaimers gated in front of the Success step (populated
+        // after login once the session JWT is stored)
+        private List<PendingDisclaimerModel>? _pendingDisclaimers;
+
         // Pre-selected tier details
         private AppTierModel? _preSelectedTier;
         private AppTierPricingModel? _preSelectedTierPricing;
@@ -101,6 +106,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
             SelectTier,
             Payment,
             Processing,
+            Disclaimers,
             Success
         }
 
@@ -357,6 +363,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
             _processingStatus = null;
             _paymentTransactionId = null;
             _paymentExternalId = null;
+            _pendingDisclaimers = null;
             BuildStepConfig();
             StateHasChanged();
         }
@@ -522,7 +529,10 @@ namespace WildwoodComponents.Blazor.Components.Registration
                     }
                 }
 
-                _currentStep = SignupStep.Success;
+                // Step 5: Gate the terminal Success transition on any pending registration
+                // disclaimers. The account exists and the session JWT is stored, so the
+                // signed-in user reviews and accepts before signup is considered complete.
+                await GateSuccessOnPendingDisclaimersAsync();
             }
             catch (Exception ex)
             {
@@ -534,6 +544,62 @@ namespace WildwoodComponents.Blazor.Components.Registration
                 _processingStatus = null;
                 StateHasChanged();
             }
+        }
+
+        /// <summary>
+        /// Fetches pending registration disclaimers for the newly signed-in user. If any are
+        /// pending, advances to the Disclaimers step so they can be accepted; otherwise goes
+        /// straight to Success. Failures are non-fatal and fall through to Success.
+        /// </summary>
+        private async Task GateSuccessOnPendingDisclaimersAsync()
+        {
+            try
+            {
+                // The disclaimer service HttpClient is unauthenticated, so identify the
+                // signed-in user by passing their id (mirrors the AppTier SetAuthToken pattern
+                // where the service exposes a token setter — this one does not).
+                var pending = await DisclaimerService.GetPendingDisclaimersAsync(AppId, _authResponse?.Id, "registration");
+                if (pending.ErrorMessage == null && pending.HasPendingDisclaimers && pending.Disclaimers.Any())
+                {
+                    _pendingDisclaimers = pending.Disclaimers;
+                    _currentStep = SignupStep.Disclaimers;
+                    Logger.LogInformation("Registration disclaimers pending after signup: {Count}", _pendingDisclaimers.Count);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to load registration disclaimers, continuing without them");
+            }
+
+            _currentStep = SignupStep.Success;
+        }
+
+        /// <summary>
+        /// Called when the embedded DisclaimerComponent reports the user accepted the pending
+        /// registration disclaimers. Persists the acceptances (non-fatal on failure) and
+        /// advances to Success.
+        /// </summary>
+        private async Task HandleDisclaimersAccepted(List<DisclaimerAcceptanceResult> acceptances)
+        {
+            try
+            {
+                if (acceptances.Any())
+                {
+                    var result = await DisclaimerService.AcceptDisclaimersAsync(AppId, acceptances);
+                    if (!result.Success)
+                    {
+                        Logger.LogWarning("Failed to record disclaimer acceptances: {Message}", result.ErrorMessage);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Error recording disclaimer acceptances after signup");
+            }
+
+            _currentStep = SignupStep.Success;
+            StateHasChanged();
         }
 
         #endregion

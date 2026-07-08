@@ -333,6 +333,26 @@
         </div>
     </div>
 
+    <!-- ===== STEP: DISCLAIMERS (surfaced after the account exists + is authenticated, before completion) =====
+         Server-renders the shared Disclaimer view component (which fetches pending "registration" disclaimers
+         via its own service) hidden. signup-subscription.js reveals it after subscription and blocks the
+         success transition until disclaimer.js posts the acceptances and fires ww-disclaimers-accepted.
+         When nothing is pending the component renders its empty state (no checkboxes) and the JS skips it. -->
+    <div class="ww-signup-step ww-signup-step-disclaimers" data-step="disclaimers" style="display: none;">
+        <div class="text-center mb-4">
+            <h4 class="mb-1">One more step</h4>
+            <p class="text-muted mb-0">Please review and accept the following before continuing.</p>
+        </div>
+        <div style="max-width: 640px; margin: 0 auto;">
+            @await Component.InvokeAsync("Disclaimer", new
+            {
+                appId = Model.AppId,
+                mode = "registration",
+                showCancelButton = false
+            })
+        </div>
+    </div>
+
     <!-- ===== STEP 4: SUCCESS ===== -->
     <div class="ww-signup-step ww-step-4" data-step="4" style="display: none;">
         <div class="text-center py-5">

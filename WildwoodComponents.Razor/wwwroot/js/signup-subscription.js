@@ -24,6 +24,7 @@
         var messageEl = root.querySelector('.ww-signup-sub-message');
         var loadingEl = root.querySelector('.ww-signup-sub-loading');
         var loadingMsg = root.querySelector('.ww-signup-sub-loading-msg');
+        var disclaimersStepEl = root.querySelector('.ww-signup-step-disclaimers');
 
         var currentStep = 1;
         var selectedTier = null;
@@ -82,6 +83,42 @@
 
             clearMessage();
         }
+
+        // ===== DISCLAIMERS (surfaced post-registration, gated before completion) =====
+
+        // The disclaimers step server-renders the shared Disclaimer component. When the app has
+        // pending "registration" disclaimers the component renders acceptance checkboxes; otherwise
+        // it renders its empty state (no checkboxes) and we skip straight to success.
+        function hasPendingDisclaimers() {
+            return !!(disclaimersStepEl && disclaimersStepEl.querySelector('.ww-disclaimer-checkbox'));
+        }
+
+        function showDisclaimersStep() {
+            var stepViews = root.querySelectorAll('.ww-signup-step');
+            for (var i = 0; i < stepViews.length; i++) {
+                stepViews[i].style.display = stepViews[i] === disclaimersStepEl ? '' : 'none';
+            }
+            clearMessage();
+        }
+
+        function finishSuccess() {
+            goToStep(4); // Complete
+
+            root.dispatchEvent(new CustomEvent('ww-signup-complete', {
+                detail: {
+                    tierId: selectedTier.id,
+                    tierName: selectedTier.name,
+                    user: registeredUser
+                },
+                bubbles: true
+            }));
+        }
+
+        // disclaimer.js (the shared Disclaimer component) posts the acceptances to its own proxy
+        // and dispatches this bubbling event on success — gate signup completion on it.
+        root.addEventListener('ww-disclaimers-accepted', function () {
+            finishSuccess();
+        });
 
         // ===== STEP 1: PLAN SELECTION =====
 
@@ -213,16 +250,14 @@
                 })
                 .then(function () {
                     setLoading(false);
-                    goToStep(4); // Complete
 
-                    root.dispatchEvent(new CustomEvent('ww-signup-complete', {
-                        detail: {
-                            tierId: selectedTier.id,
-                            tierName: selectedTier.name,
-                            user: registeredUser
-                        },
-                        bubbles: true
-                    }));
+                    // Account exists and is authenticated; gate completion on any pending
+                    // registration disclaimers before declaring success.
+                    if (hasPendingDisclaimers()) {
+                        showDisclaimersStep();
+                    } else {
+                        finishSuccess();
+                    }
                 })
                 .catch(function (err) {
                     setLoading(false);

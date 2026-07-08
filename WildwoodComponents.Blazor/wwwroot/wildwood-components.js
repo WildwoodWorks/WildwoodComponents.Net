@@ -375,3 +375,52 @@ window.autoResizeTextarea = window.wildwoodComponents.autoResizeTextarea;
 window.scrollToMessage = window.wildwoodComponents.messaging.scrollToMessage;
 window.focusElement = window.wildwoodComponents.messaging.focusElement;
 window.downloadFile = window.wildwoodComponents.messaging.downloadFile;
+
+// ────────────────────────────────────────────────────────────────
+// Browser notifications (Web Notifications API) for the inbox "browser" channel.
+// Mirrors @wildwood/core browserNotifications.ts. Web Notifications API only —
+// no service worker / VAPID. All members are safe to call anywhere (no-op when
+// the API is unavailable) and never throw. Called from the Blazor
+// NotificationsBell + NotificationPreferences components via JSRuntime.
+// ────────────────────────────────────────────────────────────────
+window.wildwoodBrowserNotifications = {
+    // True only when the Web Notifications API is present (browser main thread).
+    isSupported: function () {
+        return typeof window !== 'undefined' && 'Notification' in window;
+    },
+
+    // Current permission ('default' | 'granted' | 'denied'), or 'unsupported'.
+    getPermission: function () {
+        if (!window.wildwoodBrowserNotifications.isSupported()) return 'unsupported';
+        return Notification.permission;
+    },
+
+    // Prompts for permission; resolves to the resulting permission or 'unsupported'.
+    requestPermission: async function () {
+        if (!window.wildwoodBrowserNotifications.isSupported()) return 'unsupported';
+        try {
+            // Modern browsers return a promise; older Safari used a callback (ignored here).
+            return await Notification.requestPermission();
+        } catch (e) {
+            return window.wildwoodBrowserNotifications.getPermission();
+        }
+    },
+
+    // Raises a native notification. No-op when unsupported or permission !== 'granted'.
+    show: function (title, body, tag) {
+        if (!window.wildwoodBrowserNotifications.isSupported()) return;
+        if (Notification.permission !== 'granted') return;
+        try {
+            const notification = new Notification(title, {
+                body: body || undefined,
+                tag: tag || undefined
+            });
+            notification.onclick = function () {
+                try { window.focus(); } catch (e) { /* focus can throw in embedded contexts */ }
+            };
+        } catch (e) {
+            // Constructing a Notification can throw on platforms that require a service
+            // worker (e.g. mobile Chrome). Degrade silently — the in-app inbox row remains.
+        }
+    }
+};

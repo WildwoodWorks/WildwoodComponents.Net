@@ -103,11 +103,25 @@ function collectBrowserContext() {
 }
 
 // ---------- html2canvas loader ----------
+// Self-hosting override: by default html2canvas is loaded from the cdnjs CDN. Hosts that
+// cannot (or prefer not to) reach a third-party CDN can serve the library same-origin —
+// e.g. from _content/WildwoodComponents.Blazor/js/html2canvas.min.js — by setting
+// `window.__WW_HTML2CANVAS_SRC__` to that URL before the first screenshot capture. An
+// empty/non-string value falls back to the default CDN URL. Alternatively, pre-register
+// `window.html2canvas` yourself and no script is injected at all.
+const DEFAULT_HTML2CANVAS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+
+function resolveHtml2CanvasSrc() {
+    const override = window.__WW_HTML2CANVAS_SRC__;
+    if (typeof override === 'string' && override.length > 0) return override;
+    return DEFAULT_HTML2CANVAS_URL;
+}
+
 function ensureHtml2Canvas() {
     return new Promise(function (resolve, reject) {
         if (typeof window.html2canvas !== 'undefined') { resolve(); return; }
         const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        s.src = resolveHtml2CanvasSrc();
         s.onload = function () { resolve(); };
         s.onerror = function () { reject(new Error('Failed to load screenshot library.')); };
         document.head.appendChild(s);

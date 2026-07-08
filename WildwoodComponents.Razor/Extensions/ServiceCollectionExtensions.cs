@@ -220,6 +220,16 @@ public static class ServiceCollectionExtensions
             return new WildwoodFeedbackService(httpClient, sessionManager, logger, cache);
         });
 
+        // Notification inbox service (backend-connected persisted inbox + delivery preferences).
+        // Distinct from the transient toast surface; backs the /api/wildwood-notifications proxy.
+        services.AddScoped<IWildwoodNotificationInboxService>(sp =>
+        {
+            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
+            var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
+            var logger = sp.GetRequiredService<ILogger<WildwoodNotificationInboxService>>();
+            return new WildwoodNotificationInboxService(httpClient, sessionManager, logger);
+        });
+
         // Consent service (anonymous endpoints; the ConsentBanner client engine calls them directly,
         // this is provided for parity and same-origin proxy scenarios).
         services.AddScoped<IWildwoodConsentService>(sp =>

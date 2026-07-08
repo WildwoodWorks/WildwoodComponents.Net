@@ -1,0 +1,75 @@
+@using WildwoodComponents.Shared.Models
+@using WildwoodComponents.Razor.Models
+@model NotificationPreferencesViewModel
+
+@{
+    var cid = Model.ComponentId;
+    var pref = Model.Preferences;
+}
+
+@* Delivery-preference toggles, pre-rendered server-side. notification-inbox.js persists each
+   toggle via PUT to the same-origin proxy; the browser toggle is gated on the Web Notifications
+   permission (requested on enable). data-event-opt-outs-json round-trips the opaque server blob. *@
+<div id="ww-notification-prefs-@cid"
+     class="ww-notification-prefs"
+     data-component-id="@cid"
+     data-proxy-url="@Model.ProxyBaseUrl"
+     data-app-id="@Model.AppId"
+     data-event-opt-outs-json="@pref.EventOptOutsJson">
+
+    <div class="ww-notification-prefs-header">
+        <h4 class="ww-notification-prefs-title">Notification Preferences</h4>
+        <span class="ww-notification-prefs-saving" style="display:none;">Saving…</span>
+    </div>
+
+    <ul class="ww-notification-prefs-list">
+        <li class="ww-notification-prefs-row">
+            <label class="ww-notification-prefs-label">
+                <span>Email notifications</span>
+                <input type="checkbox"
+                       class="ww-notification-prefs-toggle"
+                       data-channel="emailEnabled"
+                       @(pref.EmailEnabled ? "checked" : "") />
+            </label>
+        </li>
+
+        <li class="ww-notification-prefs-row">
+            <label class="ww-notification-prefs-label">
+                <span>SMS notifications</span>
+                <input type="checkbox"
+                       class="ww-notification-prefs-toggle"
+                       data-channel="smsEnabled"
+                       @(pref.SmsEnabled ? "checked" : "") />
+            </label>
+        </li>
+
+        @if (Model.ShowPush)
+        {
+            <li class="ww-notification-prefs-row">
+                <label class="ww-notification-prefs-label">
+                    <span>Push notifications</span>
+                    <input type="checkbox"
+                           class="ww-notification-prefs-toggle"
+                           data-channel="pushEnabled"
+                           @(pref.PushEnabled ? "checked" : "") />
+                </label>
+            </li>
+        }
+
+        @if (Model.ShowBrowser)
+        {
+            <li class="ww-notification-prefs-row">
+                <label class="ww-notification-prefs-label">
+                    <span>
+                        Browser notifications
+                        <span class="ww-notification-prefs-hint" data-role="browser-hint"></span>
+                    </span>
+                    <input type="checkbox"
+                           class="ww-notification-prefs-toggle"
+                           data-channel="browserEnabled"
+                           @(pref.BrowserEnabled ? "checked" : "") />
+                </label>
+            </li>
+        }
+    </ul>
+</div>
