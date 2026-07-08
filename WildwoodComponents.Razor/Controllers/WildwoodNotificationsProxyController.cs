@@ -37,11 +37,21 @@ public class WildwoodNotificationsProxyController : ControllerBase
         _logger = logger;
     }
 
+    // A 401 from the API on a read means the server session token is dead. Signal the browser via a
+    // response header (kept alongside the graceful body so the retain semantics are preserved) so the
+    // client can dispatch a session-expired event — the server-side analog of the JS sessionExpired.
+    private void SignalSessionExpiryIfNeeded()
+    {
+        if (_service.LastResponseUnauthorized)
+            Response.Headers["X-Session-Expired"] = "true";
+    }
+
     /// <summary>GET /api/wildwood-notifications — the authenticated user's inbox list.</summary>
     [HttpGet]
     public async Task<IActionResult> List()
     {
         var list = await _service.GetNotificationsAsync();
+        SignalSessionExpiryIfNeeded();
         // null = transient: 502 tells the client to retain its last-good list.
         return list is null ? StatusCode(StatusCodes.Status502BadGateway) : Ok(list);
     }
@@ -51,6 +61,7 @@ public class WildwoodNotificationsProxyController : ControllerBase
     public async Task<IActionResult> Count()
     {
         var count = await _service.GetUnreadCountAsync();
+        SignalSessionExpiryIfNeeded();
         return count is null ? StatusCode(StatusCodes.Status502BadGateway) : Ok(count.Value);
     }
 
@@ -83,6 +94,7 @@ public class WildwoodNotificationsProxyController : ControllerBase
     public async Task<IActionResult> GetPreferences([FromQuery] string appId)
     {
         var pref = await _service.GetPreferencesAsync(appId);
+        SignalSessionExpiryIfNeeded();
         return pref is null ? StatusCode(StatusCodes.Status502BadGateway) : Ok(pref);
     }
 

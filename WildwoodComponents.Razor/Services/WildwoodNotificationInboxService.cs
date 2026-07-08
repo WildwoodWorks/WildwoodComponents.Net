@@ -33,6 +33,9 @@ public class WildwoodNotificationInboxService : IWildwoodNotificationInboxServic
         PropertyNameCaseInsensitive = true
     };
 
+    /// <inheritdoc />
+    public bool LastResponseUnauthorized { get; private set; }
+
     public WildwoodNotificationInboxService(
         HttpClient httpClient,
         IWildwoodSessionManager sessionManager,
@@ -52,10 +55,12 @@ public class WildwoodNotificationInboxService : IWildwoodNotificationInboxServic
 
     public async Task<List<AppNotification>?> GetNotificationsAsync()
     {
+        LastResponseUnauthorized = false;
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             using var response = await _httpClient.GetAsync("notifications");
+            LastResponseUnauthorized = response.StatusCode == HttpStatusCode.Unauthorized;
 
             if (IsAuthDeny(response.StatusCode))
                 return new List<AppNotification>();          // auth deny — graceful empty
@@ -74,10 +79,12 @@ public class WildwoodNotificationInboxService : IWildwoodNotificationInboxServic
 
     public async Task<int?> GetUnreadCountAsync()
     {
+        LastResponseUnauthorized = false;
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             using var response = await _httpClient.GetAsync("notifications/count");
+            LastResponseUnauthorized = response.StatusCode == HttpStatusCode.Unauthorized;
 
             if (IsAuthDeny(response.StatusCode))
                 return 0;                                     // auth deny — graceful 0
@@ -149,11 +156,13 @@ public class WildwoodNotificationInboxService : IWildwoodNotificationInboxServic
 
     public async Task<UserNotificationPreference?> GetPreferencesAsync(string appId)
     {
+        LastResponseUnauthorized = false;
         try
         {
             _sessionManager.ApplyAuthorizationHeader(_httpClient);
             var url = $"notifications/preferences?appId={Uri.EscapeDataString(appId ?? string.Empty)}";
             using var response = await _httpClient.GetAsync(url);
+            LastResponseUnauthorized = response.StatusCode == HttpStatusCode.Unauthorized;
 
             if (IsAuthDeny(response.StatusCode))
                 return UserNotificationPreference.CreateDefault(appId ?? string.Empty); // auth deny — safe defaults

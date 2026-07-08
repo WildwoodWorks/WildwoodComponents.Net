@@ -1,0 +1,56 @@
+@using WildwoodComponents.Shared.Models
+@using WildwoodComponents.Shared.Utilities
+
+<div class="ww-notification-inbox">
+    <div class="ww-notification-inbox-header">
+        <span class="ww-notification-inbox-title">Notifications</span>
+        <div>
+            @if (ShowRefresh)
+            {
+                <button type="button" class="ww-notification-inbox-refresh" @onclick="() => OnRefresh.InvokeAsync()">
+                    Refresh
+                </button>
+            }
+            @if (ShowMarkAllRead)
+            {
+                <button type="button" class="ww-notification-inbox-markall"
+                        @onclick="() => OnMarkAllRead.InvokeAsync()" disabled="@(UnreadCount == 0)">
+                    Mark all read
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (Notifications.Count == 0)
+    {
+        <div class="ww-notification-inbox-empty">@EmptyText</div>
+    }
+    else
+    {
+        <ul class="ww-notification-inbox-list">
+            @foreach (var n in Notifications)
+            {
+                <li class="ww-notification-inbox-item @(n.IsUnread ? "ww-notification-inbox-item-unread" : null)">
+                    <div class="ww-notification-inbox-item-main" @onclick="() => OnItemClick.InvokeAsync(n)">
+                        @if (n.IsUnread)
+                        {
+                            <span class="ww-notification-inbox-dot" aria-hidden="true"></span>
+                        }
+                        <div class="ww-notification-inbox-item-body">
+                            @if (!string.IsNullOrEmpty(n.Title))
+                            {
+                                <div class="ww-notification-inbox-item-title">@n.Title</div>
+                            }
+                            <div class="ww-notification-inbox-item-message">@n.Message</div>
+                            <div class="ww-notification-inbox-item-time">@FormatHelpers.RelativeTime(n.CreatedAt)</div>
+                        </div>
+                    </div>
+                    <div class="ww-notification-inbox-item-actions">
+                        <button type="button" class="ww-notification-inbox-remove" title="Dismiss"
+                                @onclick="() => OnRemove.InvokeAsync(n)">&times;</button>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+</div>

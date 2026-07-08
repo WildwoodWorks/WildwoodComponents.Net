@@ -722,7 +722,10 @@ namespace WildwoodComponents.Blazor.Extensions
                     var logger = loggerFactory?.CreateLogger<WildwoodComponents.Blazor.Services.NotificationInboxService>()
                                 ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.NotificationInboxService>.Instance;
 
-                    return new WildwoodComponents.Blazor.Services.NotificationInboxService(httpClient, logger);
+                    // Optional: lets a background 401 during polling participate in session-expiry handling.
+                    var sessionManager = serviceProvider.GetService<WildwoodComponents.Blazor.Services.IWildwoodSessionManager>();
+
+                    return new WildwoodComponents.Blazor.Services.NotificationInboxService(httpClient, logger, sessionManager);
                 });
             }
         }

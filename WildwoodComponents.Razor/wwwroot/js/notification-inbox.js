@@ -91,11 +91,21 @@
             for (var i = 0; i < listeners.length; i++) listeners[i](state);
         }
 
+        var sessionExpiredFired = false;
         function req(path, method) {
             return fetch(cfg.proxyUrl + path, {
                 method: method || 'GET',
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin'
+            }).then(function (r) {
+                // The proxy sets X-Session-Expired when the API returned 401 (dead session token).
+                // Dispatch a window event once so the host app can redirect to login — the server-side
+                // analog of the JS SDK's sessionExpired signal. The body still carries last-good data.
+                if (!sessionExpiredFired && r.headers && r.headers.get('X-Session-Expired') === 'true') {
+                    sessionExpiredFired = true;
+                    try { window.dispatchEvent(new CustomEvent('ww-session-expired')); } catch (e) { /* older browsers */ }
+                }
+                return r;
             });
         }
 

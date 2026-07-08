@@ -107,25 +107,4 @@ public partial class NotificationList : BaseWildwoodComponent
             if (wasUnread && _unreadCount > 0) _unreadCount--;
         }
     }
-
-    /// <summary>Relative "time ago" label matching the JS/Swift formatting rules.</summary>
-    private static string TimeAgo(DateTime createdAt)
-    {
-        var created = createdAt.Kind == DateTimeKind.Unspecified
-            ? DateTime.SpecifyKind(createdAt, DateTimeKind.Utc)
-            : createdAt.ToUniversalTime();
-
-        var seconds = (DateTime.UtcNow - created).TotalSeconds;
-        if (seconds < 0) seconds = 0;
-        if (seconds < 60) return "just now";
-
-        var minutes = seconds / 60;
-        if (minutes < 60) return $"{(int)minutes}m ago";
-
-        var hours = minutes / 60;
-        if (hours < 24) return $"{(int)hours}h ago";
-
-        var days = hours / 24;
-        return $"{(int)days}d ago";
-    }
 }

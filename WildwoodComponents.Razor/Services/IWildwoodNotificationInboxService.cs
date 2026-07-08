@@ -16,6 +16,14 @@ namespace WildwoodComponents.Razor.Services;
 public interface IWildwoodNotificationInboxService
 {
     /// <summary>
+    /// True when the most recent read call (list/count/preferences) received a 401 from the API —
+    /// the server session token is no longer valid. The proxy reads this to signal the browser so a
+    /// background poll surfaces session expiry. Valid only immediately after a read call (the service
+    /// is per-request scoped).
+    /// </summary>
+    bool LastResponseUnauthorized { get; }
+
+    /// <summary>
     /// All inbox notifications for the authenticated user.
     /// <c>null</c> = transient failure (retain last-good); empty list = auth deny.
     /// </summary>

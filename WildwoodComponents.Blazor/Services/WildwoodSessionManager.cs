@@ -78,6 +78,12 @@ public interface IWildwoodSessionManager : IDisposable
     Task TouchSessionAsync();
 
     /// <summary>
+    /// Notify the manager that an authenticated request returned 401 (e.g. a background notification
+    /// poll), triggering the same reactive refresh-or-expire path as an auth-service 401.
+    /// </summary>
+    void NotifyAuthenticationFailure();
+
+    /// <summary>
     /// Fired when the session has expired and token refresh has failed.
     /// The consuming app should redirect to the login page.
     /// </summary>
@@ -535,6 +541,14 @@ public class WildwoodSessionManager : IWildwoodSessionManager
     #endregion
 
     #region Event Handlers
+
+    /// <summary>
+    /// Notify the session manager that an authenticated request observed a 401 (e.g. a background
+    /// notification poll). Runs the same reactive path as an auth-service 401 — attempts a token
+    /// refresh, and fires SessionExpired if the session is truly dead. Mirrors the JS SDK's
+    /// sessionExpired-on-401 signal so background pollers participate in session-expiry handling.
+    /// </summary>
+    public void NotifyAuthenticationFailure() => OnAuthenticationFailed(this, EventArgs.Empty);
 
     private void OnAuthenticationFailed(object? sender, EventArgs e)
     {

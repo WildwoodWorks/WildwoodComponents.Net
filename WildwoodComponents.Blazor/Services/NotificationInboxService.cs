@@ -18,18 +18,33 @@ namespace WildwoodComponents.Blazor.Services
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<NotificationInboxService> _logger;
+        private readonly IWildwoodSessionManager? _sessionManager;
+        private string? _currentToken;
+        private string? _lastAuthFailureToken;
         private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-        public NotificationInboxService(HttpClient httpClient, ILogger<NotificationInboxService> logger)
+        public NotificationInboxService(HttpClient httpClient, ILogger<NotificationInboxService> logger, IWildwoodSessionManager? sessionManager = null)
         {
             _httpClient = httpClient;
             _logger = logger;
+            _sessionManager = sessionManager;
         }
 
         public void SetAuthToken(string? token)
         {
+            _currentToken = token;
             if (!string.IsNullOrEmpty(token))
                 _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        // A 401 means the session token is no longer valid. Notify the session manager (reactive
+        // refresh, else fire SessionExpired) once per token, mirroring the JS SDK's sessionExpired-
+        // on-401 signal so a background poll doesn't silently mask an expired session.
+        private void OnUnauthorized()
+        {
+            if (_sessionManager == null || _currentToken == _lastAuthFailureToken) return;
+            _lastAuthFailureToken = _currentToken;
+            _sessionManager.NotifyAuthenticationFailure();
         }
 
         // A 401 (session expired) or 403 (tier/feature denial) is a genuine deny, distinct from a
@@ -43,7 +58,10 @@ namespace WildwoodComponents.Blazor.Services
             {
                 var response = await _httpClient.GetAsync("api/notifications");
                 if (IsAuthDeny(response.StatusCode))
+                {
+                    if (response.StatusCode == HttpStatusCode.Unauthorized) OnUnauthorized();
                     return new List<AppNotification>();
+                }
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogWarning("GetNotifications returned {StatusCode}", response.StatusCode);
@@ -65,7 +83,10 @@ namespace WildwoodComponents.Blazor.Services
             {
                 var response = await _httpClient.GetAsync("api/notifications/count");
                 if (IsAuthDeny(response.StatusCode))
+                {
+                    if (response.StatusCode == HttpStatusCode.Unauthorized) OnUnauthorized();
                     return 0;
+                }
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogWarning("GetUnreadCount returned {StatusCode}", response.StatusCode);
@@ -131,7 +152,10 @@ namespace WildwoodComponents.Blazor.Services
             {
                 var response = await _httpClient.GetAsync($"api/notifications/preferences?appId={Uri.EscapeDataString(appId)}");
                 if (IsAuthDeny(response.StatusCode))
+                {
+                    if (response.StatusCode == HttpStatusCode.Unauthorized) OnUnauthorized();
                     return UserNotificationPreference.CreateDefault(appId);
+                }
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogWarning("GetPreferences returned {StatusCode} for app {AppId}", response.StatusCode, appId);
