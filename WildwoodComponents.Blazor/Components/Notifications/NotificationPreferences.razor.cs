@@ -29,6 +29,7 @@ public partial class NotificationPreferences : BaseWildwoodComponent
 
     private UserNotificationPreference? _pref;
     private bool _saving;
+    private int _browserToggleNonce;
 
     protected override async Task OnComponentInitializedAsync()
     {
@@ -67,18 +68,32 @@ public partial class NotificationPreferences : BaseWildwoodComponent
         if (value)
         {
             var supported = await InvokeJSAsync<bool>("wildwoodBrowserNotifications.isSupported");
-            if (supported != true) return;
+            if (supported != true)
+            {
+                ResetBrowserToggle();
+                return;
+            }
 
             var permission = await InvokeJSAsync<string>("wildwoodBrowserNotifications.requestPermission");
             if (!string.Equals(permission, "granted", StringComparison.OrdinalIgnoreCase))
             {
-                // Permission denied/dismissed — leave the toggle off.
-                StateHasChanged();
+                // Permission denied/dismissed — leave the preference off and re-sync the checkbox.
+                ResetBrowserToggle();
                 return;
             }
         }
 
         await SetChannelAsync(p => p.BrowserEnabled = value);
+    }
+
+    // The Browser checkbox is one-way bound to _pref.BrowserEnabled. When we reject the user's
+    // "on" click (unsupported / permission denied) the model value is unchanged, so Blazor's diff
+    // won't reset the DOM checkbox the user just ticked. Bumping the @key forces the input to be
+    // recreated with the correct (off) state.
+    private void ResetBrowserToggle()
+    {
+        _browserToggleNonce++;
+        StateHasChanged();
     }
 
     private async Task SetChannelAsync(Action<UserNotificationPreference> apply)

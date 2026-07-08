@@ -15,7 +15,11 @@
      data-component-id="@cid"
      data-proxy-url="@Model.ProxyBaseUrl"
      data-app-id="@Model.AppId"
-     data-event-opt-outs-json="@pref.EventOptOutsJson">
+     data-event-opt-outs-json="@pref.EventOptOutsJson"
+     data-email-enabled="@(pref.EmailEnabled ? "true" : "false")"
+     data-sms-enabled="@(pref.SmsEnabled ? "true" : "false")"
+     data-push-enabled="@(pref.PushEnabled ? "true" : "false")"
+     data-browser-enabled="@(pref.BrowserEnabled ? "true" : "false")">
 
     <div class="ww-notification-prefs-header">
         <h4 class="ww-notification-prefs-title">Notification Preferences</h4>

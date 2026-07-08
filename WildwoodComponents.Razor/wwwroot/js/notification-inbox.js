@@ -346,6 +346,15 @@
         var eventOptOutsJson = root.getAttribute('data-event-opt-outs-json');
         if (eventOptOutsJson === '' || eventOptOutsJson === null) eventOptOutsJson = null;
 
+        // Baseline of ALL channels from the server-rendered pref, so a save preserves channels
+        // whose toggle is hidden (ShowPush/ShowBrowser=false) instead of clobbering them to false.
+        var basePref = {
+            emailEnabled: root.getAttribute('data-email-enabled') === 'true',
+            smsEnabled: root.getAttribute('data-sms-enabled') === 'true',
+            pushEnabled: root.getAttribute('data-push-enabled') === 'true',
+            browserEnabled: root.getAttribute('data-browser-enabled') === 'true'
+        };
+
         var savingEl = root.querySelector('.ww-notification-prefs-saving');
         var browserHintEl = root.querySelector('[data-role="browser-hint"]');
         var toggles = root.querySelectorAll('.ww-notification-prefs-toggle');
@@ -366,12 +375,14 @@
         updateBrowserHint();
 
         function buildPref() {
+            // Seed from the server baseline (preserves hidden channels), then overwrite the
+            // channels that actually have a rendered toggle with their current checkbox state.
             var pref = {
                 appId: appId,
-                emailEnabled: false,
-                smsEnabled: false,
-                pushEnabled: false,
-                browserEnabled: false,
+                emailEnabled: basePref.emailEnabled,
+                smsEnabled: basePref.smsEnabled,
+                pushEnabled: basePref.pushEnabled,
+                browserEnabled: basePref.browserEnabled,
                 eventOptOutsJson: eventOptOutsJson
             };
             for (var i = 0; i < toggles.length; i++) {

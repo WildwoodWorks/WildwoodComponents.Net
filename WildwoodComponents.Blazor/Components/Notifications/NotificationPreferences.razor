@@ -46,7 +46,7 @@
             {
                 <label class="ww-notification-prefs-row">
                     <span class="ww-notification-prefs-label">Browser</span>
-                    <input class="ww-notification-prefs-toggle" type="checkbox"
+                    <input class="ww-notification-prefs-toggle" type="checkbox" @key="_browserToggleNonce"
                            checked="@_pref.BrowserEnabled" disabled="@_saving"
                            @onchange="@(e => ToggleBrowser((bool)(e.Value ?? false)))" />
                 </label>

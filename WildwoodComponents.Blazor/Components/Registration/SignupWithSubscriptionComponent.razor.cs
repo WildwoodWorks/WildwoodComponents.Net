@@ -532,7 +532,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
                 // Step 5: Gate the terminal Success transition on any pending registration
                 // disclaimers. The account exists and the session JWT is stored, so the
                 // signed-in user reviews and accepts before signup is considered complete.
-                await GateSuccessOnPendingDisclaimersAsync();
+                GateSuccessOnPendingDisclaimers();
             }
             catch (Exception ex)
             {
@@ -551,25 +551,20 @@ namespace WildwoodComponents.Blazor.Components.Registration
         /// pending, advances to the Disclaimers step so they can be accepted; otherwise goes
         /// straight to Success. Failures are non-fatal and fall through to Success.
         /// </summary>
-        private async Task GateSuccessOnPendingDisclaimersAsync()
+        private void GateSuccessOnPendingDisclaimers()
         {
-            try
+            // Gate on the authenticated login/registration response, which already carries the
+            // pending disclaimers (mirrors the React source + the sibling AuthenticationComponent).
+            // Reading them directly avoids a second, fallible fetch that could fail OPEN and let a
+            // user with pending disclaimers through on a transient error, and avoids a showOn filter
+            // that could surface a different set than the auth system flagged.
+            var pending = _authResponse?.PendingDisclaimers;
+            if (_authResponse?.RequiresDisclaimerAcceptance == true && pending != null && pending.Count > 0)
             {
-                // The disclaimer service HttpClient is unauthenticated, so identify the
-                // signed-in user by passing their id (mirrors the AppTier SetAuthToken pattern
-                // where the service exposes a token setter — this one does not).
-                var pending = await DisclaimerService.GetPendingDisclaimersAsync(AppId, _authResponse?.Id, "registration");
-                if (pending.ErrorMessage == null && pending.HasPendingDisclaimers && pending.Disclaimers.Any())
-                {
-                    _pendingDisclaimers = pending.Disclaimers;
-                    _currentStep = SignupStep.Disclaimers;
-                    Logger.LogInformation("Registration disclaimers pending after signup: {Count}", _pendingDisclaimers.Count);
-                    return;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogWarning(ex, "Failed to load registration disclaimers, continuing without them");
+                _pendingDisclaimers = pending;
+                _currentStep = SignupStep.Disclaimers;
+                Logger.LogInformation("Registration disclaimers pending after signup: {Count}", pending.Count);
+                return;
             }
 
             _currentStep = SignupStep.Success;
@@ -584,7 +579,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
         {
             try
             {
-                if (acceptances.Any())
+                if (acceptances.Count > 0)
                 {
                     var result = await DisclaimerService.AcceptDisclaimersAsync(AppId, acceptances);
                     if (!result.Success)

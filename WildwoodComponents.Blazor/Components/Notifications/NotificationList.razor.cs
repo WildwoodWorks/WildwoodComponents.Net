@@ -90,15 +90,11 @@ public partial class NotificationList : BaseWildwoodComponent
 
     private async Task MarkAllRead()
     {
-        var marked = await InboxService.MarkAllReadAsync();
-        if (marked > 0 || _unreadCount > 0)
-        {
-            foreach (var n in _notifications)
-            {
-                n.Status = AppNotificationStatus.Read;
-            }
-            _unreadCount = 0;
-        }
+        // Reconcile with the server rather than optimistically clobbering local state: a transient
+        // failure returns 0 (indistinguishable from "nothing to mark"), so re-fetching keeps the
+        // list/badge truthful instead of showing everything read when nothing persisted.
+        await InboxService.MarkAllReadAsync();
+        await RefreshAsync();
     }
 
     private async Task Remove(AppNotification n)

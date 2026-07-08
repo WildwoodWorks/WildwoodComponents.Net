@@ -33,6 +33,13 @@ public partial class NotificationsBell : BaseWildwoodComponent
     /// <summary>Poll cadence in seconds for the count + list refresh.</summary>
     [Parameter] public int PollIntervalSeconds { get; set; } = 45;
 
+    /// <summary>
+    /// Opt in to raising a native browser (Web Notifications API) notification when a new unread
+    /// item arrives. Off by default, mirroring the React <c>browserNotifications</c> option; it
+    /// still only fires when the user has granted permission (e.g. via NotificationPreferences).
+    /// </summary>
+    [Parameter] public bool BrowserNotifications { get; set; }
+
     /// <summary>Raised when an item is activated; when unset the item's Link is navigated to.</summary>
     [Parameter] public EventCallback<AppNotification> OnNavigate { get; set; }
 
@@ -99,6 +106,10 @@ public partial class NotificationsBell : BaseWildwoodComponent
 
     private async Task NotifyNewItemsAsync(List<AppNotification> list)
     {
+        // Off by default (mirrors React's browserNotifications option): only raise native OS
+        // notifications when the host explicitly opts in, so the bell never fires them unrequested.
+        if (!BrowserNotifications) return;
+
         // Prime silently on the first successful load so existing items don't all fire notifications.
         if (!_primed)
         {
@@ -154,15 +165,11 @@ public partial class NotificationsBell : BaseWildwoodComponent
 
     private async Task MarkAllRead()
     {
-        var marked = await InboxService.MarkAllReadAsync();
-        if (marked > 0 || _unreadCount > 0)
-        {
-            foreach (var n in _notifications)
-            {
-                n.Status = AppNotificationStatus.Read;
-            }
-            _unreadCount = 0;
-        }
+        // Reconcile with the server rather than optimistically clobbering local state: a transient
+        // failure returns 0 (indistinguishable from "nothing to mark"), so re-fetching keeps the
+        // list/badge truthful instead of showing everything read when nothing persisted.
+        await InboxService.MarkAllReadAsync();
+        await RefreshAsync();
     }
 
     private async Task Remove(AppNotification n)
