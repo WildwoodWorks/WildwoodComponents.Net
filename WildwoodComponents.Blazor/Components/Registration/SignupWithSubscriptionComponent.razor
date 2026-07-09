@@ -22,7 +22,7 @@
 
 <div class="@GetRootCssClasses() ww-signup-subscription @CssClass">
     @* Step Indicator *@
-    @if (_currentStep != SignupStep.Success && _currentStep != SignupStep.Processing)
+    @if (_currentStep != SignupStep.Success && _currentStep != SignupStep.Processing && _currentStep != SignupStep.Disclaimers)
     {
         <div class="ww-step-indicator">
             <div class="ww-steps">
@@ -212,6 +212,25 @@
                 <h3>Setting up your account</h3>
                 <p class="ww-text-muted">@(_processingStatus ?? "Please wait...")</p>
             }
+        </div>
+    }
+
+    @* Disclaimers — gated in front of Success once the account exists and the session JWT is stored *@
+    @if (_currentStep == SignupStep.Disclaimers)
+    {
+        <div class="ww-signup-step ww-signup-disclaimers">
+            <div class="ww-signup-disclaimers-header">
+                <h3>Terms &amp; Agreements</h3>
+                <p class="ww-text-muted">Please review and accept the following to finish setting up your account.</p>
+            </div>
+
+            <WildwoodComponents.Blazor.Components.Disclaimer.DisclaimerComponent
+                AppId="@AppId"
+                UserId="@_authResponse?.Id"
+                Mode="registration"
+                PendingDisclaimers="@_pendingDisclaimers"
+                ShowCancelButton="false"
+                OnDisclaimersAccepted="HandleDisclaimersAccepted" />
         </div>
     }
 

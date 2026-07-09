@@ -1,0 +1,22 @@
+@using WildwoodComponents.Razor.Models
+@model NotificationInboxViewModel
+
+@{
+    var cid = Model.ComponentId;
+}
+
+@* Standalone inbox list shell. notification-inbox.js hydrates + polls the list from the
+   same-origin proxy at data-proxy-url. Distinct root class from the rendered inner
+   .ww-notification-inbox so the script can find standalone instances. *@
+<div id="ww-notification-inbox-@cid"
+     class="ww-notification-inbox-standalone"
+     data-component-id="@cid"
+     data-proxy-url="@Model.ProxyBaseUrl"
+     data-app-id="@Model.AppId"
+     data-poll-interval="@Model.PollIntervalMs"
+     data-empty-text="@Model.EmptyText"
+     data-show-mark-all-read="@Model.ShowMarkAllRead.ToString().ToLowerInvariant()"
+     data-browser-notifications="@Model.BrowserNotifications.ToString().ToLowerInvariant()">
+
+    <div class="ww-notification-list-container"></div>
+</div>

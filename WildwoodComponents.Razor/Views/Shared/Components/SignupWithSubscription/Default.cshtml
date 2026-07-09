@@ -333,6 +333,33 @@
         </div>
     </div>
 
+    <!-- ===== STEP: DISCLAIMERS (surfaced after the account exists + is authenticated, before completion) =====
+         Client-rendered, mirroring the TokenRegistration disclaimer step. signup-subscription.js fetches the
+         now-authenticated user's pending "registration" disclaimers (GET api/disclaimeracceptance/pending/{appId}?showOn=registration)
+         after the account is created + logged in + tier subscribe attempted, renders the acceptance checkboxes
+         into .ww-disclaimers-list, reveals this step, and blocks completion until the required ones are accepted.
+         On accept it POSTs api/disclaimeracceptance/accept-bulk, then finishes success. When nothing is pending
+         the JS skips straight to success. Reuses the .ww-disclaimers-list / .ww-disclaimer-check /
+         .ww-accept-disclaimers-btn / .ww-cancel-disclaimers-btn classes so the shared styling applies. -->
+    <div class="ww-signup-step ww-signup-step-disclaimers" data-step="disclaimers" style="display: none;">
+        <div class="text-center mb-4">
+            <h4 class="mb-1">One more step</h4>
+            <p class="text-muted mb-0">Please review and accept the following before continuing.</p>
+        </div>
+        <div style="max-width: 640px; margin: 0 auto;">
+            <div class="ww-disclaimers-list"></div>
+
+            <div class="d-grid gap-2 mt-3">
+                <button type="button" class="btn btn-primary btn-lg ww-accept-disclaimers-btn" disabled>
+                    Accept &amp; Continue
+                </button>
+                <button type="button" class="btn btn-link ww-cancel-disclaimers-btn">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== STEP 4: SUCCESS ===== -->
     <div class="ww-signup-step ww-step-4" data-step="4" style="display: none;">
         <div class="text-center py-5">

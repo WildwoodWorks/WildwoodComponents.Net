@@ -1,0 +1,59 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Shared.Models
+@inherits BaseWildwoodComponent
+
+<div class="ww-notification-prefs @CssClass">
+    <div class="ww-notification-prefs-header">
+        <span class="ww-notification-prefs-title">Notification preferences</span>
+        @if (_saving)
+        {
+            <span class="ww-notification-prefs-saving">Saving...</span>
+        }
+    </div>
+
+    @if (_pref == null)
+    {
+        <div class="ww-notification-inbox-empty">Loading preferences...</div>
+    }
+    else
+    {
+        <div class="ww-notification-prefs-list">
+            <label class="ww-notification-prefs-row">
+                <span class="ww-notification-prefs-label">Email</span>
+                <input class="ww-notification-prefs-toggle" type="checkbox"
+                       checked="@_pref.EmailEnabled" disabled="@_saving"
+                       @onchange="@(e => ToggleEmail((bool)(e.Value ?? false)))" />
+            </label>
+
+            <label class="ww-notification-prefs-row">
+                <span class="ww-notification-prefs-label">SMS</span>
+                <input class="ww-notification-prefs-toggle" type="checkbox"
+                       checked="@_pref.SmsEnabled" disabled="@_saving"
+                       @onchange="@(e => ToggleSms((bool)(e.Value ?? false)))" />
+            </label>
+
+            @if (ShowPush)
+            {
+                <label class="ww-notification-prefs-row">
+                    <span class="ww-notification-prefs-label">Push</span>
+                    <input class="ww-notification-prefs-toggle" type="checkbox"
+                           checked="@_pref.PushEnabled" disabled="@_saving"
+                           @onchange="@(e => TogglePush((bool)(e.Value ?? false)))" />
+                </label>
+            }
+
+            @if (ShowBrowser)
+            {
+                <label class="ww-notification-prefs-row">
+                    <span class="ww-notification-prefs-label">Browser</span>
+                    <input class="ww-notification-prefs-toggle" type="checkbox" @key="_browserToggleNonce"
+                           checked="@_pref.BrowserEnabled" disabled="@_saving"
+                           @onchange="@(e => ToggleBrowser((bool)(e.Value ?? false)))" />
+                </label>
+                <div class="ww-notification-prefs-hint">
+                    Browser notifications require granting permission in this browser.
+                </div>
+            }
+        </div>
+    }
+</div>

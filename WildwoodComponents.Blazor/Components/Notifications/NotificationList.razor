@@ -1,0 +1,15 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Shared.Models
+@inherits BaseWildwoodComponent
+
+<div class="ww-notification-list-container @CssClass">
+    <NotificationInboxItems Notifications="_notifications"
+                            UnreadCount="_unreadCount"
+                            EmptyText="@EmptyText"
+                            ShowMarkAllRead="ShowMarkAllRead"
+                            ShowRefresh="true"
+                            OnItemClick="OnItemClick"
+                            OnRemove="Remove"
+                            OnMarkAllRead="MarkAllRead"
+                            OnRefresh="RefreshAsync" />
+</div>

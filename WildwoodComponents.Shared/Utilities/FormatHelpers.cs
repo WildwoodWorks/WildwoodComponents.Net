@@ -6,6 +6,31 @@ namespace WildwoodComponents.Shared.Utilities;
 /// </summary>
 public static class FormatHelpers
 {
+    /// <summary>
+    /// Relative "time ago" label for a timestamp, matching the JS/Swift notification formatting
+    /// (&lt;60s "just now", &lt;60m "Nm ago", &lt;24h "Nh ago", else "Nd ago"). This is a cross-stack
+    /// contract — keep the thresholds aligned with the JS/Swift timeAgo helpers.
+    /// </summary>
+    public static string RelativeTime(DateTime createdAt)
+    {
+        var created = createdAt.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(createdAt, DateTimeKind.Utc)
+            : createdAt.ToUniversalTime();
+
+        var seconds = (DateTime.UtcNow - created).TotalSeconds;
+        if (seconds < 0) seconds = 0;
+        if (seconds < 60) return "just now";
+
+        var minutes = seconds / 60;
+        if (minutes < 60) return $"{(int)minutes}m ago";
+
+        var hours = minutes / 60;
+        if (hours < 24) return $"{(int)hours}h ago";
+
+        var days = hours / 24;
+        return $"{(int)days}d ago";
+    }
+
     public static string GetCurrencySymbol(string currency)
     {
         return currency.ToUpperInvariant() switch

@@ -125,11 +125,19 @@
         }, 3000);
     }
 
+    // html2canvas is loaded lazily from the cdnjs CDN by default. A host can serve it
+    // same-origin (e.g. _content/WildwoodComponents.Razor/js/html2canvas.min.js) by setting
+    // window.__WW_HTML2CANVAS_SRC__ to that URL before the first capture; a pre-registered
+    // window.html2canvas global still short-circuits loading entirely.
+    var HTML2CANVAS_DEFAULT_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+
     function ensureHtml2Canvas() {
         return new Promise(function (resolve, reject) {
             if (typeof window.html2canvas !== 'undefined') { resolve(); return; }
+            var override = window.__WW_HTML2CANVAS_SRC__;
+            var src = (typeof override === 'string' && override) ? override : HTML2CANVAS_DEFAULT_SRC;
             var s = document.createElement('script');
-            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+            s.src = src;
             s.onload = function () { resolve(); };
             s.onerror = function () { reject(new Error('Failed to load screenshot library.')); };
             document.head.appendChild(s);

@@ -24,11 +24,16 @@
         var messageEl = root.querySelector('.ww-signup-sub-message');
         var loadingEl = root.querySelector('.ww-signup-sub-loading');
         var loadingMsg = root.querySelector('.ww-signup-sub-loading-msg');
+        var disclaimersStepEl = root.querySelector('.ww-signup-step-disclaimers');
+        var disclaimersListEl = root.querySelector('.ww-disclaimers-list');
+        var acceptDisclaimersBtn = root.querySelector('.ww-accept-disclaimers-btn');
+        var cancelDisclaimersBtn = root.querySelector('.ww-cancel-disclaimers-btn');
 
         var currentStep = 1;
         var selectedTier = null;
         var selectedPricing = null;
         var registeredUser = null;
+        var pendingDisclaimers = null;
 
         // ===== HELPERS =====
 
@@ -83,13 +88,181 @@
             clearMessage();
         }
 
+        // ===== DISCLAIMERS (surfaced post-registration, gated before completion) =====
+        //
+        // Self-contained, mirroring token-registration.js: after the account is created + logged in +
+        // tier subscribe attempted, we fetch the NOW-authenticated user's pending "registration"
+        // disclaimers via an authenticated same-origin GET, render the acceptance checkboxes client-side,
+        // reveal the disclaimer step, and BLOCK completion until the required ones are accepted. On accept
+        // we POST the acceptances to api/disclaimeracceptance/accept-bulk (same endpoint the Blazor/Razor
+        // disclaimer services use), then finish success. No dependency on disclaimer.js or the
+        // /api/wildwood-disclaimer proxy.
+
+        // Direct same-origin API helpers (identical mechanism to token-registration.js: paths starting
+        // with 'api/' hit the backend directly relative to the current origin, carrying the session
+        // cookie established at register/login so the calls are authenticated for the just-created user).
+        function apiGet(path) {
+            return fetch(path, {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin'
+            }).then(function (r) {
+                if (!r.ok) return null;
+                var ct = r.headers.get('content-type') || '';
+                if (ct.indexOf('json') >= 0) return r.json();
+                return r.text();
+            });
+        }
+
+        function apiPost(path, body) {
+            return fetch(path, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify(body),
+                credentials: 'same-origin'
+            });
+        }
+
+        function esc(str) {
+            if (!str) return '';
+            var div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function finishSuccess() {
+            goToStep(4); // Complete
+
+            root.dispatchEvent(new CustomEvent('ww-signup-complete', {
+                detail: {
+                    tierId: selectedTier.id,
+                    tierName: selectedTier.name,
+                    user: registeredUser
+                },
+                bubbles: true
+            }));
+        }
+
+        function showDisclaimersStep() {
+            var stepViews = root.querySelectorAll('.ww-signup-step');
+            for (var i = 0; i < stepViews.length; i++) {
+                stepViews[i].style.display = stepViews[i] === disclaimersStepEl ? '' : 'none';
+            }
+            clearMessage();
+        }
+
+        // Account exists and is authenticated; gate completion on any pending registration disclaimers
+        // before declaring success. If none are pending (or the fetch fails, matching token-registration's
+        // fail-open behavior) proceed straight to success.
+        function checkDisclaimersThenFinish() {
+            if (!appId || !disclaimersListEl) {
+                finishSuccess();
+                return;
+            }
+
+            apiGet('api/disclaimeracceptance/pending/' + encodeURIComponent(appId) + '?showOn=registration')
+                .then(function (response) {
+                    if (response && response.hasPendingDisclaimers && response.disclaimers && response.disclaimers.length > 0) {
+                        pendingDisclaimers = response.disclaimers;
+                        renderDisclaimers();
+                        showDisclaimersStep();
+                    } else {
+                        finishSuccess();
+                    }
+                })
+                .catch(function () {
+                    finishSuccess();
+                });
+        }
+
+        function renderDisclaimers() {
+            disclaimersListEl.innerHTML = '';
+
+            for (var i = 0; i < pendingDisclaimers.length; i++) {
+                var d = pendingDisclaimers[i];
+                var card = document.createElement('div');
+                card.className = 'card mb-3';
+                card.innerHTML =
+                    '<div class="card-body">' +
+                    '<h6 class="card-title">' + esc(d.title) +
+                    (d.isRequired ? ' <span class="text-danger">*</span>' : '') + '</h6>' +
+                    '<div class="card-text small mb-3" style="max-height: 200px; overflow-y: auto;">' +
+                    (d.contentFormat === 'html' ? d.content : esc(d.content)) + '</div>' +
+                    '<div class="form-check">' +
+                    '<input class="form-check-input ww-disclaimer-check" type="checkbox" ' +
+                    'data-disclaimer-id="' + esc(d.disclaimerId) + '" ' +
+                    'data-version-id="' + esc(d.versionId) + '" ' +
+                    (d.isRequired ? 'required' : '') + '>' +
+                    '<label class="form-check-label">I accept</label>' +
+                    '</div></div>';
+                disclaimersListEl.appendChild(card);
+            }
+
+            var checks = disclaimersListEl.querySelectorAll('.ww-disclaimer-check');
+            for (var j = 0; j < checks.length; j++) {
+                checks[j].addEventListener('change', updateDisclaimerBtn);
+            }
+            updateDisclaimerBtn();
+        }
+
+        function updateDisclaimerBtn() {
+            if (!acceptDisclaimersBtn) return;
+            var checks = disclaimersListEl.querySelectorAll('.ww-disclaimer-check[required]');
+            var allChecked = true;
+            for (var i = 0; i < checks.length; i++) {
+                if (!checks[i].checked) { allChecked = false; break; }
+            }
+            acceptDisclaimersBtn.disabled = !allChecked;
+        }
+
+        function acceptDisclaimers() {
+            var checks = disclaimersListEl.querySelectorAll('.ww-disclaimer-check:checked');
+            var acceptances = [];
+            for (var i = 0; i < checks.length; i++) {
+                acceptances.push({
+                    companyDisclaimerId: checks[i].dataset.disclaimerId,
+                    companyDisclaimerVersionId: checks[i].dataset.versionId
+                });
+            }
+
+            if (acceptDisclaimersBtn) acceptDisclaimersBtn.disabled = true;
+            setLoading(true, 'Saving your acceptance...');
+
+            apiPost('api/disclaimeracceptance/accept-bulk', { appId: appId, acceptances: acceptances })
+                .then(function (r) {
+                    setLoading(false);
+                    if (r && r.ok) {
+                        finishSuccess();
+                    } else {
+                        showMessage('Failed to record disclaimer acceptance. Please try again.', 'danger');
+                        updateDisclaimerBtn();
+                    }
+                })
+                .catch(function () {
+                    setLoading(false);
+                    showMessage('Error recording disclaimer acceptance. Please try again.', 'danger');
+                    updateDisclaimerBtn();
+                });
+        }
+
+        if (acceptDisclaimersBtn) {
+            acceptDisclaimersBtn.addEventListener('click', acceptDisclaimers);
+        }
+        if (cancelDisclaimersBtn) {
+            // Account already exists; cancelling does not bypass the gate (no success transition).
+            // Dispatch a bubbling event so hosts can decide what to do (e.g. sign out / "accept later").
+            cancelDisclaimersBtn.addEventListener('click', function () {
+                root.dispatchEvent(new CustomEvent('ww-signup-disclaimers-cancelled', { bubbles: true }));
+            });
+        }
+
         // ===== STEP 1: PLAN SELECTION =====
 
         root.addEventListener('click', function (e) {
             var card = e.target.closest('.ww-plan-select-card');
             if (!card || currentStep !== 1) return;
 
-            var btn = e.target.closest('.ww-select-plan-btn') || card.querySelector('.ww-select-plan-btn');
+            var btn = e.target.closest('.ww-choose-tier-btn') || card.querySelector('.ww-choose-tier-btn');
             // Also allow clicking the card itself
             if (!btn && !card) return;
 
@@ -115,7 +288,7 @@
 
         // ===== STEP 2: REGISTRATION =====
 
-        var registerForm = root.querySelector('.ww-register-form');
+        var registerForm = root.querySelector('.ww-registration-form');
         if (registerForm) {
             registerForm.addEventListener('submit', function (e) {
                 e.preventDefault();
@@ -213,16 +386,10 @@
                 })
                 .then(function () {
                     setLoading(false);
-                    goToStep(4); // Complete
 
-                    root.dispatchEvent(new CustomEvent('ww-signup-complete', {
-                        detail: {
-                            tierId: selectedTier.id,
-                            tierName: selectedTier.name,
-                            user: registeredUser
-                        },
-                        bubbles: true
-                    }));
+                    // Account exists and is authenticated; gate completion on any pending
+                    // registration disclaimers (fetched for the just-created user) before success.
+                    checkDisclaimersThenFinish();
                 })
                 .catch(function (err) {
                     setLoading(false);
@@ -232,7 +399,7 @@
 
         // ===== STEP 4: COMPLETION =====
 
-        var continueBtn = root.querySelector('.ww-signup-continue-btn');
+        var continueBtn = root.querySelector('.ww-get-started-btn');
         if (continueBtn) {
             continueBtn.addEventListener('click', function () {
                 if (returnUrl) {
@@ -246,7 +413,8 @@
         // ===== BACK BUTTONS =====
 
         root.addEventListener('click', function (e) {
-            var backBtn = e.target.closest('.ww-signup-back-btn');
+            // Step 2 -> "Back to Plans" (.ww-back-to-plans-btn); Step 3 -> "Back" (.ww-back-to-register-btn).
+            var backBtn = e.target.closest('.ww-back-to-plans-btn') || e.target.closest('.ww-back-to-register-btn');
             if (!backBtn) return;
             if (currentStep > 1) {
                 goToStep(currentStep - 1);

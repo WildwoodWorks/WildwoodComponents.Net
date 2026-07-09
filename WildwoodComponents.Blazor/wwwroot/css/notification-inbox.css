@@ -1,0 +1,295 @@
+/* WildwoodComponents Notification Inbox Styles
+ *
+ * Styles the backend-connected notification inbox: the bell + dropdown panel,
+ * the standalone inbox list, and the delivery-preferences toggles.
+ *
+ * Class names mirror @wildwood/react for structural parity across stacks.
+ * All colors use --ww-* custom properties (see wildwood-themes.css) with
+ * literal fallbacks so the stylesheet is usable standalone.
+ */
+
+/* ========================================
+   Bell + badge
+   ======================================== */
+.ww-notification-bell {
+    position: relative;
+    display: inline-block;
+}
+
+.ww-notification-bell-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--ww-text-primary, #212529);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.ww-notification-bell-button:hover {
+    background: var(--ww-bg-tertiary, #e9ecef);
+}
+
+.ww-notification-bell-icon {
+    display: block;
+}
+
+.ww-notification-bell-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--ww-danger, #dc3545);
+    color: var(--ww-text-inverse, #ffffff);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
+    text-align: center;
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+/* ========================================
+   Dropdown panel
+   ======================================== */
+.ww-notification-bell-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: transparent;
+}
+
+.ww-notification-bell-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 1001;
+    width: 360px;
+    max-width: 90vw;
+    background: var(--ww-bg-primary, #ffffff);
+    border: 1px solid var(--ww-bg-tertiary, #e9ecef);
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+}
+
+.ww-notification-list-container {
+    display: block;
+    max-height: 70vh;
+    overflow: hidden;
+}
+
+/* ========================================
+   Inbox list
+   ======================================== */
+.ww-notification-inbox {
+    display: flex;
+    flex-direction: column;
+    max-height: 70vh;
+}
+
+.ww-notification-inbox-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--ww-bg-tertiary, #e9ecef);
+}
+
+.ww-notification-inbox-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-notification-inbox-markall,
+.ww-notification-inbox-refresh {
+    padding: 2px 6px;
+    border: none;
+    background: transparent;
+    color: var(--ww-primary, #D4882C);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.ww-notification-inbox-markall:disabled {
+    color: var(--ww-text-muted, #6c757d);
+    cursor: default;
+}
+
+.ww-notification-inbox-empty {
+    padding: 28px 14px;
+    text-align: center;
+    color: var(--ww-text-muted, #6c757d);
+    font-size: 13px;
+}
+
+.ww-notification-inbox-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+}
+
+.ww-notification-inbox-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--ww-bg-secondary, #f8f9fa);
+}
+
+.ww-notification-inbox-item:last-child {
+    border-bottom: none;
+}
+
+.ww-notification-inbox-item-unread {
+    background: var(--ww-info-bg, rgba(23, 162, 184, 0.08));
+}
+
+.ww-notification-inbox-item-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.ww-notification-inbox-dot {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    margin-top: 6px;
+    border-radius: 50%;
+    background: var(--ww-primary, #D4882C);
+}
+
+.ww-notification-inbox-item-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ww-notification-inbox-item-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+    margin-bottom: 2px;
+}
+
+.ww-notification-inbox-item-message {
+    font-size: 13px;
+    color: var(--ww-text-secondary, #6c757d);
+    word-break: break-word;
+}
+
+.ww-notification-inbox-item-time {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-notification-inbox-item-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+}
+
+.ww-notification-inbox-remove {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--ww-text-muted, #6c757d);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.ww-notification-inbox-remove:hover {
+    background: var(--ww-bg-tertiary, #e9ecef);
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ========================================
+   Preferences
+   ======================================== */
+.ww-notification-prefs {
+    max-width: 420px;
+    padding: 16px;
+    background: var(--ww-bg-primary, #ffffff);
+    border: 1px solid var(--ww-bg-tertiary, #e9ecef);
+    border-radius: 10px;
+}
+
+.ww-notification-prefs-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.ww-notification-prefs-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-notification-prefs-saving {
+    font-size: 12px;
+    color: var(--ww-text-muted, #6c757d);
+    font-style: italic;
+}
+
+.ww-notification-prefs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ww-notification-prefs-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--ww-bg-secondary, #f8f9fa);
+    cursor: pointer;
+}
+
+.ww-notification-prefs-row:last-child {
+    border-bottom: none;
+}
+
+.ww-notification-prefs-label {
+    font-size: 13px;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-notification-prefs-toggle {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    accent-color: var(--ww-primary, #D4882C);
+    cursor: pointer;
+}
+
+.ww-notification-prefs-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--ww-text-muted, #6c757d);
+}

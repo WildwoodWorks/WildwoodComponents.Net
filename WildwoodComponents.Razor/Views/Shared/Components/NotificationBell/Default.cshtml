@@ -1,0 +1,35 @@
+@using WildwoodComponents.Razor.Models
+@model NotificationBellViewModel
+
+@{
+    var cid = Model.ComponentId;
+}
+
+@* Notification bell shell. notification-inbox.js hydrates the badge + panel list from the
+   same-origin proxy at data-proxy-url and keeps them in sync (polled per data-poll-interval). *@
+<div id="ww-notification-bell-@cid"
+     class="ww-notification-bell"
+     data-component-id="@cid"
+     data-proxy-url="@Model.ProxyBaseUrl"
+     data-app-id="@Model.AppId"
+     data-max-badge-count="@Model.MaxBadgeCount"
+     data-poll-interval="@Model.PollIntervalMs"
+     data-empty-text="@Model.EmptyText"
+     data-browser-notifications="@Model.BrowserNotifications.ToString().ToLowerInvariant()">
+
+    <button type="button"
+            class="ww-notification-bell-button ww-btn-icon"
+            aria-label="Notifications"
+            aria-haspopup="true"
+            aria-expanded="false">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+        <span class="ww-notification-bell-badge" aria-hidden="true" style="display:none;"></span>
+    </button>
+
+    <div class="ww-notification-bell-panel" role="dialog" aria-label="Notifications" style="display:none;">
+        <div class="ww-notification-list-container"></div>
+    </div>
+</div>
