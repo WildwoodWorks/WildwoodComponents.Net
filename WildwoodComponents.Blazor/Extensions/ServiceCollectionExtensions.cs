@@ -416,6 +416,16 @@ namespace WildwoodComponents.Blazor.Extensions
                 // Service may not exist, ignore
             }
 
+            // Register AI Flow subscriptions service (per-user scheduled runs)
+            try
+            {
+                RegisterAIFlowSubscriptionService(services, assembly, options);
+            }
+            catch
+            {
+                // Service may not exist, ignore
+            }
+
             // Register session manager for automatic token refresh and session monitoring
             try
             {
@@ -632,6 +642,35 @@ namespace WildwoodComponents.Blazor.Extensions
                 flowService.SetApiBaseUrl(options.BaseUrl?.TrimEnd('/') + "/api");
                 flowService.SetAppId(options.AppId);
                 return flowService;
+            });
+        }
+
+        /// <summary>
+        /// Registers the AI Flow subscriptions service (per-user scheduled runs of
+        /// published flows), mirroring RegisterAIFlowService.
+        /// </summary>
+        private static void RegisterAIFlowSubscriptionService(IServiceCollection services, Assembly assembly, WildwoodComponentsOptions options)
+        {
+            var serviceInterface = assembly.GetType("WildwoodComponents.Blazor.Services.IAIFlowSubscriptionService");
+            var serviceImplementation = assembly.GetType("WildwoodComponents.Blazor.Services.AIFlowSubscriptionService");
+            if (serviceInterface == null || serviceImplementation == null) return;
+
+            services.AddScoped(serviceInterface, serviceProvider =>
+            {
+                var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                httpClient.BaseAddress = new Uri(options.BaseUrl);
+                httpClient.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds > 0 ? options.RequestTimeoutSeconds : 300);
+                if (!string.IsNullOrEmpty(options.ApiKey))
+                    httpClient.DefaultRequestHeaders.Add("X-API-Key", options.ApiKey);
+
+                var loggerFactory = serviceProvider.GetService<ILoggerFactory>();
+                var logger = loggerFactory?.CreateLogger<WildwoodComponents.Blazor.Services.AIFlowSubscriptionService>()
+                             ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.AIFlowSubscriptionService>.Instance;
+
+                var subscriptionService = new WildwoodComponents.Blazor.Services.AIFlowSubscriptionService(httpClient, logger);
+                subscriptionService.SetApiBaseUrl(options.BaseUrl?.TrimEnd('/') + "/api");
+                subscriptionService.SetAppId(options.AppId);
+                return subscriptionService;
             });
         }
 
