@@ -114,4 +114,42 @@ public class WildwoodDocumentServiceTests
 
         Assert.Empty(documents);
     }
+
+    [Fact]
+    public async Task GetAsync_ReturnsDocument_AndForwardsAppId()
+    {
+        var (service, handler, session) = CreateService();
+        handler.WhenOk("documents/doc-1", DocJson);
+
+        var doc = await service.GetAsync("doc-1", "app-1");
+
+        Assert.NotNull(doc);
+        Assert.Equal("doc-1", doc!.Id);
+        Assert.True(session.ApplyAuthorizationHeaderCalls > 0);
+        Assert.Contains("api/documents/doc-1?requestedAppId=app-1", handler.Requests[0].Url);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_ReturnsBytes_OnSuccess()
+    {
+        var (service, handler, _) = CreateService();
+        handler.WhenOk("documents/doc-1/download", "%PDF-1.7");
+
+        var bytes = await service.DownloadAsync("doc-1", "app-1");
+
+        Assert.NotNull(bytes);
+        Assert.Equal("%PDF-1.7", Encoding.UTF8.GetString(bytes!));
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Get, request.Method);
+        Assert.Contains("api/documents/doc-1/download?requestedAppId=app-1", request.Url);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_ReturnsNull_OnFailure()
+    {
+        var (service, handler, _) = CreateService();
+        handler.When("documents/doc-1/download", HttpStatusCode.InternalServerError, "");
+
+        Assert.Null(await service.DownloadAsync("doc-1", "app-1"));
+    }
 }

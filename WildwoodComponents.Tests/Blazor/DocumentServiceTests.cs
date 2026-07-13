@@ -170,4 +170,66 @@ public class DocumentServiceTests
         Assert.Empty(documents);
         Assert.Equal(0, fired); // 403 = tier lacks DOCUMENTS, not a session expiry
     }
+
+    [Fact]
+    public async Task UploadAsync_DoesNotDisposeCallerStream()
+    {
+        var (service, handler) = CreateService();
+        handler.WhenOk("documents", DocJson);
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("%PDF-1.7"));
+        await service.UploadAsync(stream, "rfp.pdf", "application/pdf");
+
+        // The service buffers the bytes and must NOT dispose the caller's stream — a disposed
+        // MemoryStream reports CanRead == false. This keeps retry-on-null safe.
+        Assert.True(stream.CanRead);
+    }
+
+    [Fact]
+    public async Task GetAsync_ReturnsDocument_WithRequestedAppId()
+    {
+        var (service, handler) = CreateService();
+        handler.WhenOk("documents/doc-1", DocJson);
+
+        var doc = await service.GetAsync("doc-1");
+
+        Assert.NotNull(doc);
+        Assert.Equal("doc-1", doc!.Id);
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Get, request.Method);
+        Assert.Contains("https://api.test/api/documents/doc-1?requestedAppId=app-1", request.Url);
+    }
+
+    [Fact]
+    public async Task GetAsync_ReturnsNull_OnNotFound()
+    {
+        var (service, handler) = CreateService();
+        handler.When("documents/doc-1", HttpStatusCode.NotFound, "");
+
+        Assert.Null(await service.GetAsync("doc-1"));
+    }
+
+    [Fact]
+    public async Task DownloadAsync_ReturnsBytes_OnSuccess()
+    {
+        var (service, handler) = CreateService();
+        handler.WhenOk("documents/doc-1/download", "%PDF-1.7");
+
+        var bytes = await service.DownloadAsync("doc-1");
+
+        Assert.NotNull(bytes);
+        Assert.Equal("%PDF-1.7", Encoding.UTF8.GetString(bytes!));
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Get, request.Method);
+        Assert.Contains("https://api.test/api/documents/doc-1/download?requestedAppId=app-1", request.Url);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_ReturnsNull_OnFailure()
+    {
+        var (service, handler) = CreateService();
+        handler.When("documents/doc-1/download", HttpStatusCode.InternalServerError, "");
+
+        Assert.Null(await service.DownloadAsync("doc-1"));
+    }
 }

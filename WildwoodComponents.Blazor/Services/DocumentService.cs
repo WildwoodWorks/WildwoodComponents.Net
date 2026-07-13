@@ -33,6 +33,8 @@ namespace WildwoodComponents.Blazor.Services
         /// <summary>
         /// Uploads one file as multipart form data (field name "file"). Returns the created
         /// document (status "uploaded"; text extraction runs server-side) or null on failure.
+        /// The stream is read to the end into memory; the caller retains ownership (it is NOT
+        /// disposed), so a retry-on-null is safe with a re-seekable/fresh stream.
         /// </summary>
         Task<AppDocumentModel?> UploadAsync(Stream fileStream, string fileName, string? contentType = null);
 
@@ -102,10 +104,20 @@ namespace WildwoodComponents.Blazor.Services
         {
             try
             {
-                // No manual Content-Type: MultipartFormDataContent sets multipart/form-data with the
-                // boundary itself. The file goes in as a form field named "file" with its filename.
+                // Buffer the file so the multipart content owns the bytes: a StreamContent inside
+                // MultipartFormDataContent disposes the wrapped stream on send, which would turn a
+                // retry-on-null into an ObjectDisposedException. The caller keeps ownership of fileStream.
+                byte[] fileBytes;
+                using (var buffer = new MemoryStream())
+                {
+                    await fileStream.CopyToAsync(buffer);
+                    fileBytes = buffer.ToArray();
+                }
+
+                // No manual request Content-Type: MultipartFormDataContent sets multipart/form-data with
+                // the boundary itself. The file goes in as a form field named "file" with its filename.
                 using var form = new MultipartFormDataContent();
-                var filePart = new StreamContent(fileStream);
+                var filePart = new ByteArrayContent(fileBytes);
                 if (!string.IsNullOrEmpty(contentType))
                     filePart.Headers.ContentType = new MediaTypeHeaderValue(contentType);
                 form.Add(filePart, "file", string.IsNullOrEmpty(fileName) ? "document" : fileName);
