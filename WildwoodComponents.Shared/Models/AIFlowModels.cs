@@ -59,6 +59,56 @@ namespace WildwoodComponents.Shared.Models
         public string? ErrorMessage { get; set; }
     }
 
+    /// <summary>Full run detail — includes the output, so a client can sync the
+    /// result of a background/subscription run it did not stream.</summary>
+    public class AIFlowRunDetail : AIFlowRunSummary
+    {
+        public string? InputJson { get; set; }
+        public string? OutputJson { get; set; }
+    }
+
+    /// <summary>
+    /// A user's standing order for a scheduled run of a published flow (the
+    /// server's AppLangFlowSubscription): saved inputs + cron schedule +
+    /// notify-on-complete. TrailForecast models a favorited location as one.
+    /// </summary>
+    public class AIFlowSubscription
+    {
+        public string Id { get; set; } = string.Empty;
+        public string FlowId { get; set; } = string.Empty;
+        public string FlowName { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string? InputJson { get; set; }
+        public string? ScheduleCron { get; set; }
+        public string? ScheduleTimezone { get; set; }
+        public DateTime? NextRunAt { get; set; }
+        public bool IsEnabled { get; set; }
+        public bool NotifyOnComplete { get; set; }
+        public string? LastRunId { get; set; }
+        public DateTime? LastRunAt { get; set; }
+        public string? LastRunStatus { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class AIFlowSubscriptionCreateRequest
+    {
+        public string FlowId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string? InputJson { get; set; }
+        public string ScheduleCron { get; set; } = string.Empty;
+        public string? ScheduleTimezone { get; set; }
+        public bool NotifyOnComplete { get; set; } = true;
+    }
+
+    public class AIFlowSubscriptionUpdateRequest
+    {
+        public string? Name { get; set; }
+        public string? InputJson { get; set; }
+        public string? ScheduleCron { get; set; }
+        public string? ScheduleTimezone { get; set; }
+        public bool? NotifyOnComplete { get; set; }
+    }
+
     /// <summary>Display/behavior settings for AIFlowComponent.</summary>
     public class AIFlowSettings
     {
