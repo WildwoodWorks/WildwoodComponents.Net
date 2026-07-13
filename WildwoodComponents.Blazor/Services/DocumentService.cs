@@ -19,6 +19,13 @@ namespace WildwoodComponents.Blazor.Services
     /// absolute URLs built from an injected api base, an X-API-Key/Bearer header pair, per-call
     /// ?requestedAppId scoping, and a one-shot 401 signal (re-armed when the token changes).
     /// </summary>
+    /// <remarks>
+    /// This is a service-only feature — there is no Documents UI component to receive an
+    /// <c>AuthToken</c> parameter and wire it up (as e.g. AIFlowComponent does). A host that
+    /// injects <see cref="IDocumentService"/> directly MUST call <see cref="SetAuthToken"/> with
+    /// the app user's JWT before use, and call it again whenever the token is refreshed — the
+    /// library does not auto-inject a session token (the host owns the auth flow in this stack).
+    /// </remarks>
     public interface IDocumentService
     {
         event EventHandler? AuthenticationFailed;
