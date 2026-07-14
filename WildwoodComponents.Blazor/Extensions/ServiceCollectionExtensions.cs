@@ -426,6 +426,16 @@ namespace WildwoodComponents.Blazor.Extensions
                 // Service may not exist, ignore
             }
 
+            // Register tenant Documents service
+            try
+            {
+                RegisterDocumentService(services, assembly, options);
+            }
+            catch
+            {
+                // Service may not exist, ignore
+            }
+
             // Register session manager for automatic token refresh and session monitoring
             try
             {
@@ -671,6 +681,35 @@ namespace WildwoodComponents.Blazor.Extensions
                 subscriptionService.SetApiBaseUrl(options.BaseUrl?.TrimEnd('/') + "/api");
                 subscriptionService.SetAppId(options.AppId);
                 return subscriptionService;
+            });
+        }
+
+        /// <summary>
+        /// Registers the tenant Documents service with URL/app configuration, mirroring
+        /// RegisterAIFlowService (absolute URLs built from BaseUrl + "/api").
+        /// </summary>
+        private static void RegisterDocumentService(IServiceCollection services, Assembly assembly, WildwoodComponentsOptions options)
+        {
+            var serviceInterface = assembly.GetType("WildwoodComponents.Blazor.Services.IDocumentService");
+            var serviceImplementation = assembly.GetType("WildwoodComponents.Blazor.Services.DocumentService");
+            if (serviceInterface == null || serviceImplementation == null) return;
+
+            services.AddScoped(serviceInterface, serviceProvider =>
+            {
+                var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                httpClient.BaseAddress = new Uri(options.BaseUrl);
+                httpClient.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds > 0 ? options.RequestTimeoutSeconds : 300);
+                if (!string.IsNullOrEmpty(options.ApiKey))
+                    httpClient.DefaultRequestHeaders.Add("X-API-Key", options.ApiKey);
+
+                var loggerFactory = serviceProvider.GetService<ILoggerFactory>();
+                var logger = loggerFactory?.CreateLogger<WildwoodComponents.Blazor.Services.DocumentService>()
+                             ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.DocumentService>.Instance;
+
+                var documentService = new WildwoodComponents.Blazor.Services.DocumentService(httpClient, logger);
+                documentService.SetApiBaseUrl(options.BaseUrl?.TrimEnd('/') + "/api");
+                documentService.SetAppId(options.AppId);
+                return documentService;
             });
         }
 
