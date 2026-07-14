@@ -195,8 +195,12 @@ namespace WildwoodComponents.Blazor.Services
             {
                 var body = await response.Content.ReadAsStringAsync();
                 using var doc = JsonDocument.Parse(body);
-                if (doc.RootElement.TryGetProperty("message", out var message))
-                    return message.GetString();
+                // Fall back to the friendly copy when the message is absent OR empty — matches
+                // the JS (`body.message || fallback`) and Swift (`!message.isEmpty`) behavior so
+                // all three stacks never surface a blank plan-limit message.
+                if (doc.RootElement.TryGetProperty("message", out var message)
+                    && message.GetString() is { Length: > 0 } text)
+                    return text;
             }
             catch (JsonException) { /* non-JSON body — fall through */ }
             return "Your plan's favorites limit has been reached.";

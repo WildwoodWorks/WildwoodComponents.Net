@@ -210,6 +210,15 @@ public static class ServiceCollectionExtensions
             return new WildwoodAIFlowService(httpClient, sessionManager, logger);
         });
 
+        // Tenant Documents service
+        services.AddScoped<IWildwoodDocumentService>(sp =>
+        {
+            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
+            var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
+            var logger = sp.GetRequiredService<ILogger<WildwoodDocumentService>>();
+            return new WildwoodDocumentService(httpClient, sessionManager, logger);
+        });
+
         // Feedback service
         services.AddScoped<IWildwoodFeedbackService>(sp =>
         {

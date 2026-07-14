@@ -9,7 +9,7 @@ namespace WildwoodComponents.Tests.TestHelpers;
 /// </summary>
 public class FakeHttpMessageHandler : HttpMessageHandler
 {
-    public record RecordedRequest(HttpMethod Method, string Url, string? Body);
+    public record RecordedRequest(HttpMethod Method, string Url, string? Body, string? Authorization = null);
 
     private readonly List<(string UrlContains, HttpStatusCode Status, string Json)> _responses = new();
     public List<RecordedRequest> Requests { get; } = new();
@@ -36,7 +36,7 @@ public class FakeHttpMessageHandler : HttpMessageHandler
         }
 
         var url = request.RequestUri?.ToString() ?? string.Empty;
-        Requests.Add(new RecordedRequest(request.Method, url, body));
+        Requests.Add(new RecordedRequest(request.Method, url, body, request.Headers.Authorization?.ToString()));
 
         foreach (var (urlContains, status, json) in _responses)
         {
