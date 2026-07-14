@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -34,7 +33,7 @@ namespace WildwoodComponents.Shared.Seeder
 
         public async Task<SeederRunSummary> RunPendingAsync(CancellationToken ct = default)
         {
-            var ordered = TopoSort(_tasks.ToList());
+            var ordered = TopoSort(new List<ISeederTask>(_tasks));
             if (ordered.Count == 0)
                 return new SeederRunSummary(0, 0, 0, "No seed tasks registered.");
 
@@ -225,19 +224,31 @@ namespace WildwoodComponents.Shared.Seeder
             }
         }
 
-        /// <summary>Kahn topological sort by DependsOn. Unknown deps are ignored (warned); cycles throw.</summary>
+        /// <summary>
+        /// Kahn topological sort by DependsOn, stable in registration order. Unknown deps are
+        /// ignored (warned); cycles throw. Written without LINQ (WildwoodComponents no-LINQ rule);
+        /// task counts are tiny so the O(n^2) ready-scan is fine.
+        /// </summary>
         private List<ISeederTask> TopoSort(List<ISeederTask> tasks)
         {
             var byKey = new Dictionary<string, ISeederTask>(StringComparer.Ordinal);
-            foreach (var t in tasks)
+            var order = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (var i = 0; i < tasks.Count; i++)
             {
+                var t = tasks[i];
                 if (byKey.ContainsKey(t.Key))
                     throw new InvalidOperationException($"Duplicate seed task key '{t.Key}'.");
                 byKey[t.Key] = t;
+                order[t.Key] = i;
             }
 
-            var indegree = tasks.ToDictionary(t => t.Key, _ => 0, StringComparer.Ordinal);
-            var dependents = tasks.ToDictionary(t => t.Key, _ => new List<string>(), StringComparer.Ordinal);
+            var indegree = new Dictionary<string, int>(StringComparer.Ordinal);
+            var dependents = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            foreach (var t in tasks)
+            {
+                indegree[t.Key] = 0;
+                dependents[t.Key] = new List<string>();
+            }
 
             foreach (var t in tasks)
             {
@@ -253,29 +264,29 @@ namespace WildwoodComponents.Shared.Seeder
                 }
             }
 
-            // Stable order: process ready tasks in their original registration order.
-            var order = tasks.Select((t, i) => (t.Key, i)).ToDictionary(x => x.Key, x => x.i, StringComparer.Ordinal);
-            var ready = new List<string>(indegree.Where(kv => kv.Value == 0).Select(kv => kv.Key));
-            ready.Sort((a, b) => order[a].CompareTo(order[b]));
+            var remaining = new List<string>();
+            foreach (var t in tasks)
+                remaining.Add(t.Key);
 
             var result = new List<ISeederTask>();
-            while (ready.Count > 0)
+            while (remaining.Count > 0)
             {
-                var key = ready[0];
-                ready.RemoveAt(0);
-                result.Add(byKey[key]);
-                foreach (var d in dependents[key])
+                // Pick the ready (indegree 0) task with the lowest registration order — stable.
+                string? pick = null;
+                foreach (var key in remaining)
                 {
-                    if (--indegree[d] == 0)
-                    {
-                        var idx = ready.BinarySearch(d, Comparer<string>.Create((a, b) => order[a].CompareTo(order[b])));
-                        ready.Insert(idx < 0 ? ~idx : idx, d);
-                    }
+                    if (indegree[key] == 0 && (pick == null || order[key] < order[pick]))
+                        pick = key;
                 }
-            }
 
-            if (result.Count != tasks.Count)
-                throw new InvalidOperationException("Seed tasks contain a dependency cycle.");
+                if (pick == null)
+                    throw new InvalidOperationException("Seed tasks contain a dependency cycle.");
+
+                remaining.Remove(pick);
+                result.Add(byKey[pick]);
+                foreach (var d in dependents[pick])
+                    indegree[d]--;
+            }
 
             return result;
         }
