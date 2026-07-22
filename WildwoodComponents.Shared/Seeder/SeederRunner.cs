@@ -51,9 +51,19 @@ namespace WildwoodComponents.Shared.Seeder
                     _logger.LogInformation("Seeder is disabled for app {AppId} (server config). Skipping.", _options.AppId);
                     return new SeederRunSummary(0, ordered.Count, 0, "Seeder disabled via admin configuration.");
                 }
-                stopOnFirstFailure = config.StopOnFirstFailure;
-                maxAttempts = Math.Max(1, config.MaxAttempts);
-                retryDelaySeconds = Math.Max(0, config.RetryDelaySeconds);
+                // The server returns a TRANSIENT default DTO (empty Id) when no row has been
+                // persisted yet — its knob values are the server's defaults, not an operator's
+                // choice, so only a persisted row overrides the app's option defaults.
+                if (!string.IsNullOrEmpty(config.Id))
+                {
+                    stopOnFirstFailure = config.StopOnFirstFailure;
+                    maxAttempts = Math.Max(1, config.MaxAttempts);
+                    retryDelaySeconds = Math.Max(0, config.RetryDelaySeconds);
+                }
+                else
+                {
+                    _logger.LogDebug("No persisted seeder configuration for app {AppId}; using option defaults.", _options.AppId);
+                }
             }
             catch (Exception ex)
             {
@@ -169,7 +179,10 @@ namespace WildwoodComponents.Shared.Seeder
             }
 
             var completedAt = DateTime.UtcNow;
-            await RecordAsync(task, result, startedAt, completedAt, correlationId, ct);
+            // Nothing was written during a dry-run, so nothing is recorded either (the client's
+            // write guard would reject the POSTs anyway — this avoids the noisy swallowed errors).
+            if (!_options.DryRun)
+                await RecordAsync(task, result, startedAt, completedAt, correlationId, ct);
             return (result, lastError);
         }
 
@@ -203,6 +216,13 @@ namespace WildwoodComponents.Shared.Seeder
             {
                 _logger.LogWarning(ex, "Failed to record seed history for task '{Key}'.", task.Key);
             }
+
+            // A Skipped result means the task's work was NOT performed (dry-run, missing
+            // prerequisites, ...). Advancing the ledger would record Success@Version and
+            // permanently suppress the task, so Skipped leaves the ledger untouched — the
+            // task simply runs again on the next startup once it can do real work.
+            if (result.Status == SeederTaskStatus.Skipped)
+                return;
 
             try
             {

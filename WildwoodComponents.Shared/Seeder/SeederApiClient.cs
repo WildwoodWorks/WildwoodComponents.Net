@@ -58,11 +58,21 @@ namespace WildwoodComponents.Shared.Seeder
             _logger = logger;
             ApiKey = options.ApiKey;
 
-            var handler = new HttpClientHandler();
-            if (Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var uri) && uri.IsLoopback)
+            HttpMessageHandler handler;
+            if (options.PrimaryHandlerFactory is not null)
             {
-                handler.ServerCertificateCustomValidationCallback =
-                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+                // App-supplied handler (e.g. IPv4-preferred connects) — used as-is, no dev-cert bypass.
+                handler = options.PrimaryHandlerFactory();
+            }
+            else
+            {
+                var defaultHandler = new HttpClientHandler();
+                if (Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var uri) && uri.IsLoopback)
+                {
+                    defaultHandler.ServerCertificateCustomValidationCallback =
+                        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+                }
+                handler = defaultHandler;
             }
 
             _http = new HttpClient(handler)
@@ -80,10 +90,21 @@ namespace WildwoodComponents.Shared.Seeder
             try
             {
                 if (_authenticated) return;
+
+                // A pre-issued token wins over the login flow (parity with consuming apps' own
+                // token providers; the token expires and cannot be refreshed here).
+                if (!string.IsNullOrWhiteSpace(_options.BearerToken))
+                {
+                    BearerToken = _options.BearerToken;
+                    _authenticated = true;
+                    _logger.LogInformation("Seeder using the pre-issued bearer token (no login).");
+                    return;
+                }
+
                 if (!_options.HasCredentials)
                     throw new InvalidOperationException(
                         "Seeder has no admin credentials. Set Wildwood:Seeder:AdminEmail and :AdminPassword " +
-                        "(a CompanyAdmin service account without 2FA).");
+                        "(a CompanyAdmin service account without 2FA) or a pre-issued BearerToken.");
 
                 var body = new SeederLoginRequest
                 {

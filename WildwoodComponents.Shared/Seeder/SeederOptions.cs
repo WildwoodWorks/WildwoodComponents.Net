@@ -1,4 +1,5 @@
 using System;
+using System.Net.Http;
 
 namespace WildwoodComponents.Shared.Seeder
 {
@@ -6,7 +7,8 @@ namespace WildwoodComponents.Shared.Seeder
     /// Configuration for the in-app Seeder runner. Supplied by the consuming app
     /// (typically bound from <c>Wildwood:Seeder</c> in appsettings plus environment
     /// variable overrides). The seeder authenticates to WildwoodAPI as a CompanyAdmin
-    /// service account to seed data and record the ledger/history.
+    /// service account (or with a pre-issued bearer token) to seed data and record
+    /// the ledger/history.
     /// </summary>
     public sealed class SeederOptions
     {
@@ -24,6 +26,19 @@ namespace WildwoodComponents.Shared.Seeder
 
         /// <summary>CompanyAdmin service-account password.</summary>
         public string? AdminPassword { get; set; }
+
+        /// <summary>
+        /// Pre-issued admin JWT used INSTEAD of the email/password login when set (it expires — the
+        /// seeder cannot refresh it). Lets token-only environments seed without service-account creds.
+        /// </summary>
+        public string? BearerToken { get; set; }
+
+        /// <summary>
+        /// Optional factory for the HTTP primary handler, for apps with special outbound needs
+        /// (e.g. an IPv4-preferred connect callback on nodes with broken IPv6). When set, the
+        /// default handler — including its loopback dev-cert bypass — is not used.
+        /// </summary>
+        public Func<HttpMessageHandler>? PrimaryHandlerFactory { get; set; }
 
         /// <summary>AppId used for the login call (defaults to <see cref="AppId"/>).</summary>
         public string? LoginAppId { get; set; }
@@ -53,6 +68,8 @@ namespace WildwoodComponents.Shared.Seeder
         public int RetryDelaySecondsDefault { get; set; } = 20;
 
         public string EffectiveLoginAppId => string.IsNullOrWhiteSpace(LoginAppId) ? AppId : LoginAppId!;
-        public bool HasCredentials => !string.IsNullOrWhiteSpace(AdminEmail) && !string.IsNullOrWhiteSpace(AdminPassword);
+        public bool HasCredentials =>
+            !string.IsNullOrWhiteSpace(BearerToken)
+            || (!string.IsNullOrWhiteSpace(AdminEmail) && !string.IsNullOrWhiteSpace(AdminPassword));
     }
 }
