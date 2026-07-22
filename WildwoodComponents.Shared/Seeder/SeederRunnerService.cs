@@ -43,7 +43,8 @@ namespace WildwoodComponents.Shared.Seeder
             }
             if (!_options.HasCredentials)
             {
-                _logger.LogWarning("Seeder has no admin credentials; skipping automatic seeding.");
+                _logger.LogWarning(
+                    "Seeder has no admin credentials (AdminEmail/AdminPassword or BearerToken); skipping automatic seeding.");
                 return;
             }
 
