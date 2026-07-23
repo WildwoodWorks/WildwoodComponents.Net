@@ -37,49 +37,66 @@ namespace WildwoodComponents.Shared.Seeder
             if (ordered.Count == 0)
                 return new SeederRunSummary(0, 0, 0, "No seed tasks registered.");
 
-            await _client.EnsureAuthenticatedAsync(ct);
-
-            // Server config (enable kill-switch + run knobs); fall back to option defaults if absent.
             bool stopOnFirstFailure = _options.StopOnFirstFailureDefault;
             int maxAttempts = Math.Max(1, _options.MaxAttemptsDefault);
             int retryDelaySeconds = Math.Max(0, _options.RetryDelaySecondsDefault);
-            try
-            {
-                var config = await _client.GetSeederConfigurationAsync(_options.AppId, ct);
-                if (!config.Enabled)
-                {
-                    _logger.LogInformation("Seeder is disabled for app {AppId} (server config). Skipping.", _options.AppId);
-                    return new SeederRunSummary(0, ordered.Count, 0, "Seeder disabled via admin configuration.");
-                }
-                // The server returns a TRANSIENT default DTO (empty Id) when no row has been
-                // persisted yet — its knob values are the server's defaults, not an operator's
-                // choice, so only a persisted row overrides the app's option defaults.
-                if (!string.IsNullOrEmpty(config.Id))
-                {
-                    stopOnFirstFailure = config.StopOnFirstFailure;
-                    maxAttempts = Math.Max(1, config.MaxAttempts);
-                    retryDelaySeconds = Math.Max(0, config.RetryDelaySeconds);
-                }
-                else
-                {
-                    _logger.LogDebug("No persisted seeder configuration for app {AppId}; using option defaults.", _options.AppId);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not load seeder configuration; using option defaults.");
-            }
-
-            // Ledger keyed by task key for this environment.
             var ledger = new Dictionary<string, SeedTaskLedgerDto>(StringComparer.Ordinal);
-            try
+
+            if (_options.DryRun)
             {
-                foreach (var row in await _client.GetLedgerAsync(_options.AppId, _options.Environment, ct))
-                    ledger[row.TaskKey] = row;
+                // A dry-run touches the server not at all — no login (a real auth side effect:
+                // audit rows, LastLoginAt), no config/ledger reads. All tasks are treated as
+                // pending; their own dry-run guards keep them from writing.
+                _logger.LogInformation("Dry-run: skipping authentication and server reads; treating all tasks as pending.");
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogWarning(ex, "Could not load seed ledger; treating all tasks as pending.");
+                await _client.EnsureAuthenticatedAsync(ct);
+
+                // Server config (enable kill-switch + run knobs); only a PERSISTED row overrides
+                // the app's option defaults.
+                try
+                {
+                    var config = await _client.GetSeederConfigurationAsync(_options.AppId, ct);
+                    if (!config.Enabled)
+                    {
+                        _logger.LogInformation("Seeder is disabled for app {AppId} (server config). Skipping.", _options.AppId);
+                        return new SeederRunSummary(0, ordered.Count, 0, "Seeder disabled via admin configuration.");
+                    }
+                    // The server returns a TRANSIENT default DTO (empty Id) when no row has been
+                    // persisted yet — its knob values are the server's defaults, not an operator's
+                    // choice, so only a persisted row overrides the app's option defaults.
+                    if (!string.IsNullOrEmpty(config.Id))
+                    {
+                        stopOnFirstFailure = config.StopOnFirstFailure;
+                        maxAttempts = Math.Max(1, config.MaxAttempts);
+                        retryDelaySeconds = Math.Max(0, config.RetryDelaySeconds);
+                    }
+                    else
+                    {
+                        _logger.LogDebug("No persisted seeder configuration for app {AppId}; using option defaults.", _options.AppId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Fail CLOSED: the Enabled kill-switch lives in this config, so an unreadable
+                    // config must not be treated as "enabled". Seeding is idempotent and retried on
+                    // the next startup — skipping one run is cheaper than running against a
+                    // deliberate operator disable.
+                    _logger.LogWarning(ex, "Could not load seeder configuration; skipping this run (kill-switch state unknown).");
+                    return new SeederRunSummary(0, ordered.Count, 0, "Seeder configuration unavailable; run skipped.");
+                }
+
+                // Ledger keyed by task key for this environment.
+                try
+                {
+                    foreach (var row in await _client.GetLedgerAsync(_options.AppId, _options.Environment, ct))
+                        ledger[row.TaskKey] = row;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not load seed ledger; treating all tasks as pending.");
+                }
             }
 
             var correlationId = Guid.NewGuid().ToString("N");
@@ -109,6 +126,13 @@ namespace WildwoodComponents.Shared.Seeder
                         _logger.LogError("Aborting seeding: task '{Key}' failed and StopOnFirstFailure is set.", task.Key);
                         break;
                     }
+                }
+                else if (result.Status == SeederTaskStatus.Skipped)
+                {
+                    // Ran but declined to do work (dry-run, missing prerequisites) — counting it
+                    // as "run" would make an entirely-unseeded pass look healthy in the summary.
+                    skipped++;
+                    _logger.LogInformation("Seed task '{Key}' -> Skipped: {Message}", task.Key, result.Message);
                 }
                 else
                 {
@@ -189,8 +213,17 @@ namespace WildwoodComponents.Shared.Seeder
         private async Task RecordAsync(
             ISeederTask task, SeederTaskResult result, DateTime startedAt, DateTime completedAt, string correlationId, CancellationToken ct)
         {
+            // A Skipped result means the task's work was NOT performed (dry-run, missing
+            // prerequisites, ...). Recording nothing keeps the ledger honest AND avoids an
+            // append-only history row per startup from a perpetually-skipped task; the task
+            // simply runs again next boot once it can do real work.
+            if (result.Status == SeederTaskStatus.Skipped)
+                return;
+
+            // camelCase like every other payload on this surface — consumers of ArtifactsJson
+            // should not need a casing exception for this one field.
             var artifactsJson = result.Artifacts is { Count: > 0 }
-                ? JsonSerializer.Serialize(result.Artifacts)
+                ? JsonSerializer.Serialize(result.Artifacts, SeederApiClient.JsonOptions)
                 : null;
 
             SeedRunHistoryDto? history = null;
@@ -216,13 +249,6 @@ namespace WildwoodComponents.Shared.Seeder
             {
                 _logger.LogWarning(ex, "Failed to record seed history for task '{Key}'.", task.Key);
             }
-
-            // A Skipped result means the task's work was NOT performed (dry-run, missing
-            // prerequisites, ...). Advancing the ledger would record Success@Version and
-            // permanently suppress the task, so Skipped leaves the ledger untouched — the
-            // task simply runs again on the next startup once it can do real work.
-            if (result.Status == SeederTaskStatus.Skipped)
-                return;
 
             try
             {

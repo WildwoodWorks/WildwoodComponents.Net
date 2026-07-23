@@ -31,7 +31,7 @@ namespace WildwoodComponents.Shared.Seeder
         public static SeederTaskResult AlreadyPresent(string message) => new(SeederTaskStatus.AlreadyPresent, message);
         public static SeederTaskResult Updated(string message, IReadOnlyList<SeededArtifact>? artifacts = null) => new(SeederTaskStatus.Updated, message, artifacts);
         public static SeederTaskResult Skipped(string message) => new(SeederTaskStatus.Skipped, message);
-        public static SeederTaskResult Failed(string message) => new(SeederTaskStatus.Failed, message);
+        public static SeederTaskResult Failed(string message, IReadOnlyList<SeededArtifact>? artifacts = null) => new(SeederTaskStatus.Failed, message, artifacts);
 
         /// <summary>True when the task changed something (Created or Updated).</summary>
         public bool WroteChanges => Status is SeederTaskStatus.Created or SeederTaskStatus.Updated;
@@ -125,7 +125,8 @@ namespace WildwoodComponents.Shared.Seeder
         public string Id { get; set; } = string.Empty;
         public string AppId { get; set; } = string.Empty;
         public bool Enabled { get; set; } = true;
-        public bool StopOnFirstFailure { get; set; } = true;
+        // False like the server-side defaults: one failed task must not silently dark the rest.
+        public bool StopOnFirstFailure { get; set; } = false;
         public int MaxAttempts { get; set; } = 5;
         public int RetryDelaySeconds { get; set; } = 20;
     }
