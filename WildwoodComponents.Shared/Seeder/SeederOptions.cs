@@ -58,8 +58,9 @@ namespace WildwoodComponents.Shared.Seeder
         /// <summary>Delay before the runner starts, to let the app finish coming up. Default 3s.</summary>
         public TimeSpan StartupDelay { get; set; } = TimeSpan.FromSeconds(3);
 
-        /// <summary>Fallback for StopOnFirstFailure when no server config row exists yet.</summary>
-        public bool StopOnFirstFailureDefault { get; set; } = true;
+        /// <summary>Fallback for StopOnFirstFailure when no server config row exists yet.
+        /// False like the platform defaults: one failed task must not dark the independent rest.</summary>
+        public bool StopOnFirstFailureDefault { get; set; } = false;
 
         /// <summary>Fallback max attempts per task when no server config row exists yet.</summary>
         public int MaxAttemptsDefault { get; set; } = 5;
