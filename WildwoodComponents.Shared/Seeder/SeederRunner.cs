@@ -51,7 +51,27 @@ namespace WildwoodComponents.Shared.Seeder
             }
             else
             {
-                await _client.EnsureAuthenticatedAsync(ct);
+                // The auth gate guards the ENTIRE run: without a retry, one transient blip during a
+                // coordinated rollout (WildwoodAPI restarting alongside the app) aborts seeding
+                // until the next process start. Same bounded-retry knobs as per-task retries.
+                for (var attempt = 1; ; attempt++)
+                {
+                    try
+                    {
+                        await _client.EnsureAuthenticatedAsync(ct);
+                        break;
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex) when (attempt < maxAttempts)
+                    {
+                        _logger.LogWarning(ex, "Seeder authentication attempt {Attempt}/{Max} failed; retrying in {Delay}s.",
+                            attempt, maxAttempts, retryDelaySeconds);
+                        await Task.Delay(TimeSpan.FromSeconds(retryDelaySeconds), ct);
+                    }
+                }
 
                 // Server config (enable kill-switch + run knobs); only a PERSISTED row overrides
                 // the app's option defaults.
@@ -103,11 +123,36 @@ namespace WildwoodComponents.Shared.Seeder
             // One run-scoped state bag shared by every task's context, so a task can hand values
             // (resolved ids, tool names, ...) to later tasks.
             var sharedState = new Dictionary<string, object?>(StringComparer.Ordinal);
+            // Keys that failed (or were skipped because a dependency failed) THIS run — their
+            // dependents must not run against half-seeded prerequisites.
+            var failedKeys = new HashSet<string>(StringComparer.Ordinal);
             int ran = 0, skipped = 0, failed = 0;
 
             foreach (var task in ordered)
             {
                 ct.ThrowIfCancellationRequested();
+
+                // DependsOn is more than ordering: a dependent running after its dependency FAILED
+                // can persist artifacts referencing things that were never created (e.g. flows
+                // naming AI configs) and then ledger Success over the breakage. Skip instead —
+                // Skipped is never recorded, so the dependent re-runs next boot once the
+                // dependency succeeds, converging exactly like the failure itself.
+                string? failedDep = null;
+                foreach (var dep in task.DependsOn)
+                {
+                    if (failedKeys.Contains(dep))
+                    {
+                        failedDep = dep;
+                        break;
+                    }
+                }
+                if (failedDep != null)
+                {
+                    skipped++;
+                    failedKeys.Add(task.Key); // transitive: this task's own dependents skip too
+                    _logger.LogWarning("Seed task '{Key}' skipped: dependency '{Dep}' failed this run.", task.Key, failedDep);
+                    continue;
+                }
 
                 if (!ShouldRun(task, ledger))
                 {
@@ -116,10 +161,12 @@ namespace WildwoodComponents.Shared.Seeder
                     continue;
                 }
 
-                var (result, error) = await RunWithRetriesAsync(task, maxAttempts, retryDelaySeconds, correlationId, sharedState, ct);
+                ledger.TryGetValue(task.Key, out var priorLedger);
+                var (result, error) = await RunWithRetriesAsync(task, maxAttempts, retryDelaySeconds, correlationId, sharedState, priorLedger, ct);
                 if (result.Status == SeederTaskStatus.Failed)
                 {
                     failed++;
+                    failedKeys.Add(task.Key);
                     _logger.LogError("Seed task '{Key}' failed: {Message}", task.Key, result.Message);
                     if (stopOnFirstFailure)
                     {
@@ -159,7 +206,7 @@ namespace WildwoodComponents.Shared.Seeder
 
         private async Task<(SeederTaskResult Result, Exception? Error)> RunWithRetriesAsync(
             ISeederTask task, int maxAttempts, int retryDelaySeconds, string correlationId,
-            IDictionary<string, object?> sharedState, CancellationToken ct)
+            IDictionary<string, object?> sharedState, SeedTaskLedgerDto? priorLedger, CancellationToken ct)
         {
             var startedAt = DateTime.UtcNow;
             SeederTaskResult result = SeederTaskResult.Failed("Not run");
@@ -206,12 +253,13 @@ namespace WildwoodComponents.Shared.Seeder
             // Nothing was written during a dry-run, so nothing is recorded either (the client's
             // write guard would reject the POSTs anyway — this avoids the noisy swallowed errors).
             if (!_options.DryRun)
-                await RecordAsync(task, result, startedAt, completedAt, correlationId, ct);
+                await RecordAsync(task, result, startedAt, completedAt, correlationId, priorLedger, ct);
             return (result, lastError);
         }
 
         private async Task RecordAsync(
-            ISeederTask task, SeederTaskResult result, DateTime startedAt, DateTime completedAt, string correlationId, CancellationToken ct)
+            ISeederTask task, SeederTaskResult result, DateTime startedAt, DateTime completedAt,
+            string correlationId, SeedTaskLedgerDto? priorLedger, CancellationToken ct)
         {
             // A Skipped result means the task's work was NOT performed (dry-run, missing
             // prerequisites, ...). Recording nothing keeps the ledger honest AND avoids an
@@ -219,6 +267,19 @@ namespace WildwoodComponents.Shared.Seeder
             // simply runs again next boot once it can do real work.
             if (result.Status == SeederTaskStatus.Skipped)
                 return;
+
+            // The same guard for a PERSISTENTLY failing task: the ledger already says
+            // Failed@thisVersion, so re-recording every boot would grow SeedRunHistory without
+            // bound across restarts (deploys, drains, crashes). The first failure at this
+            // version keeps its history row + ledger state; repeats only log.
+            if (result.Status == SeederTaskStatus.Failed
+                && priorLedger != null
+                && priorLedger.InstalledVersion == task.Version
+                && string.Equals(priorLedger.Status, "Failed", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogDebug("Seed task '{Key}' still failing at v{Version}; not re-recording.", task.Key, task.Version);
+                return;
+            }
 
             // camelCase like every other payload on this surface — consumers of ArtifactsJson
             // should not need a casing exception for this one field.
