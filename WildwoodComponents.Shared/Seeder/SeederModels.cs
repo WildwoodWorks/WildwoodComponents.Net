@@ -45,6 +45,11 @@ namespace WildwoodComponents.Shared.Seeder
         public string Email { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string AppId { get; set; } = string.Empty;
+
+        /// <summary>WildwoodAPI records this on the session/audit trail. "server" matches the
+        /// shape server-to-server token providers send, so seeder logins are attributed as
+        /// server logins instead of "Unknown platform".</summary>
+        public string Platform { get; set; } = "server";
     }
 
     public sealed class SeederLoginResponse
