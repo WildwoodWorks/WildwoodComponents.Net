@@ -41,10 +41,14 @@ namespace WildwoodComponents.Shared.Seeder
                 _logger.LogWarning("Seeder not configured (BaseUrl/AppId missing); skipping.");
                 return;
             }
-            if (!_options.HasCredentials)
+            // The app's X-API-Key gates the run (primary path — no user login; see
+            // SeederApiClient.EnsureAuthenticatedAsync). Admin credentials / a pre-issued
+            // bearer token remain as the deprecated fallback.
+            if (string.IsNullOrWhiteSpace(_options.ApiKey) && !_options.HasCredentials)
             {
                 _logger.LogWarning(
-                    "Seeder has no admin credentials (AdminEmail/AdminPassword or BearerToken); skipping automatic seeding.");
+                    "Seeder has no API key (and no deprecated admin credentials/BearerToken); skipping automatic " +
+                    "seeding. Set Wildwood:Seeder:ApiKey to a key minted with the tiers:manage scope.");
                 return;
             }
 

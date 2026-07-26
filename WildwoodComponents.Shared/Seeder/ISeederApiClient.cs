@@ -6,17 +6,22 @@ namespace WildwoodComponents.Shared.Seeder
     /// <summary>
     /// Typed HTTP client over the WildwoodAPI surface, used by seed tasks to create/reconcile
     /// resources and by the runner to read/write the seed ledger and history. Mirrors the
-    /// admin REST conventions: Bearer auth after login, optional X-API-Key, camelCase JSON.
+    /// admin REST conventions: X-API-Key on every request (the primary credential — mint it
+    /// with the <c>tiers:manage</c> scope for tier-catalog tasks), Bearer auth after the
+    /// deprecated email/password login, camelCase JSON.
     /// </summary>
     public interface ISeederApiClient
     {
-        /// <summary>The bearer token acquired at login, if any.</summary>
+        /// <summary>The bearer token acquired at login (deprecated path) or pre-issued, if any.</summary>
         string? BearerToken { get; }
 
-        /// <summary>Optional X-API-Key sent with every request.</summary>
+        /// <summary>The app's X-API-Key sent with every request — the seeder's primary credential.</summary>
         string? ApiKey { get; set; }
 
-        /// <summary>Ensures the client is authenticated (logs in on first call using the configured credentials).</summary>
+        /// <summary>
+        /// Ensures the client is authenticated. Precedence: pre-issued BearerToken, then
+        /// <see cref="ApiKey"/> (no user login), then the deprecated email/password login.
+        /// </summary>
         Task EnsureAuthenticatedAsync(CancellationToken ct = default);
 
         // ---- generic verbs (tasks call arbitrary WildwoodAPI endpoints) ----

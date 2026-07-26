@@ -101,10 +101,31 @@ namespace WildwoodComponents.Shared.Seeder
                     return;
                 }
 
+                // API-key mode (primary): the app's X-API-Key is already attached to every request,
+                // so no user login is needed. Mint the key with the tiers:manage scope so the
+                // tier-catalog tasks can define tiers/add-ons/feature definitions headlessly; scope
+                // stays confined to the key's own app/company.
+                if (!string.IsNullOrWhiteSpace(ApiKey))
+                {
+                    if (!string.IsNullOrWhiteSpace(_options.AdminEmail) || !string.IsNullOrWhiteSpace(_options.AdminPassword))
+                        _logger.LogWarning(
+                            "Seeder AdminEmail/AdminPassword are deprecated and ignored because ApiKey is set. " +
+                            "Remove them; mint the X-API-Key with the tiers:manage scope instead.");
+                    _authenticated = true;
+                    _logger.LogInformation("Seeder authenticating via X-API-Key (app-scoped; no user login).");
+                    return;
+                }
+
                 if (!_options.HasCredentials)
                     throw new InvalidOperationException(
-                        "Seeder has no admin credentials. Set Wildwood:Seeder:AdminEmail and :AdminPassword " +
-                        "(a CompanyAdmin service account without 2FA) or a pre-issued BearerToken.");
+                        "Seeder has no credentials. Set Wildwood:Seeder:ApiKey to the app's X-API-Key — mint it " +
+                        "with the tiers:manage scope so the tier-catalog tasks can manage the catalog. " +
+                        "(Deprecated fallback: AdminEmail + AdminPassword for a CompanyAdmin service account " +
+                        "without 2FA, or a pre-issued BearerToken.)");
+
+                _logger.LogWarning(
+                    "Seeder email/password login is deprecated: mint the app X-API-Key with the tiers:manage " +
+                    "scope and set ApiKey instead. Credential login will be removed in a future major.");
 
                 var body = new SeederLoginRequest
                 {
