@@ -184,11 +184,23 @@ namespace WildwoodComponents.Blazor.Models
     public class AuthProvider
     {
         public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// The provider's name as shown to users (e.g. "Microsoft").
+        /// Not a full button label — see <see cref="ButtonText"/>.
+        /// </summary>
         public string DisplayName { get; set; } = string.Empty;
+
         public string Icon { get; set; } = string.Empty;
         public bool IsEnabled { get; set; }
         public string? ClientId { get; set; }
         public string? RedirectUri { get; set; }
+
+        /// <summary>
+        /// Optional full button label override (e.g. "Sign in with Google").
+        /// When empty, components render "Sign in with {DisplayName}".
+        /// </summary>
+        public string? ButtonText { get; set; }
     }
 
     // ComponentTheme now lives in WildwoodComponents.Shared.Models

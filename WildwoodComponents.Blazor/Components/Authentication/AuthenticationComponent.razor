@@ -405,7 +405,7 @@
                                 <button type="button" class="btn btn-outline-secondary social-btn"
                                     @onclick="() => HandleEmailProviderClick()" disabled="@IsLoading">
                                     <i class="@provider.Icon"></i>
-                                    Sign in with @provider.DisplayName
+                                    @GetProviderButtonLabel(provider)
                                 </button>
                             }
                             else
@@ -413,7 +413,7 @@
                                 <button type="button" class="btn btn-outline-secondary social-btn"
                                     @onclick="() => HandleSocialAuth(provider)" disabled="@IsLoading">
                                     <i class="@provider.Icon"></i>
-                                    Sign in with @provider.DisplayName
+                                    @GetProviderButtonLabel(provider)
                                 </button>
                             }
                         }
@@ -1029,6 +1029,23 @@
 
         // Check if provider is in the available list (already filtered for enabled)
         return _availableProviders?.Any(p => p.Name.Equals(provider.Name, StringComparison.OrdinalIgnoreCase)) == true;
+    }
+
+    private static string GetProviderButtonLabel(AuthProvider provider)
+    {
+        // ButtonText is the full label; DisplayName is just the provider's name.
+        if (!string.IsNullOrWhiteSpace(provider.ButtonText))
+        {
+            return provider.ButtonText;
+        }
+
+        // Some existing configs store the full label in DisplayName — don't double the prefix.
+        if (provider.DisplayName.StartsWith("Sign in", StringComparison.OrdinalIgnoreCase))
+        {
+            return provider.DisplayName;
+        }
+
+        return $"Sign in with {provider.DisplayName}";
     }
 
     private void TogglePasswordVisibility()

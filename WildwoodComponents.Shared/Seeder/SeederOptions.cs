@@ -6,9 +6,9 @@ namespace WildwoodComponents.Shared.Seeder
     /// <summary>
     /// Configuration for the in-app Seeder runner. Supplied by the consuming app
     /// (typically bound from <c>Wildwood:Seeder</c> in appsettings plus environment
-    /// variable overrides). The seeder authenticates to WildwoodAPI as a CompanyAdmin
-    /// service account (or with a pre-issued bearer token) to seed data and record
-    /// the ledger/history.
+    /// variable overrides). The seeder authenticates to WildwoodAPI with the app's
+    /// X-API-Key (mint it with the <c>tiers:manage</c> scope so tier-catalog tasks
+    /// work headlessly) to seed data and record the ledger/history.
     /// </summary>
     public sealed class SeederOptions
     {
@@ -18,13 +18,26 @@ namespace WildwoodComponents.Shared.Seeder
         /// <summary>The app id being seeded.</summary>
         public string AppId { get; set; } = string.Empty;
 
-        /// <summary>Optional X-API-Key sent with requests (only a few admin routes require it).</summary>
+        /// <summary>
+        /// The app's X-API-Key — the seeder's primary credential, sent on every request with no
+        /// user login. Mint it with the <c>tiers:manage</c> scope (Admin/CompanyAdmin only) so the
+        /// tier-catalog tasks can define tiers/add-ons/feature definitions headlessly; an unscoped
+        /// key seeds everything else and tier tasks skip.
+        /// </summary>
         public string? ApiKey { get; set; }
 
-        /// <summary>CompanyAdmin service-account email/username used to log in.</summary>
+        /// <summary>
+        /// CompanyAdmin service-account email/username used to log in.
+        /// Deprecated: mint the app's X-API-Key with the <c>tiers:manage</c> scope and set
+        /// <see cref="ApiKey"/> instead; ignored when ApiKey is set. Removal in a future major.
+        /// </summary>
         public string? AdminEmail { get; set; }
 
-        /// <summary>CompanyAdmin service-account password.</summary>
+        /// <summary>
+        /// CompanyAdmin service-account password.
+        /// Deprecated: mint the app's X-API-Key with the <c>tiers:manage</c> scope and set
+        /// <see cref="ApiKey"/> instead; ignored when ApiKey is set. Removal in a future major.
+        /// </summary>
         public string? AdminPassword { get; set; }
 
         /// <summary>

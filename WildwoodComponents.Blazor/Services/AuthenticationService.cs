@@ -550,7 +550,8 @@ namespace WildwoodComponents.Blazor.Services
                                     Icon = provider.Icon,
                                     IsEnabled = provider.IsEnabled,
                                     ClientId = provider.ClientId,
-                                    RedirectUri = provider.RedirectUri
+                                    RedirectUri = provider.RedirectUri,
+                                    ButtonText = provider.ButtonText
                                 });
                             }
                         }
