@@ -27,6 +27,11 @@ namespace WildwoodComponents.Shared.Http;
 /// permits. The SDK's retryable content-bearing requests use buffered content
 /// (<c>StringContent</c> / <c>JsonContent</c>), which re-serializes cleanly; a
 /// one-shot stream body would not, but no idempotent SDK call sends one.
+/// <para>
+/// The Seeder is deliberately exempt: <c>SeederApiClient</c> builds its own HttpClient and
+/// <c>SeederRunner</c> already retries whole tasks, so layering this handler underneath
+/// would compound the two.
+/// </para>
 /// </remarks>
 public sealed class WildwoodRetryHandler : DelegatingHandler
 {

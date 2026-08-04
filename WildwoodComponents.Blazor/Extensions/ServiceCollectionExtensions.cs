@@ -967,12 +967,14 @@ namespace WildwoodComponents.Blazor.Extensions
         public int RequestTimeoutSeconds { get; set; } = 30;
 
         /// <summary>
-        /// Enable automatic retry on failed requests
+        /// Enable automatic retry on 5xx/network failure (default true). Applies only to
+        /// idempotent methods (GET/HEAD/OPTIONS/PUT/DELETE); POST and PATCH are never
+        /// replayed, and timeouts are never retried. See <see cref="WildwoodRetryHandler"/>.
         /// </summary>
         public bool EnableRetry { get; set; } = true;
 
         /// <summary>
-        /// Maximum number of retry attempts
+        /// Maximum attempts including the first (default 3). A value of 1 means no retry.
         /// </summary>
         public int MaxRetryAttempts { get; set; } = 3;
 
