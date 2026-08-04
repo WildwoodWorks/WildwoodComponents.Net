@@ -607,7 +607,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
         {
             if (_httpClient == null)
             {
-                _httpClient = HttpClientFactory.CreateClient();
+                _httpClient = HttpClientFactory.CreateClient(Extensions.ServiceCollectionExtensions.WildwoodHttpClientName);
                 var baseUrl = OptionsAccessor.Value.BaseUrl;
                 if (!string.IsNullOrEmpty(baseUrl))
                 {
