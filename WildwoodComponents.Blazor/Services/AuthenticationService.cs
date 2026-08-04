@@ -600,78 +600,48 @@ namespace WildwoodComponents.Blazor.Services
 
         public async Task<AuthenticationConfiguration?> GetAuthenticationConfigurationAsync(string appId)
         {
-            const int maxRetries = 3;
-            const int retryDelayMs = 2000;
-            
-            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            // Retries live in WildwoodRetryHandler on the shared WildwoodAPI HttpClient, which
+            // already replays this GET on 5xx and network failures with exponential backoff.
+            // A loop here as well would multiply out to 9 attempts with compounding delay.
+            try
             {
-                try
+                _logger.LogInformation("Attempting to get auth configuration for app {AppId}", appId);
+
+                var response = await _httpClient.GetAsync($"api/AppComponentConfigurations/{appId}/auth-configuration");
+
+                _logger.LogInformation("Auth configuration response for app {AppId}: StatusCode={StatusCode}", appId, response.StatusCode);
+
+                if (response.IsSuccessStatusCode)
                 {
-                    _logger.LogInformation("Attempting to get auth configuration for app {AppId} (attempt {Attempt}/{MaxRetries})", appId, attempt, maxRetries);
-                    
-                    var response = await _httpClient.GetAsync($"api/AppComponentConfigurations/{appId}/auth-configuration");
+                    var content = await response.Content.ReadAsStringAsync();
+                    _logger.LogDebug("Auth configuration response content (first 500 chars): {Content}",
+                        content.Length > 500 ? content.Substring(0, 500) : content);
 
-                    _logger.LogInformation("Auth configuration response for app {AppId}: StatusCode={StatusCode}", appId, response.StatusCode);
+                    var config = System.Text.Json.JsonSerializer.Deserialize<AuthenticationConfiguration>(
+                        content,
+                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-                    if (response.IsSuccessStatusCode)
+                    if (config != null)
                     {
-                        var content = await response.Content.ReadAsStringAsync();
-                        _logger.LogDebug("Auth configuration response content (first 500 chars): {Content}", 
-                            content.Length > 500 ? content.Substring(0, 500) : content);
-                        
-                        var config = System.Text.Json.JsonSerializer.Deserialize<AuthenticationConfiguration>(
-                            content, 
-                            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                        
-                        if (config != null)
-                        {
-                            _logger.LogInformation("Successfully loaded auth configuration for app {AppId}. IsEnabled={IsEnabled}, AllowTokenRegistration={AllowTokenRegistration}, AllowOpenRegistration={AllowOpenRegistration}", 
-                                appId, config.IsEnabled, config.AllowTokenRegistration, config.AllowOpenRegistration);
-                        }
-                        else
-                        {
-                            _logger.LogWarning("Auth configuration deserialization returned null for app {AppId}", appId);
-                        }
-                        
-                        return config;
+                        _logger.LogInformation("Successfully loaded auth configuration for app {AppId}. IsEnabled={IsEnabled}, AllowTokenRegistration={AllowTokenRegistration}, AllowOpenRegistration={AllowOpenRegistration}",
+                            appId, config.IsEnabled, config.AllowTokenRegistration, config.AllowOpenRegistration);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Auth configuration deserialization returned null for app {AppId}", appId);
                     }
 
-                    // Don't retry on 404 (config not found) or 401/403 (auth issues) - these won't be fixed by retrying
-                    if (response.StatusCode == System.Net.HttpStatusCode.NotFound ||
-                        response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
-                        response.StatusCode == System.Net.HttpStatusCode.Forbidden)
-                    {
-                        _logger.LogWarning("GetAuthenticationConfigurationAsync for app {AppId} returned {StatusCode}", appId, response.StatusCode);
-                        return null;
-                    }
+                    return config;
+                }
 
-                    // For other errors, log and potentially retry
-                    _logger.LogWarning("GetAuthenticationConfigurationAsync for app {AppId} failed with status {StatusCode} on attempt {Attempt}", 
-                        appId, response.StatusCode, attempt);
-                }
-                catch (HttpRequestException ex) when (attempt < maxRetries)
-                {
-                    // Connection refused or other network errors - retry after delay
-                    _logger.LogWarning("Connection error getting auth configuration for app {AppId} on attempt {Attempt}: {Message}. Retrying in {DelayMs}ms...", 
-                        appId, attempt, ex.Message, retryDelayMs);
-                    await Task.Delay(retryDelayMs);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error getting authentication configuration for app {AppId} on attempt {Attempt}", appId, attempt);
-                    
-                    // Only retry on the last attempt if it's a recoverable error
-                    if (attempt >= maxRetries)
-                    {
-                        return null;
-                    }
-                    
-                    await Task.Delay(retryDelayMs);
-                }
+                _logger.LogWarning("GetAuthenticationConfigurationAsync for app {AppId} returned {StatusCode}", appId, response.StatusCode);
+                return null;
             }
-            
-            _logger.LogError("Failed to get authentication configuration for app {AppId} after {MaxRetries} attempts", appId, maxRetries);
-            return null;
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting authentication configuration for app {AppId}", appId);
+                return null;
+            }
         }
 
         public async Task<bool> ValidateLicenseTokenAsync(string token)

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
 using WildwoodComponents.Blazor.Services.Payment;
+using WildwoodComponents.Shared.Http;
 
 namespace WildwoodComponents.Blazor.Extensions
 {
@@ -11,6 +12,14 @@ namespace WildwoodComponents.Blazor.Extensions
     /// </summary>
     public static class ServiceCollectionExtensions
     {
+        /// <summary>
+        /// Name of the HttpClient every Wildwood service resolves from the factory. Named
+        /// rather than default so the retry handler attaches only to WildwoodAPI traffic and
+        /// leaves the host application's own <c>CreateClient()</c> calls untouched. Matches
+        /// the client name used by WildwoodComponents.Razor.
+        /// </summary>
+        public const string WildwoodHttpClientName = "WildwoodAPI";
+
         /// <summary>
         /// Adds WildwoodComponents services to the service collection with simplified configuration
         /// </summary>
@@ -69,6 +78,16 @@ namespace WildwoodComponents.Blazor.Extensions
                     options.RequestTimeoutSeconds = timeoutSeconds;
                 }
 
+                if (bool.TryParse(section["EnableRetry"], out var enableRetry))
+                {
+                    options.EnableRetry = enableRetry;
+                }
+
+                if (int.TryParse(section["MaxRetryAttempts"], out var maxRetryAttempts))
+                {
+                    options.MaxRetryAttempts = maxRetryAttempts;
+                }
+
                 // Read session management settings
                 if (int.TryParse(section["SessionExpirationMinutes"], out var sessionMinutes))
                 {
@@ -122,6 +141,24 @@ namespace WildwoodComponents.Blazor.Extensions
             if (!services.Any(s => s.ServiceType == typeof(IHttpClientFactory)))
             {
                 services.AddHttpClient();
+            }
+
+            // The named client every Wildwood service resolves. Deliberately configures nothing
+            // but the retry handler, leaving each service registration to set its own
+            // BaseAddress, headers and Timeout as it already did — so this stays purely
+            // additive and gives every service one retry policy instead of a hand-rolled loop
+            // apiece.
+            //
+            // Which failures are retried matches @wildwood/core and WildwoodCore exactly. The
+            // timeout budget does not: HttpClient.Timeout spans the whole handler chain, so
+            // attempts and backoff share one budget, where the JS client gives each attempt a
+            // fresh one. Bounded total latency is the safer default for a UI.
+            var wildwoodHttpClient = services.AddHttpClient(WildwoodHttpClientName);
+            if (options.EnableRetry)
+            {
+                wildwoodHttpClient.AddHttpMessageHandler(serviceProvider => new WildwoodRetryHandler(
+                    options.MaxRetryAttempts,
+                    serviceProvider.GetService<ILogger<WildwoodRetryHandler>>()));
             }
 
             // Register WildwoodComponents.Blazor services using reflection to avoid compile-time dependencies
@@ -225,7 +262,7 @@ namespace WildwoodComponents.Blazor.Extensions
                 {
                     // Create HttpClient with configuration
                     var httpClientFactory = serviceProvider.GetService<IHttpClientFactory>();
-                    var httpClient = httpClientFactory?.CreateClient() ?? new HttpClient();
+                    var httpClient = httpClientFactory?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
                     httpClient.BaseAddress = new Uri(options.BaseUrl);
                     
                     if (!string.IsNullOrEmpty(options.ApiKey))
@@ -264,7 +301,7 @@ namespace WildwoodComponents.Blazor.Extensions
             {
                 services.AddScoped(configServiceInterface, serviceProvider =>
                 {
-                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
                     httpClient.BaseAddress = new Uri(options.BaseUrl);
                     
                     if (!string.IsNullOrEmpty(options.ApiKey))
@@ -313,7 +350,7 @@ namespace WildwoodComponents.Blazor.Extensions
             {
                 services.AddScoped(serviceInterface, serviceProvider =>
                 {
-                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
                     httpClient.BaseAddress = new Uri(options.BaseUrl);
                     
                     if (!string.IsNullOrEmpty(options.ApiKey))
@@ -352,7 +389,7 @@ namespace WildwoodComponents.Blazor.Extensions
             {
                 services.AddScoped(paymentServiceInterface, serviceProvider =>
                 {
-                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
                     httpClient.BaseAddress = new Uri(options.BaseUrl);
                     
                     if (!string.IsNullOrEmpty(options.ApiKey))
@@ -560,7 +597,7 @@ namespace WildwoodComponents.Blazor.Extensions
             {
                 services.AddScoped(serviceInterface, serviceProvider =>
                 {
-                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
                     httpClient.BaseAddress = new Uri(options.BaseUrl);
                     
                     if (!string.IsNullOrEmpty(options.ApiKey))
@@ -598,7 +635,7 @@ namespace WildwoodComponents.Blazor.Extensions
             {
                 services.AddScoped(serviceInterface, serviceProvider =>
                 {
-                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
                     httpClient.BaseAddress = new Uri(options.BaseUrl);
                     httpClient.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds > 0 ? options.RequestTimeoutSeconds : 300);
                     
@@ -638,7 +675,7 @@ namespace WildwoodComponents.Blazor.Extensions
 
             services.AddScoped(serviceInterface, serviceProvider =>
             {
-                var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
                 httpClient.BaseAddress = new Uri(options.BaseUrl);
                 httpClient.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds > 0 ? options.RequestTimeoutSeconds : 300);
                 if (!string.IsNullOrEmpty(options.ApiKey))
@@ -667,7 +704,7 @@ namespace WildwoodComponents.Blazor.Extensions
 
             services.AddScoped(serviceInterface, serviceProvider =>
             {
-                var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
                 httpClient.BaseAddress = new Uri(options.BaseUrl);
                 httpClient.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds > 0 ? options.RequestTimeoutSeconds : 300);
                 if (!string.IsNullOrEmpty(options.ApiKey))
@@ -696,7 +733,7 @@ namespace WildwoodComponents.Blazor.Extensions
 
             services.AddScoped(serviceInterface, serviceProvider =>
             {
-                var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
                 httpClient.BaseAddress = new Uri(options.BaseUrl);
                 httpClient.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds > 0 ? options.RequestTimeoutSeconds : 300);
                 if (!string.IsNullOrEmpty(options.ApiKey))
@@ -725,7 +762,7 @@ namespace WildwoodComponents.Blazor.Extensions
             {
                 services.AddScoped(serviceInterface, serviceProvider =>
                 {
-                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
                     httpClient.BaseAddress = new Uri(options.BaseUrl);
 
                     if (!string.IsNullOrEmpty(options.ApiKey))
@@ -762,7 +799,7 @@ namespace WildwoodComponents.Blazor.Extensions
             {
                 services.AddScoped(serviceInterface, serviceProvider =>
                 {
-                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
                     httpClient.BaseAddress = new Uri(options.BaseUrl);
 
                     var loggerFactory = serviceProvider.GetService<ILoggerFactory>();
@@ -788,7 +825,7 @@ namespace WildwoodComponents.Blazor.Extensions
             {
                 services.AddScoped(serviceInterface, serviceProvider =>
                 {
-                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
                     httpClient.BaseAddress = new Uri(options.BaseUrl);
 
                     if (!string.IsNullOrEmpty(options.ApiKey))
@@ -820,7 +857,7 @@ namespace WildwoodComponents.Blazor.Extensions
             {
                 services.AddScoped(serviceInterface, serviceProvider =>
                 {
-                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
                     httpClient.BaseAddress = new Uri(options.BaseUrl);
 
                     if (!string.IsNullOrEmpty(options.ApiKey))
@@ -856,7 +893,7 @@ namespace WildwoodComponents.Blazor.Extensions
             {
                 services.AddScoped(serviceInterface, serviceProvider =>
                 {
-                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient() ?? new HttpClient();
+                    var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
                     httpClient.BaseAddress = new Uri(options.BaseUrl);
 
                     if (!string.IsNullOrEmpty(options.ApiKey))
@@ -930,12 +967,14 @@ namespace WildwoodComponents.Blazor.Extensions
         public int RequestTimeoutSeconds { get; set; } = 30;
 
         /// <summary>
-        /// Enable automatic retry on failed requests
+        /// Enable automatic retry on 5xx/network failure (default true). Applies only to
+        /// idempotent methods (GET/HEAD/OPTIONS/PUT/DELETE); POST and PATCH are never
+        /// replayed, and timeouts are never retried. See <see cref="WildwoodRetryHandler"/>.
         /// </summary>
         public bool EnableRetry { get; set; } = true;
 
         /// <summary>
-        /// Maximum number of retry attempts
+        /// Maximum attempts including the first (default 3). A value of 1 means no retry.
         /// </summary>
         public int MaxRetryAttempts { get; set; } = 3;
 

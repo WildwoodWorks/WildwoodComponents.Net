@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Razor.Authentication;
 using WildwoodComponents.Razor.Services;
+using WildwoodComponents.Shared.Http;
 
 namespace WildwoodComponents.Razor.Extensions;
 
@@ -50,6 +51,12 @@ public static class ServiceCollectionExtensions
             if (int.TryParse(section["RequestTimeoutSeconds"], out var timeoutSeconds))
                 options.RequestTimeoutSeconds = timeoutSeconds;
 
+            if (bool.TryParse(section["EnableRetry"], out var enableRetry))
+                options.EnableRetry = enableRetry;
+
+            if (int.TryParse(section["MaxRetryAttempts"], out var maxRetryAttempts))
+                options.MaxRetryAttempts = maxRetryAttempts;
+
             var appVersion = section["AppVersion"];
             if (!string.IsNullOrEmpty(appVersion))
                 options.AppVersion = appVersion;
@@ -86,6 +93,17 @@ public static class ServiceCollectionExtensions
             }
             client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds);
         });
+
+        // Which failures are retried matches @wildwood/core and WildwoodCore: 5xx and network
+        // failures only, idempotent methods only, never a timeout or cancellation. Note that
+        // the client's Timeout above spans the whole handler chain, so attempts and backoff
+        // share one budget rather than each attempt getting a fresh one as in the JS client.
+        if (options.EnableRetry)
+        {
+            httpClientBuilder.AddHttpMessageHandler(serviceProvider => new WildwoodRetryHandler(
+                options.MaxRetryAttempts,
+                serviceProvider.GetService<ILogger<WildwoodRetryHandler>>()));
+        }
 
         // In dev mode, accept self-signed certificates for localhost WildwoodAPI
         if (options.EnableDetailedErrors)
@@ -279,6 +297,18 @@ public class WildwoodComponentsRazorOptions
     /// Timeout for HTTP requests in seconds
     /// </summary>
     public int RequestTimeoutSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// Enable automatic retry on 5xx/network failure (default true). Applies only to
+    /// idempotent methods (GET/HEAD/OPTIONS/PUT/DELETE); POST and PATCH are never
+    /// replayed, and timeouts are never retried. See <see cref="WildwoodRetryHandler"/>.
+    /// </summary>
+    public bool EnableRetry { get; set; } = true;
+
+    /// <summary>
+    /// Maximum attempts including the first (default 3).
+    /// </summary>
+    public int MaxRetryAttempts { get; set; } = 3;
 
     /// <summary>
     /// Application version string sent with auth requests.
