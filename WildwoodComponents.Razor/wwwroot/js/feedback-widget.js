@@ -125,22 +125,147 @@
         }, 3000);
     }
 
-    // html2canvas is loaded lazily from the cdnjs CDN by default. A host can serve it
-    // same-origin (e.g. _content/WildwoodComponents.Razor/js/html2canvas.min.js) by setting
-    // window.__WW_HTML2CANVAS_SRC__ to that URL before the first capture; a pre-registered
-    // window.html2canvas global still short-circuits loading entirely.
-    var HTML2CANVAS_DEFAULT_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    // ===== html2canvas loader =====
+    // html2canvas is VENDORED into this package's wwwroot, and that single fact is what makes
+    // screenshot capture work behind a strict Content-Security-Policy. The library ships as
+    // wwwroot/js/html2canvas.min.js, which the RCL serves from the consuming app's OWN origin
+    // as _content/WildwoodComponents.Razor/js/html2canvas.min.js — a URL that `script-src
+    // 'self'` permits, where the public CDN this widget used to depend on is refused outright.
+    // There is no bundler here to code-split an npm dependency (the route @wildwood/react
+    // takes), so a checked-in copy beside this script is the equivalent.
+    //
+    // To update it: copy node_modules/html2canvas/dist/html2canvas.min.js from the pinned
+    // version over the vendored file. It keeps its own MIT banner, so provenance travels with it.
+    //
+    // Resolution order, most to least preferred:
+    //   1. window.html2canvas pre-registered by the host — nothing is fetched.
+    //   2. window.__WW_HTML2CANVAS_SRC__ — a host serving its own copy from a URL it picks.
+    //   3. The vendored copy beside this script (the normal path, and same-origin).
+    //   4. The public CDN — last, and only reached when a host has not mapped this package's
+    //      static web assets. A strict CSP will refuse it, which is what makes it a fallback
+    //      rather than the default it used to be.
+    var HTML2CANVAS_CDN_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+
+    // Read while this script is executing — `document.currentScript` is null afterwards, and
+    // resolving the sibling from it keeps the vendored URL correct under any base path or
+    // reverse-proxy prefix. The literal is the conventional RCL path, used only if this
+    // script's own URL cannot be read (it was inlined, or concatenated into a bundle).
+    var HTML2CANVAS_VENDORED_SRC = (function () {
+        var self = document.currentScript && document.currentScript.src;
+        return self
+            ? new URL('./html2canvas.min.js', self).href
+            : '/_content/WildwoodComponents.Razor/js/html2canvas.min.js';
+    })();
+
+    // How long to wait for one html2canvas <script> before giving up on that URL.
+    var HTML2CANVAS_LOAD_TIMEOUT_MS = 8000;
+
+    /**
+     * Why a capture could not be produced. The widget renders different copy per reason, so a
+     * cause it can explain must never collapse into one generic message.
+     *
+     * - 'library-blocked'  a <script> was refused or failed to fetch (a CSP that omits the URL,
+     *                      an unmapped _content path, an offline CDN).
+     * - 'library-timeout'  the request neither loaded nor errored inside the deadline — a proxy
+     *                      that blackholes it. Distinguished because "your CSP refused it"
+     *                      would be a false accusation here.
+     * - 'permission'       the share picker was dismissed, or this document may not call
+     *                      getDisplayMedia at all. Shown to the user as NOTHING: the common
+     *                      case is a deliberate cancel.
+     * - 'unsupported'      the capture path does not exist in this environment.
+     * - 'failed'           anything else.
+     */
+    function CaptureError(reason, message) {
+        var err = new Error(message);
+        err.name = 'ScreenshotCaptureError';
+        err.reason = reason;
+        return err;
+    }
+
+    function captureReason(err) {
+        return (err && err.reason) || 'failed';
+    }
+
+    // The host's chosen URL, if it named one. A host that sets it has said where it wants the
+    // library to come from, so that URL is tried ALONE — falling through to the vendored copy
+    // would quietly ignore the setting.
+    function html2canvasSources() {
+        var override = window.__WW_HTML2CANVAS_SRC__;
+        if (typeof override === 'string' && override) return [override];
+        return [HTML2CANVAS_VENDORED_SRC, HTML2CANVAS_CDN_SRC];
+    }
+
+    // In-flight load only. A SETTLED promise is never kept: on success window.html2canvas is
+    // set and the fast path below returns it, and caching a rejection would make one blocked
+    // fetch permanent for the life of the page. Every failure is retryable on the next attempt.
+    var html2canvasLoad = null;
 
     function ensureHtml2Canvas() {
+        if (typeof window.html2canvas !== 'undefined') return Promise.resolve(window.html2canvas);
+        if (html2canvasLoad) return html2canvasLoad;
+
+        var sources = html2canvasSources();
+        // Try each source in turn; the rejection carried forward is the last one's.
+        var attempt = sources.reduce(function (chain, src) {
+            return chain.catch(function () { return loadHtml2CanvasFrom(src); });
+        }, Promise.reject(CaptureError('library-blocked', 'Could not load the screenshot library.')));
+
+        html2canvasLoad = attempt;
+        var clearIfCurrent = function () { if (html2canvasLoad === attempt) html2canvasLoad = null; };
+        attempt.then(clearIfCurrent, clearIfCurrent);
+        return attempt;
+    }
+
+    // Inject one <script> and settle exactly once, whatever the browser does or does not do.
+    function loadHtml2CanvasFrom(src) {
         return new Promise(function (resolve, reject) {
-            if (typeof window.html2canvas !== 'undefined') { resolve(); return; }
-            var override = window.__WW_HTML2CANVAS_SRC__;
-            var src = (typeof override === 'string' && override) ? override : HTML2CANVAS_DEFAULT_SRC;
-            var s = document.createElement('script');
-            s.src = src;
-            s.onload = function () { resolve(); };
-            s.onerror = function () { reject(new Error('Failed to load screenshot library.')); };
-            document.head.appendChild(s);
+            var script = document.createElement('script');
+            // Assigned before the timer is armed, because this is the line that can throw
+            // synchronously under a `require-trusted-types-for 'script'` policy — the kind of
+            // policy that travels with the CSPs that block the CDN in the first place.
+            try {
+                script.src = src;
+            } catch (err) {
+                reject(CaptureError('library-blocked',
+                    'Could not request the screenshot library from ' + src + (err && err.message ? ': ' + err.message : '')));
+                return;
+            }
+            // Settle exactly once and ALWAYS: a request blackholed by a proxy fires neither
+            // onload nor onerror, and an unsettled promise here strands the caller — the panel
+            // is hidden for the duration of a capture, so it would stay hidden until a reload.
+            var settled = false;
+            var finish = function (fn) {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                script.onload = null;
+                script.onerror = null;
+                fn();
+            };
+            var timer = setTimeout(function () {
+                finish(function () {
+                    script.remove();
+                    reject(CaptureError('library-timeout', 'Timed out loading the screenshot library (' + src + ')'));
+                });
+            }, HTML2CANVAS_LOAD_TIMEOUT_MS);
+
+            script.onload = function () {
+                finish(function () {
+                    if (typeof window.html2canvas !== 'undefined') { resolve(window.html2canvas); return; }
+                    // Nothing to reuse: drop the element so a retry is not competing with a dud.
+                    script.remove();
+                    reject(CaptureError('library-blocked', 'The screenshot library loaded but did not initialize'));
+                });
+            };
+            // Fires for a network failure AND for a CSP refusal, which is the case this whole
+            // ordering exists for.
+            script.onerror = function () {
+                finish(function () {
+                    script.remove();
+                    reject(CaptureError('library-blocked', 'Could not load the screenshot library from ' + src));
+                });
+            };
+            document.head.appendChild(script);
         });
     }
 
@@ -318,10 +443,18 @@
         });
     }
 
-    // Area capture: user drags a selection rectangle, then annotates. Resolves with data URL or null.
+    // Area capture: user drags a selection rectangle, then annotates. Resolves with a data URL,
+    // or null when the user cancelled (Escape, or a selection too small to be a screenshot).
+    //
+    // This path has never asked to share the screen and still does not: html2canvas renders the
+    // selected region silently, and a getDisplayMedia fallback here would mean adding a
+    // permission prompt to a path that does not need one. Since the library is now vendored
+    // same-origin, the only way to reach a failure is a host that has neither mapped this
+    // package's static web assets nor allowed the CDN — and that host is now told exactly that,
+    // rather than the silent nothing this used to return.
     function captureArea(quality, maxSizeKb) {
-        return ensureHtml2Canvas().then(function () {
-            return new Promise(function (resolve) {
+        return ensureHtml2Canvas().then(function (html2canvas) {
+            return new Promise(function (resolve, reject) {
                 var overlay = document.createElement('div'); overlay.className = 'ww-feedback-capture-overlay';
                 var selection = document.createElement('div'); selection.className = 'ww-feedback-capture-selection';
                 overlay.appendChild(selection); document.body.appendChild(overlay);
@@ -331,15 +464,17 @@
                     capturing = false; overlay.remove();
                     var rect = { x: Math.min(mx, startX), y: Math.min(my, startY), width: Math.abs(mx - startX), height: Math.abs(my - startY) };
                     if (rect.width < 10 || rect.height < 10) { resolve(null); return; }
-                    window.html2canvas(document.body, {
+                    html2canvas(document.body, {
                         x: rect.x + window.scrollX, y: rect.y + window.scrollY,
                         width: rect.width, height: rect.height, useCORS: true, logging: false
                     }).then(function (canvas) {
                         return openAnnotationEditor(canvas, quality, maxSizeKb);
                     }).then(function (result) {
                         resolve(result);
-                    }).catch(function () {
-                        resolve(null);
+                    }).catch(function (e) {
+                        // A render failure is not a cancel. Resolving null here made the button
+                        // look broken — the panel came back with no screenshot and no reason.
+                        reject(asCaptureError(e));
                     });
                 }
 
@@ -363,56 +498,195 @@
         });
     }
 
-    // Full-page capture: prefer the native Screen Capture API, fall back to html2canvas.
-    function captureFullPage(quality, maxSizeKb) {
-        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-            return navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'browser' }, preferCurrentTab: true })
-                .then(function (stream) {
-                    var track = stream.getVideoTracks()[0];
-                    return new Promise(function (resolve, reject) {
-                        // Any failure must reject (not hang): the panel is hidden during capture, so a
-                        // never-settling promise would leave the widget stuck. Rejection falls back below.
-                        var fail = function (err) { track.stop(); reject(err || new Error('capture failed')); };
-                        setTimeout(function () {
-                            var video = document.createElement('video');
-                            video.srcObject = stream;
-                            video.onerror = function () { fail(new Error('video error')); };
-                            video.onloadedmetadata = function () {
-                                video.play().then(function () {
-                                    var c = document.createElement('canvas');
-                                    c.width = video.videoWidth;
-                                    c.height = video.videoHeight;
-                                    c.getContext('2d').drawImage(video, 0, 0);
-                                    track.stop();
-                                    resolve(c);
-                                }).catch(fail);
-                            };
-                        }, 200);
-                    });
-                })
-                .then(function (canvas) {
-                    return openAnnotationEditor(canvas, quality, maxSizeKb);
-                })
-                .catch(function () {
-                    return captureFullPageFallback(quality, maxSizeKb);
-                });
-        }
-        return captureFullPageFallback(quality, maxSizeKb);
+    /**
+     * How long full-page capture waits for the library before committing to the native path.
+     *
+     * This bound is not about patience, it is about a BUDGET THE USER ALREADY SPENT.
+     * getDisplayMedia requires transient user activation, and a mouse gesture stamps that at
+     * mousedown — so the ~5s window opened by the click on "Full Page" is already running while
+     * this waits. Waiting out the loader's own deadline instead (up to 8s per source, twice over
+     * when the CDN is tried as well) would spend the whole window, and the native call would then
+     * be refused with NotAllowedError — indistinguishable from the user declining the share
+     * picker, and so reported as a deliberate cancel that says nothing at all. The button would
+     * appear to do nothing.
+     *
+     * Generous against the vendored copy, which is same-origin and arrives in tens of
+     * milliseconds in practice; small against the activation window it has to stay inside.
+     */
+    var LIBRARY_GRACE_MS = 1500;
+
+    // Resolve to the promise's value if it settles within `ms`, otherwise to null. Never rejects.
+    function settledWithin(promise, ms) {
+        return new Promise(function (resolve) {
+            var timer = setTimeout(function () { resolve(null); }, ms);
+            promise.then(
+                function (value) { clearTimeout(timer); resolve(value); },
+                function () { clearTimeout(timer); resolve(null); });
+        });
     }
 
-    function captureFullPageFallback(quality, maxSizeKb) {
-        return ensureHtml2Canvas().then(function () {
-            return window.html2canvas(document.body, {
-                useCORS: true, logging: false, scale: 1,
-                width: window.innerWidth, height: window.innerHeight,
-                scrollX: -window.scrollX, scrollY: -window.scrollY,
-                windowWidth: window.innerWidth, windowHeight: window.innerHeight
-            }).then(function (canvas) {
-                return openAnnotationEditor(canvas, quality, maxSizeKb);
-            });
-        }).catch(function () {
-            return null;
+    // html2canvas throws plain Errors; the widget's contract is a typed one.
+    function asCaptureError(err) {
+        if (err && err.name === 'ScreenshotCaptureError') return err;
+        return CaptureError('failed', (err && err.message) || 'The screenshot library could not render this page');
+    }
+
+    // Map a getDisplayMedia rejection onto a reason the widget can explain.
+    function displayMediaFailure(err) {
+        if (err && err.name === 'ScreenshotCaptureError') return err;
+        var name = (err && err.name) || '';
+        if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'PermissionDeniedError') {
+            return CaptureError('permission', 'Screen capture was declined or is not allowed on this page');
+        }
+        if (name === 'NotSupportedError' || name === 'NotFoundError') {
+            return CaptureError('unsupported', 'This browser cannot capture the screen');
+        }
+        return CaptureError('failed', (err && err.message) || 'Screen capture failed');
+    }
+
+    // Render the viewport (not the whole document) with a library instance already in hand.
+    function renderViewportWithLibrary(html2canvas, quality, maxSizeKb) {
+        return html2canvas(document.body, {
+            useCORS: true, logging: false, scale: 1,
+            width: window.innerWidth, height: window.innerHeight,
+            scrollX: -window.scrollX, scrollY: -window.scrollY,
+            windowWidth: window.innerWidth, windowHeight: window.innerHeight
+        }).catch(function (e) { throw asCaptureError(e); })
+            .then(function (canvas) { return openAnnotationEditor(canvas, quality, maxSizeKb); });
+    }
+
+    /**
+     * Full-page capture: render the viewport with html2canvas when the library is here, and
+     * reach for the browser's own Screen Capture API only when it is not.
+     *
+     * This used to prompt FIRST, and that ordering is the whole bug. On a host whose CSP refused
+     * the CDN the prompt was the only route, so every "Full Page" click asked to share the screen
+     * — and dismissing it produced silence, because the html2canvas fallback underneath was
+     * blocked too. With the library vendored same-origin the prompt is unnecessary, and asking
+     * for a screen share you do not need is not a neutral default.
+     *
+     * Rejects when both paths fail; it previously returned null, which the caller reads as
+     * "cancelled", so the button appeared to do nothing at all.
+     */
+    function captureFullPage(quality, maxSizeKb) {
+        // Never awaited to completion before the native path is tried — see LIBRARY_GRACE_MS.
+        var library = ensureHtml2Canvas().then(
+            function (fn) { return { fn: fn }; },
+            function (err) { return { err: asCaptureError(err) }; });
+
+        return settledWithin(library, LIBRARY_GRACE_MS).then(function (ready) {
+            if (ready && ready.fn) return renderViewportWithLibrary(ready.fn, quality, maxSizeKb);
+
+            // No library in hand. The native path is the only one left, and it costs a permission
+            // prompt — which is why the wait above is bounded rather than open-ended.
+            return captureDisplayFrame()
+                .then(function (canvas) { return openAnnotationEditor(canvas, quality, maxSizeKb); })
+                .catch(function (nativeErr) {
+                    var native = displayMediaFailure(nativeErr);
+                    // The native path is out. NOW it is worth waiting for the library: the grace
+                    // period expiring means "not ready yet", not "will never arrive".
+                    return library.then(function (late) {
+                        if (late.fn) return renderViewportWithLibrary(late.fn, quality, maxSizeKb);
+                        // Report whichever cause the user can act on. Declining the share picker
+                        // is a choice they can simply remake; "the library is blocked" is
+                        // something only whoever runs the site can fix, so it wins unless the
+                        // user made a deliberate choice.
+                        throw captureReason(native) === 'permission' ? native : (late.err || native);
+                    });
+                });
         });
+    }
+
+    /**
+     * What to tell the user about each way a capture can fail, or null to say nothing.
+     * The widget used to render one string — "Failed to capture screenshot." — for every
+     * cause, including causes whoever runs the site could have acted on, and including a
+     * deliberate cancel.
+     */
+    function captureFailureText(err) {
+        switch (captureReason(err)) {
+            // The user declined the browser's share prompt — or the page is not permitted to
+            // ask. The two are indistinguishable (both are NotAllowedError) and by far the
+            // common one is a deliberate "no", so this stays silent, exactly like Escape.
+            case 'permission':
+                return null;
+            // Naming the likely policy matters: a CSP that blocks the library is fixable by
+            // whoever runs the site (map this package's static web assets, or point
+            // window.__WW_HTML2CANVAS_SRC__ at a copy they serve) and by nobody else. It is
+            // only LIKELY, though — script.onerror fires for an unreachable network just as it
+            // does for a refusal — so the copy claims no more than that.
+            case 'library-blocked':
+                return "Couldn't take a screenshot — the screenshot library isn't available. "
+                    + "It may be blocked by this site's security policy, or unreachable.";
+            case 'library-timeout':
+                return 'Timed out loading the screenshot library. Check your connection and try again.';
+            case 'unsupported':
+                return "This browser can't take screenshots.";
+            default:
+                // 'failed': the thrower knows more than this table does.
+                return (err && err.message) || 'Failed to capture screenshot.';
+        }
+    }
+
+    // A frame must arrive within this long, or the capture is abandoned.
+    var DISPLAY_FRAME_TIMEOUT_MS = 10000;
+
+    /**
+     * Grab a single frame of the shared surface with the browser's own Screen Capture API.
+     *
+     * MUST be reached while the user's click still counts as transient activation — the browser
+     * refuses getDisplayMedia otherwise.
+     */
+    function captureDisplayFrame() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+            return Promise.reject(CaptureError('unsupported', 'This browser cannot capture the screen'));
+        }
+        return navigator.mediaDevices
+            .getDisplayMedia({ video: { displaySurface: 'browser' }, preferCurrentTab: true })
+            .then(function (stream) {
+                return new Promise(function (resolve, reject) {
+                    // Any failure must settle (not hang): the panel is hidden during capture, so
+                    // a never-settling promise would leave the widget stuck until a page reload.
+                    // That includes the frame that never arrives because the user stopped sharing
+                    // from the browser's own bar, which fires no event at all — hence the deadline.
+                    var settled = false;
+                    var finish = function (fn) {
+                        if (settled) return;
+                        settled = true;
+                        clearTimeout(timer);
+                        // Settle FIRST, so nothing below this line can throw after `settled` is
+                        // already true and leave the promise unsettled.
+                        fn();
+                        // Every track, not just the video one this function reads: whatever the
+                        // picker handed over stays live — and the browser keeps showing its
+                        // "sharing" indicator — until the last of them is stopped.
+                        stream.getTracks().forEach(function (t) { t.stop(); });
+                    };
+                    var fail = function (err) { finish(function () { reject(displayMediaFailure(err)); }); };
+                    var timer = setTimeout(function () {
+                        fail(CaptureError('failed', 'Timed out waiting for the screen capture'));
+                    }, DISPLAY_FRAME_TIMEOUT_MS);
+                    setTimeout(function () {
+                        var video = document.createElement('video');
+                        video.srcObject = stream;
+                        video.onerror = function () { fail(new Error('video error')); };
+                        video.onloadedmetadata = function () {
+                            video.play().then(function () {
+                                var c = document.createElement('canvas');
+                                c.width = video.videoWidth;
+                                c.height = video.videoHeight;
+                                var ctx = c.getContext('2d');
+                                if (!ctx) {
+                                    fail(CaptureError('failed', 'Could not open a canvas for the capture'));
+                                    return;
+                                }
+                                ctx.drawImage(video, 0, 0);
+                                finish(function () { resolve(c); });
+                            }).catch(fail);
+                        };
+                    }, 200);
+                });
+            }, function (err) { throw displayMediaFailure(err); });
     }
 
     // ===== Per-instance widget controller =====
@@ -620,10 +894,15 @@
 
             promiseFactory()
                 .then(function (data) {
+                    // A null resolution is a cancel — Escape, or a selection too small to be a
+                    // screenshot. Nothing happened, so nothing is said.
                     if (data) { screenshotData = data; showScreenshotPreview(); }
                 })
-                .catch(function () {
-                    showToast('Failed to capture screenshot.', 'error');
+                .catch(function (err) {
+                    var text = captureFailureText(err);
+                    // No text means the user made a choice — declining the share picker — and
+                    // reporting a decision back as an error would just nag them for making it.
+                    if (text) showToast(text, 'error');
                 })
                 .finally(function () {
                     btn.style.visibility = '';
