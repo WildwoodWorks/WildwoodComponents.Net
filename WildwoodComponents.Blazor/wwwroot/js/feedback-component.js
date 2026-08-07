@@ -587,7 +587,7 @@ function openAnnotationEditor(sourceCanvas, quality, maxSizeKb) {
 // neither mapped this package's static web assets nor allowed the CDN — and that host gets
 // told exactly that, rather than the silent nothing this used to return.
 async function captureArea(quality, maxSizeKb) {
-    await ensureHtml2Canvas();
+    const html2canvas = await ensureHtml2Canvas();
     return new Promise(function (resolve, reject) {
         const overlay = document.createElement('div'); overlay.className = 'ww-feedback-capture-overlay';
         const selection = document.createElement('div'); selection.className = 'ww-feedback-capture-selection';
@@ -599,7 +599,7 @@ async function captureArea(quality, maxSizeKb) {
             const rect = { x: Math.min(mx, startX), y: Math.min(my, startY), width: Math.abs(mx - startX), height: Math.abs(my - startY) };
             if (rect.width < 10 || rect.height < 10) { resolve(null); return; }
             try {
-                const canvas = await window.html2canvas(document.body, {
+                const canvas = await html2canvas(document.body, {
                     x: rect.x + window.scrollX, y: rect.y + window.scrollY,
                     width: rect.width, height: rect.height, useCORS: true, logging: false
                 });
@@ -754,7 +754,6 @@ function captureDisplayFrame() {
     return navigator.mediaDevices
         .getDisplayMedia({ video: { displaySurface: 'browser' }, preferCurrentTab: true })
         .then(function (stream) {
-            const track = stream.getVideoTracks()[0];
             return new Promise(function (resolve, reject) {
                 // Any failure must settle (not hang): the panel is hidden during capture, so a
                 // never-settling promise would leave the widget stuck until a page reload. That
@@ -765,10 +764,13 @@ function captureDisplayFrame() {
                     if (settled) return;
                     settled = true;
                     clearTimeout(timer);
-                    // Settle FIRST: a stream that somehow arrived with no video track would
-                    // otherwise throw below with `settled` already true, and never settle.
+                    // Settle FIRST, so nothing below this line can throw after `settled` is
+                    // already true and leave the promise unsettled.
                     fn();
-                    if (track) track.stop();
+                    // Every track, not just the video one this function reads: whatever the
+                    // picker handed over stays live — and the browser keeps showing its
+                    // "sharing" indicator — until the last of them is stopped.
+                    stream.getTracks().forEach(function (t) { t.stop(); });
                 };
                 const fail = function (err) { finish(function () { reject(displayMediaFailure(err)); }); };
                 const timer = setTimeout(function () {

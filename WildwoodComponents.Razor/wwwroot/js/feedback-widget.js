@@ -644,7 +644,6 @@
         return navigator.mediaDevices
             .getDisplayMedia({ video: { displaySurface: 'browser' }, preferCurrentTab: true })
             .then(function (stream) {
-                var track = stream.getVideoTracks()[0];
                 return new Promise(function (resolve, reject) {
                     // Any failure must settle (not hang): the panel is hidden during capture, so
                     // a never-settling promise would leave the widget stuck until a page reload.
@@ -655,10 +654,13 @@
                         if (settled) return;
                         settled = true;
                         clearTimeout(timer);
-                        // Settle FIRST: a stream that somehow arrived with no video track would
-                        // otherwise throw below with `settled` already true, and never settle.
+                        // Settle FIRST, so nothing below this line can throw after `settled` is
+                        // already true and leave the promise unsettled.
                         fn();
-                        if (track) track.stop();
+                        // Every track, not just the video one this function reads: whatever the
+                        // picker handed over stays live — and the browser keeps showing its
+                        // "sharing" indicator — until the last of them is stopped.
+                        stream.getTracks().forEach(function (t) { t.stop(); });
                     };
                     var fail = function (err) { finish(function () { reject(displayMediaFailure(err)); }); };
                     var timer = setTimeout(function () {
