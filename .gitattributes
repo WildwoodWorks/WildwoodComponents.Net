@@ -1,0 +1,4 @@
+# Vendored third-party dists are checked in byte-for-byte so they can be compared against
+# the upstream release they came from. Line-ending normalization would silently rewrite
+# them on every checkout and make that comparison impossible.
+*.min.js -text

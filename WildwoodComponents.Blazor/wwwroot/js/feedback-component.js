@@ -103,28 +103,159 @@ function collectBrowserContext() {
 }
 
 // ---------- html2canvas loader ----------
-// Self-hosting override: by default html2canvas is loaded from the cdnjs CDN. Hosts that
-// cannot (or prefer not to) reach a third-party CDN can serve the library same-origin —
-// e.g. from _content/WildwoodComponents.Blazor/js/html2canvas.min.js — by setting
-// `window.__WW_HTML2CANVAS_SRC__` to that URL before the first screenshot capture. An
-// empty/non-string value falls back to the default CDN URL. Alternatively, pre-register
-// `window.html2canvas` yourself and no script is injected at all.
-const DEFAULT_HTML2CANVAS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+// html2canvas is VENDORED into this package's wwwroot, and that single fact is what makes
+// screenshot capture work behind a strict Content-Security-Policy. The library ships as
+// `wwwroot/js/html2canvas.min.js`, which the RCL serves from the consuming app's OWN origin
+// as `_content/WildwoodComponents.Blazor/js/html2canvas.min.js` — a URL that `script-src
+// 'self'` permits, where the public CDN this module used to depend on is refused outright.
+// There is no bundler here to code-split an npm dependency (the route @wildwood/react takes),
+// so a checked-in copy beside this module is the equivalent.
+//
+// To update it: copy `node_modules/html2canvas/dist/html2canvas.min.js` from the pinned
+// version over the vendored file. It keeps its own MIT banner, so provenance travels with it.
+//
+// Resolution order, most to least preferred:
+//   1. `window.html2canvas` pre-registered by the host — nothing is fetched.
+//   2. `window.__WW_HTML2CANVAS_SRC__` — a host serving its own copy from a URL it picks.
+//   3. The vendored copy beside this module (the normal path, and same-origin).
+//   4. The public CDN — last, and only reached when a host has not mapped this package's
+//      static web assets. A strict CSP will refuse it, which is what makes it a fallback
+//      rather than the default it used to be.
+const VENDORED_HTML2CANVAS_URL = new URL('./html2canvas.min.js', import.meta.url).href;
+const CDN_HTML2CANVAS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
 
-function resolveHtml2CanvasSrc() {
-    const override = window.__WW_HTML2CANVAS_SRC__;
-    if (typeof override === 'string' && override.length > 0) return override;
-    return DEFAULT_HTML2CANVAS_URL;
+/** How long to wait for one html2canvas <script> before giving up on that URL. */
+const HTML2CANVAS_LOAD_TIMEOUT_MS = 8000;
+
+/**
+ * Why a capture could not be produced. Callers render different copy per reason, so a cause
+ * the widget can explain must never collapse into one generic message.
+ *
+ * - 'library-blocked'  a <script> was refused or failed to fetch (a CSP that omits the URL,
+ *                      an unmapped _content path, an offline CDN).
+ * - 'library-timeout'  the request neither loaded nor errored inside the deadline — a proxy
+ *                      that blackholes it. Distinguished because "your CSP refused it" would
+ *                      be a false accusation here.
+ * - 'permission'       the share picker was dismissed, or this document may not call
+ *                      getDisplayMedia at all. Reported to the user as NOTHING: the common
+ *                      case is a deliberate cancel.
+ * - 'wrong-surface'    a whole screen or another window was shared instead of this tab.
+ * - 'unsupported'      the capture path does not exist in this environment.
+ * - 'failed'           anything else.
+ */
+export class ScreenshotCaptureError extends Error {
+    constructor(reason, message) {
+        super(message);
+        this.name = 'ScreenshotCaptureError';
+        this.reason = reason;
+    }
 }
 
+/** The host's chosen URL for the library, if it named one. Single source of truth for both uses. */
+function srcOverride() {
+    const override = window.__WW_HTML2CANVAS_SRC__;
+    return typeof override === 'string' && override.length > 0 ? override : null;
+}
+
+/**
+ * The URLs to try, in order. A host that named its own URL has said where it wants the
+ * library to come from, and honouring that means trying it ALONE — falling through to the
+ * vendored copy would quietly ignore the setting.
+ */
+function html2canvasSources() {
+    const override = srcOverride();
+    return override ? [override] : [VENDORED_HTML2CANVAS_URL, CDN_HTML2CANVAS_URL];
+}
+
+/**
+ * In-flight load only. A SETTLED promise is never kept: on success `window.html2canvas` is
+ * set and the fast path below returns it, and caching a rejection would make one blocked
+ * fetch permanent for the life of the page — a host that comes back online, or that sets
+ * `__WW_HTML2CANVAS_SRC__` late, would keep being told the library is unavailable until a
+ * reload. Every failure is therefore retryable on the next attempt.
+ */
+let _html2canvasLoad = null;
+
+/**
+ * Load html2canvas, trying each source in turn. Resolves with the function itself; rejects
+ * with a {@link ScreenshotCaptureError} naming the cause of the LAST source tried.
+ */
 function ensureHtml2Canvas() {
+    if (typeof window.html2canvas !== 'undefined') return Promise.resolve(window.html2canvas);
+    if (_html2canvasLoad) return _html2canvasLoad;
+
+    const attempt = (async function () {
+        const sources = html2canvasSources();
+        let lastError = null;
+        for (const src of sources) {
+            try {
+                return await loadHtml2CanvasFrom(src);
+            } catch (err) {
+                lastError = err;
+            }
+        }
+        throw lastError || new ScreenshotCaptureError('library-blocked', 'Could not load the screenshot library.');
+    })();
+
+    _html2canvasLoad = attempt;
+    const clearIfCurrent = function () { if (_html2canvasLoad === attempt) _html2canvasLoad = null; };
+    attempt.then(clearIfCurrent, clearIfCurrent);
+    return attempt;
+}
+
+/** Inject one <script> and settle exactly once, whatever the browser does or does not do. */
+function loadHtml2CanvasFrom(src) {
     return new Promise(function (resolve, reject) {
-        if (typeof window.html2canvas !== 'undefined') { resolve(); return; }
-        const s = document.createElement('script');
-        s.src = resolveHtml2CanvasSrc();
-        s.onload = function () { resolve(); };
-        s.onerror = function () { reject(new Error('Failed to load screenshot library.')); };
-        document.head.appendChild(s);
+        const script = document.createElement('script');
+        // Assigned before the timer is armed, because this is the line that can throw
+        // synchronously under a `require-trusted-types-for 'script'` policy — the kind of
+        // policy that travels with the CSPs that block the CDN in the first place. Arming
+        // first would leave a stray 8s timer firing into an already-rejected promise.
+        try {
+            script.src = src;
+        } catch (err) {
+            reject(new ScreenshotCaptureError(
+                'library-blocked',
+                'Could not request the screenshot library from ' + src + (err && err.message ? ': ' + err.message : '')));
+            return;
+        }
+        // Settle exactly once and ALWAYS: a request blackholed by a proxy fires neither
+        // onload nor onerror, and an unsettled promise here strands the caller — the widget
+        // hides itself for the duration of a capture, so it would stay invisible until the
+        // page is reloaded.
+        let settled = false;
+        const finish = function (fn) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            script.onload = null;
+            script.onerror = null;
+            fn();
+        };
+        const timer = setTimeout(function () {
+            finish(function () {
+                script.remove();
+                reject(new ScreenshotCaptureError('library-timeout', 'Timed out loading the screenshot library (' + src + ')'));
+            });
+        }, HTML2CANVAS_LOAD_TIMEOUT_MS);
+
+        script.onload = function () {
+            finish(function () {
+                if (typeof window.html2canvas !== 'undefined') { resolve(window.html2canvas); return; }
+                // Nothing to reuse: drop the element so a retry is not competing with a dud.
+                script.remove();
+                reject(new ScreenshotCaptureError('library-blocked', 'The screenshot library loaded but did not initialize'));
+            });
+        };
+        // Fires for a network failure AND for a CSP refusal, which is the case this whole
+        // ordering exists for.
+        script.onerror = function () {
+            finish(function () {
+                script.remove();
+                reject(new ScreenshotCaptureError('library-blocked', 'Could not load the screenshot library from ' + src));
+            });
+        };
+        document.head.appendChild(script);
     });
 }
 
