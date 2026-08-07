@@ -577,10 +577,18 @@ function openAnnotationEditor(sourceCanvas, quality, maxSizeKb) {
     });
 }
 
-// Area capture: user drags a selection rectangle, then annotates. Resolves with data URL or null.
+// Area capture: user drags a selection rectangle, then annotates. Resolves with a data URL,
+// or null when the user cancelled (Escape, or a selection too small to be a screenshot).
+//
+// This path has never asked to share the screen and still does not: html2canvas renders the
+// selected region silently, and a `getDisplayMedia` fallback here would mean adding a
+// permission prompt to a path that does not need one. Since the library is now vendored
+// same-origin (see the loader above), the only way to reach a failure is a host that has
+// neither mapped this package's static web assets nor allowed the CDN — and that host gets
+// told exactly that, rather than the silent nothing this used to return.
 async function captureArea(quality, maxSizeKb) {
     await ensureHtml2Canvas();
-    return new Promise(function (resolve) {
+    return new Promise(function (resolve, reject) {
         const overlay = document.createElement('div'); overlay.className = 'ww-feedback-capture-overlay';
         const selection = document.createElement('div'); selection.className = 'ww-feedback-capture-selection';
         overlay.appendChild(selection); document.body.appendChild(overlay);
@@ -598,7 +606,9 @@ async function captureArea(quality, maxSizeKb) {
                 const result = await openAnnotationEditor(canvas, quality, maxSizeKb);
                 resolve(result);
             } catch (e) {
-                resolve(null);
+                // A render failure is not a cancel. Resolving null here made the button look
+                // broken — the panel came back with no screenshot and no explanation.
+                reject(asCaptureError(e));
             }
         }
 
@@ -621,16 +631,149 @@ async function captureArea(quality, maxSizeKb) {
     });
 }
 
-// Full-page capture: prefer the native Screen Capture API, fall back to html2canvas.
+/**
+ * How long full-page capture waits for the library before committing to the native path.
+ *
+ * This bound is not about patience, it is about a BUDGET THE USER ALREADY SPENT.
+ * `getDisplayMedia` requires transient user activation, and per HTML's "activation triggering
+ * input event" rules a mouse gesture stamps that at mousedown — so the ~5s window opened by the
+ * click on "Full Page" is already running while this waits. Waiting out the loader's own
+ * deadline instead (up to 8s per source, twice over when the CDN is tried as well) would spend
+ * the whole window, and the native call would then be refused with NotAllowedError — which is
+ * indistinguishable from the user declining the share picker, and so would be reported as a
+ * deliberate cancel and say nothing at all. The button would appear to do nothing.
+ *
+ * Generous against the vendored copy, which is same-origin and arrives in tens of milliseconds
+ * in practice; small against the activation window it has to stay inside.
+ */
+const LIBRARY_GRACE_MS = 1500;
+
+/** Resolve to the promise's value if it settles within `ms`, otherwise to null. Never rejects. */
+function settledWithin(promise, ms) {
+    return new Promise(function (resolve) {
+        const timer = setTimeout(function () { resolve(null); }, ms);
+        promise.then(
+            function (value) { clearTimeout(timer); resolve(value); },
+            function () { clearTimeout(timer); resolve(null); });
+    });
+}
+
+/** html2canvas throws plain Errors; the widget's contract is a typed one. */
+function asCaptureError(err) {
+    if (err instanceof ScreenshotCaptureError) return err;
+    return new ScreenshotCaptureError(
+        'failed', (err && err.message) || 'The screenshot library could not render this page');
+}
+
+/** Map a getDisplayMedia rejection onto a reason the widget can explain. */
+function displayMediaFailure(err) {
+    if (err instanceof ScreenshotCaptureError) return err;
+    const name = (err && err.name) || '';
+    if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'PermissionDeniedError') {
+        return new ScreenshotCaptureError('permission', 'Screen capture was declined or is not allowed on this page');
+    }
+    if (name === 'NotSupportedError' || name === 'NotFoundError') {
+        return new ScreenshotCaptureError('unsupported', 'This browser cannot capture the screen');
+    }
+    return new ScreenshotCaptureError('failed', (err && err.message) || 'Screen capture failed');
+}
+
+/** Render the viewport (not the whole document) with a library instance already in hand. */
+function renderViewportWithLibrary(html2canvas) {
+    return html2canvas(document.body, {
+        useCORS: true, logging: false, scale: 1,
+        width: window.innerWidth, height: window.innerHeight,
+        scrollX: -window.scrollX, scrollY: -window.scrollY,
+        windowWidth: window.innerWidth, windowHeight: window.innerHeight
+    }).catch(function (e) { throw asCaptureError(e); });
+}
+
+/**
+ * Full-page capture: render the viewport with html2canvas when the library is here, and reach
+ * for the browser's own Screen Capture API only when it is not.
+ *
+ * This used to prompt FIRST, and that ordering is the whole bug. On a host whose CSP refused
+ * the CDN the prompt was the only route, so every "Full Page" click asked to share the screen
+ * — and dismissing it produced silence, because the html2canvas fallback underneath was
+ * blocked too. With the library vendored same-origin the prompt is unnecessary, and asking
+ * for a screen share you do not need is not a neutral default.
+ *
+ * The trade is deliberate: getDisplayMedia captures truly rendered pixels (cross-origin
+ * iframes, video, plugin content) where html2canvas re-renders the DOM and cannot. For a
+ * screenshot attached to a feedback report, a silent capture of the page the user is looking
+ * at beats a pixel-exact one they had to grant a permission for.
+ *
+ * Rejects with a {@link ScreenshotCaptureError} when both paths fail; it previously returned
+ * null, which the caller reads as "cancelled", so the button appeared to do nothing at all.
+ */
 async function captureFullPage(quality, maxSizeKb) {
-    if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-        try {
-            const stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'browser' }, preferCurrentTab: true });
+    // Never awaited to completion before the native path is tried — see LIBRARY_GRACE_MS.
+    const library = ensureHtml2Canvas().then(
+        function (fn) { return { fn: fn }; },
+        function (err) { return { err: asCaptureError(err) }; });
+
+    const ready = await settledWithin(library, LIBRARY_GRACE_MS);
+    if (ready && ready.fn) {
+        return await openAnnotationEditor(await renderViewportWithLibrary(ready.fn), quality, maxSizeKb);
+    }
+
+    // No library in hand. The native path is the only one left, and it costs a permission
+    // prompt — which is why the wait above is bounded rather than open-ended.
+    try {
+        const canvas = await captureDisplayFrame();
+        return await openAnnotationEditor(canvas, quality, maxSizeKb);
+    } catch (nativeErr) {
+        const native = displayMediaFailure(nativeErr);
+        // The native path is out. NOW it is worth waiting for the library: the grace period
+        // expiring means "not ready yet", not "will never arrive", and on a platform with no
+        // getDisplayMedia at all it is the only path there ever was.
+        const late = await library;
+        if (late.fn) {
+            return await openAnnotationEditor(await renderViewportWithLibrary(late.fn), quality, maxSizeKb);
+        }
+        // Report whichever cause the user can act on. Declining the share picker is a choice
+        // they can simply remake; "the library is blocked" is something only whoever runs the
+        // site can fix, so it wins unless the user made a deliberate choice.
+        throw native.reason === 'permission' ? native : (late.err || native);
+    }
+}
+
+/** A frame must arrive within this long, or the capture is abandoned. */
+const DISPLAY_FRAME_TIMEOUT_MS = 10000;
+
+/**
+ * Grab a single frame of the shared surface with the browser's own Screen Capture API.
+ *
+ * MUST be reached while the user's click still counts as transient activation — the browser
+ * refuses getDisplayMedia otherwise.
+ */
+function captureDisplayFrame() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        return Promise.reject(new ScreenshotCaptureError('unsupported', 'This browser cannot capture the screen'));
+    }
+    return navigator.mediaDevices
+        .getDisplayMedia({ video: { displaySurface: 'browser' }, preferCurrentTab: true })
+        .then(function (stream) {
             const track = stream.getVideoTracks()[0];
-            const canvas = await new Promise(function (resolve, reject) {
-                // Any failure must reject (not hang): the panel is hidden during capture, so a
-                // never-settling promise would leave the widget stuck. Rejection falls back below.
-                const fail = function (err) { track.stop(); reject(err || new Error('capture failed')); };
+            return new Promise(function (resolve, reject) {
+                // Any failure must settle (not hang): the panel is hidden during capture, so a
+                // never-settling promise would leave the widget stuck until a page reload. That
+                // includes the frame that never arrives because the user stopped sharing from
+                // the browser's own bar, which fires no event at all — hence the deadline.
+                let settled = false;
+                const finish = function (fn) {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    // Settle FIRST: a stream that somehow arrived with no video track would
+                    // otherwise throw below with `settled` already true, and never settle.
+                    fn();
+                    if (track) track.stop();
+                };
+                const fail = function (err) { finish(function () { reject(displayMediaFailure(err)); }); };
+                const timer = setTimeout(function () {
+                    fail(new ScreenshotCaptureError('failed', 'Timed out waiting for the screen capture'));
+                }, DISPLAY_FRAME_TIMEOUT_MS);
                 setTimeout(function () {
                     const video = document.createElement('video');
                     video.srcObject = stream;
@@ -640,31 +783,18 @@ async function captureFullPage(quality, maxSizeKb) {
                             const c = document.createElement('canvas');
                             c.width = video.videoWidth;
                             c.height = video.videoHeight;
-                            c.getContext('2d').drawImage(video, 0, 0);
-                            track.stop();
-                            resolve(c);
+                            const ctx = c.getContext('2d');
+                            if (!ctx) {
+                                fail(new ScreenshotCaptureError('failed', 'Could not open a canvas for the capture'));
+                                return;
+                            }
+                            ctx.drawImage(video, 0, 0);
+                            finish(function () { resolve(c); });
                         }).catch(fail);
                     };
                 }, 200);
             });
-            return await openAnnotationEditor(canvas, quality, maxSizeKb);
-        } catch (e) {
-            // User cancelled or unsupported — fall back to html2canvas.
-        }
-    }
-
-    try {
-        await ensureHtml2Canvas();
-        const canvas = await window.html2canvas(document.body, {
-            useCORS: true, logging: false, scale: 1,
-            width: window.innerWidth, height: window.innerHeight,
-            scrollX: -window.scrollX, scrollY: -window.scrollY,
-            windowWidth: window.innerWidth, windowHeight: window.innerHeight
-        });
-        return await openAnnotationEditor(canvas, quality, maxSizeKb);
-    } catch (e) {
-        return null;
-    }
+        }, function (err) { throw displayMediaFailure(err); });
 }
 
 // ---------- Exported module API (invoked from C# via IJSObjectReference) ----------
@@ -686,18 +816,32 @@ export function getPageUrl() {
     return window.location.href;
 }
 
-// Returns a base64 data URL of the screenshot, or null if cancelled/failed.
-// `button` is the floating feedback button element; it is hidden for the duration of the
-// capture so it never appears in the screenshot (the panel is already hidden by Blazor).
+/**
+ * Capture a screenshot and report the outcome as DATA, not as an exception.
+ *
+ * Returns `{ data, reason, message }`:
+ *  - `data` is a base64 JPEG data URL on success;
+ *  - all three are null/absent when the user cancelled (Escape, or a selection too small),
+ *    which is not a failure and must not be reported as one;
+ *  - `reason` + `message` describe a real failure. A thrown error would reach C# as a
+ *    `JSException` carrying only a string, and the reason — the one thing that decides what
+ *    the user should be told — would be lost in it.
+ *
+ * `button` is the floating feedback button element; it is hidden for the duration of the
+ * capture so it never appears in the screenshot (the panel is already hidden by Blazor).
+ */
 export async function captureScreenshot(mode, quality, maxSizeKb, button) {
     ensureConsoleHooks();
     const prevVisibility = button ? button.style.visibility : null;
     if (button) button.style.visibility = 'hidden';
     try {
-        if (mode === 'full') {
-            return await captureFullPage(quality, maxSizeKb);
-        }
-        return await captureArea(quality, maxSizeKb);
+        const data = mode === 'full'
+            ? await captureFullPage(quality, maxSizeKb)
+            : await captureArea(quality, maxSizeKb);
+        return { data: data || null, reason: null, message: null };
+    } catch (e) {
+        const err = asCaptureError(e);
+        return { data: null, reason: err.reason, message: err.message };
     } finally {
         if (button) button.style.visibility = prevVisibility || '';
     }

@@ -317,16 +317,30 @@ public partial class FeedbackWidgetComponent : BaseWildwoodComponent
 
         try
         {
-            var data = await _module.InvokeAsync<string?>(
+            var result = await _module.InvokeAsync<CaptureResult?>(
                 "captureScreenshot", mode, _config.ScreenshotQuality, _config.ScreenshotMaxSizeKb, _buttonRef);
 
-            if (!string.IsNullOrEmpty(data))
+            if (!string.IsNullOrEmpty(result?.Data))
             {
-                _screenshotData = data;
+                _screenshotData = result.Data;
             }
+            else if (result?.Reason is { Length: > 0 } reason)
+            {
+                Logger?.LogWarning("Screenshot capture failed ({Reason}): {Message}", reason, result.Message);
+                var text = CaptureFailureText(reason, result.Message);
+                // No text means the user made a choice — declining the share picker — and
+                // reporting a decision back as an error would just nag them for making it.
+                if (text != null)
+                {
+                    ShowToast(text, isError: true);
+                }
+            }
+            // Otherwise the user cancelled (Escape, or a selection too small to be a
+            // screenshot). Nothing happened, so nothing is said.
         }
         catch (Exception ex)
         {
+            // The module itself failed to answer — a disposed circuit, a stale reference.
             Logger?.LogWarning(ex, "Screenshot capture failed");
             ShowToast("Failed to capture screenshot.", isError: true);
         }
@@ -337,6 +351,39 @@ public partial class FeedbackWidgetComponent : BaseWildwoodComponent
             StateHasChanged();
         }
     }
+
+    /// <summary>
+    /// What to tell the user about each way a capture can fail, or <c>null</c> to say nothing.
+    /// The widget used to render one string — "Failed to capture screenshot." — for every
+    /// cause, including causes whoever runs the site could have acted on, and including a
+    /// deliberate cancel.
+    /// </summary>
+    private static string? CaptureFailureText(string reason, string? message) => reason switch
+    {
+        // The user declined the browser's share prompt — or the page is not permitted to ask.
+        // The two are indistinguishable (both are NotAllowedError) and by far the common one
+        // is a deliberate "no", so this stays silent, exactly like pressing Escape.
+        "permission" => null,
+        // Naming the likely policy matters: a CSP that blocks the library is fixable by
+        // whoever runs the site (map this package's static web assets, or point
+        // window.__WW_HTML2CANVAS_SRC__ at a copy they serve) and by nobody else. It is only
+        // LIKELY, though — script.onerror fires for an unreachable network just as it does
+        // for a refusal — so the copy claims no more than that.
+        "library-blocked" => "Couldn't take a screenshot — the screenshot library isn't available. "
+            + "It may be blocked by this site's security policy, or unreachable.",
+        "library-timeout" => "Timed out loading the screenshot library. Check your connection and try again.",
+        // Not produced by this widget today — full-page capture uses whatever frame the user
+        // shares, and only the area-cropping path in the JS SDK has to refuse a foreign
+        // surface. Carried so the table stays exhaustive over the module's documented reasons
+        // and a new one added there is a missing case here, not silent generic copy.
+        "wrong-surface" => "Please choose \"This Tab\" when the browser asks what to share.",
+        "unsupported" => "This browser can't take screenshots.",
+        // 'failed' and anything a future version adds: the thrower knows more than this table.
+        _ => string.IsNullOrWhiteSpace(message) ? "Failed to capture screenshot." : message,
+    };
+
+    /// <summary>Outcome of a <c>captureScreenshot</c> interop call. See the module's JSDoc.</summary>
+    private sealed record CaptureResult(string? Data, string? Reason, string? Message);
 
     private void RemoveScreenshot()
     {
