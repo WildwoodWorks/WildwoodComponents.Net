@@ -68,6 +68,15 @@ public interface IWildwoodAppTierService
     // Public tier browsing (no auth required)
     Task<List<AppTierModel>> GetPublicTiersAsync(string appId);
 
+    /// <summary>
+    /// The app's Active add-ons with their pricing options, via the public endpoint (no
+    /// auth required) — the add-on twin of GetPublicTiersAsync, so a public pricing page
+    /// can list the packs an app sells alongside its tiers. THROWS on failure, unlike
+    /// GetPublicTiersAsync: a public page has to tell "this app sells no packs" apart from
+    /// "the catalog failed to load", and an empty list cannot express the second.
+    /// </summary>
+    Task<List<AppTierAddOnModel>> GetPublicAddOnsAsync(string appId);
+
     // Company-scoped subscription (admin)
     Task<UserTierSubscriptionModel?> GetCompanySubscriptionAsync(string appId, string companyId);
     Task<List<UserAddOnSubscriptionModel>> GetCompanyAddOnSubscriptionsAsync(string appId, string companyId);
