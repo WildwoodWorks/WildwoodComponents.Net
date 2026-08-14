@@ -395,6 +395,26 @@ public class WildwoodAppTierService : IWildwoodAppTierService
         return new List<AppTierModel>();
     }
 
+    /// <summary>
+    /// The app's Active add-ons with their pricing options, via the public endpoint (no
+    /// auth required) — the add-on twin of GetPublicTiersAsync. THROWS on failure, unlike
+    /// GetPublicTiersAsync: a public page has to tell "this app sells no packs" apart from
+    /// "the catalog failed to load", and an empty list cannot express the second.
+    /// </summary>
+    public async Task<List<AppTierAddOnModel>> GetPublicAddOnsAsync(string appId)
+    {
+        using var response = await _httpClient.GetAsync($"app-tier-addons/{appId}/public");
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Failed to get public add-ons for app {AppId}: {StatusCode}", appId, response.StatusCode);
+            throw new HttpRequestException($"GetPublicAddOns({appId}) failed: HTTP {(int)response.StatusCode} {response.StatusCode}");
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<List<AppTierAddOnModel>>(JsonOptions);
+        return result ?? new List<AppTierAddOnModel>();
+    }
+
     #endregion
 
     #region Company-Scoped Subscription (Admin)
