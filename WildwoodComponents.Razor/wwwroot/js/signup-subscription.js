@@ -288,9 +288,22 @@
 
         // ===== STEP 2: REGISTRATION =====
 
+
+        // The container is a <form> everywhere except classic WebForms, where a nested
+        // form is illegal and it renders as <div data-ww-form>. wildwood-forms.js, when the
+        // page loads it, supplies the semantics a form would have; without it these fall
+        // through to the native calls, unchanged.
+        function wwBindSubmit(container, handler) {
+            if (window.WildwoodForms) {
+                window.WildwoodForms.onSubmit(container, handler);
+            } else {
+                container.addEventListener('submit', handler);
+            }
+        }
+
         var registerForm = root.querySelector('.ww-registration-form');
         if (registerForm) {
-            registerForm.addEventListener('submit', function (e) {
+            wwBindSubmit(registerForm, function (e) {
                 e.preventDefault();
                 clearMessage();
 

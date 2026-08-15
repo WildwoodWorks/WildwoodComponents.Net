@@ -161,10 +161,19 @@
 
         // Registration form
         if (this.els.regForm) {
-            this.els.regForm.addEventListener('submit', function (e) {
-                e.preventDefault();
-                self._submitRegistration();
-            });
+            if (window.WildwoodForms) {
+                // Classic WebForms cannot nest a <form>, so the container renders as a
+                // <div data-ww-form> there; the shim supplies the submit semantics.
+                window.WildwoodForms.onSubmit(this.els.regForm, function (e) {
+                    e.preventDefault();
+                    self._submitRegistration();
+                });
+            } else {
+                this.els.regForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    self._submitRegistration();
+                });
+            }
         }
 
         // Password toggle
@@ -573,7 +582,10 @@
 
         // Client-side validation
         var form = this.els.regForm;
-        if (!form.checkValidity()) {
+        var formValid = window.WildwoodForms
+            ? window.WildwoodForms.checkValidity(form)
+            : form.checkValidity();
+        if (!formValid) {
             form.classList.add('was-validated');
             return;
         }
@@ -1062,7 +1074,13 @@
         this.pendingPaymentIntentId = null;
 
         if (this.els.tokenInput) this.els.tokenInput.value = '';
-        if (this.els.regForm) this.els.regForm.reset();
+        if (this.els.regForm) {
+            if (window.WildwoodForms) {
+                window.WildwoodForms.reset(this.els.regForm);
+            } else {
+                this.els.regForm.reset();
+            }
+        }
         this.els.regForm.classList.remove('was-validated');
         this._hideRegError();
         this._clearTokenError();
