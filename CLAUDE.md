@@ -4,7 +4,7 @@
 
 .NET component library providing authentication, AI, messaging, payments, subscriptions, notifications, and more for both Blazor and Razor Pages applications. All components talk to the same WildwoodAPI backend as the JS sibling project (WildwoodComponents.JS).
 
-Published as three NuGet packages: **WildwoodComponents.Blazor**, **WildwoodComponents.Razor**, **WildwoodComponents.Shared**.
+Published as four NuGet packages: **WildwoodComponents.Blazor**, **WildwoodComponents.Razor**, **WildwoodComponents.Shared**, and **WildwoodComponents.WebForms** (classic ASP.NET WebForms on .NET Framework 4.8 — Authentication and Two-Factor Settings so far; the rest of the component set follows in later phases).
 
 ## Solution Structure
 
@@ -12,19 +12,47 @@ Solution file: `WildwoodComponents.Net.slnx`
 
 | Project | Purpose |
 |---------|---------|
-| **WildwoodComponents.Shared** | Internal shared library — models, DTOs, utilities. Consumed by Blazor and Razor. |
+| **WildwoodComponents.Shared** | Internal shared library — models, DTOs, utilities. Multi-targets `net10.0;netstandard2.0`; the netstandard leg exists for WebForms and excludes the Seeder. |
 | **WildwoodComponents.Blazor** | Blazor interactive components (`.razor` + `.razor.cs`) |
 | **WildwoodComponents.Razor** | Razor Pages ViewComponents (`.cs` + `.cshtml` + `.js`) |
+| **WildwoodComponents.WebForms** | Classic ASP.NET WebForms controls, **net48** (`.cs` + `.ascx` + `.ashx` shipped as NuGet content) |
+| **WildwoodComponents.WebForms.Tests** | xUnit tests for the WebForms package, **net48** (Windows-only run) |
 | **WildwoodComponentsTestSuiteBlazor** | Blazor test harness app with test pages for each component |
 
 ### Dependency Graph
 
 ```
-WildwoodComponents.Shared
-  ├──► WildwoodComponents.Blazor
-  └──► WildwoodComponents.Razor
+WildwoodComponents.Shared          (net10.0 + netstandard2.0)
+  ├──► WildwoodComponents.Blazor   (net10.0)
+  ├──► WildwoodComponents.Razor    (net10.0)
+  └──► WildwoodComponents.WebForms (net48, resolves the netstandard2.0 leg)
          WildwoodComponentsTestSuiteBlazor ──► WildwoodComponents.Blazor
 ```
+
+### WebForms rules (net48)
+
+WebForms exists only on .NET Framework, which makes this project different from the
+others in ways that are load-bearing, not incidental:
+
+- **`.ascx` markup carries `Inherits=` and no `CodeFile`.** The runtime compiles the
+  markup against a compiled base class in the assembly, so consumers build nothing.
+  Never add a `CodeFile`/`CodeBehind` attribute to a shipped control.
+- **Never render a `<form>` inside a control.** An `.aspx` page is already inside one
+  `<form runat="server">`; HTML forbids nesting, so the browser drops the inner tag and a
+  `type="submit"` button posts the host page back. Use `<div data-ww-form>` with
+  `type="button"` and let `wildwood-forms.js` supply the semantics.
+- **Never fork the Razor `wwwroot` assets.** The WebForms package packs the JS and CSS
+  straight out of `WildwoodComponents.Razor/wwwroot`; there is one source of truth per
+  file. Adding a component means adding a line to the csproj asset list.
+- **Bearer tokens go on the request, never on the client.** One `HttpClient` is shared
+  process-wide, so `DefaultRequestHeaders.Authorization` would leak a token across users.
+  (The Razor package's `ApplyAuthorizationHeader` has this hazard; do not copy it.)
+- **Write endpoint paths as interpolated strings**, matching the other stacks, so
+  `scripts/parity-check.mjs` extracts the same normalised path. Concatenating an id onto a
+  literal produces a different entry and a false parity signal.
+- **netstandard2.0 has no `[NotNullWhen]` on `string.IsNullOrEmpty`.** Use pattern form
+  (`x is null || x.Length == 0`, `x is { Length: > 0 }`) so flow analysis narrows on both
+  target frameworks without suppressions.
 
 ## Build & Run
 

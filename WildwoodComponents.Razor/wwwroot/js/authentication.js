@@ -64,9 +64,25 @@
         button.disabled = loading;
     }
 
-    // ===== Form validation =====
+    // ===== Form helpers =====
+    // The containers below are <form> elements everywhere except classic WebForms, where
+    // a nested form is illegal and they render as <div data-ww-form>. wildwood-forms.js,
+    // when the page loads it, provides the submit/validate semantics a form would have.
+    // Without it these fall through to the native calls, unchanged.
+    function bindSubmit(container, handler) {
+        if (window.WildwoodForms) {
+            window.WildwoodForms.onSubmit(container, handler);
+        } else {
+            container.addEventListener('submit', handler);
+        }
+    }
+
     function validateForm(form) {
-        if (!form.checkValidity()) {
+        var valid = window.WildwoodForms
+            ? window.WildwoodForms.checkValidity(form)
+            : form.checkValidity();
+
+        if (!valid) {
             form.classList.add('was-validated');
             return false;
         }
@@ -99,7 +115,7 @@
     // ===== Login form =====
     const loginForm = document.getElementById('ww-login-form');
     if (loginForm) {
-        loginForm.addEventListener('submit', async function (e) {
+        bindSubmit(loginForm, async function (e) {
             e.preventDefault();
             if (!validateForm(loginForm)) return;
 
@@ -134,7 +150,7 @@
     // ===== Register form =====
     const registerForm = document.getElementById('ww-register-form');
     if (registerForm) {
-        registerForm.addEventListener('submit', async function (e) {
+        bindSubmit(registerForm, async function (e) {
             e.preventDefault();
 
             const password = document.getElementById('ww-reg-password').value;
@@ -177,7 +193,7 @@
     // ===== Forgot password form =====
     const forgotForm = document.getElementById('ww-forgot-form');
     if (forgotForm) {
-        forgotForm.addEventListener('submit', async function (e) {
+        bindSubmit(forgotForm, async function (e) {
             e.preventDefault();
             if (!validateForm(forgotForm)) return;
 
@@ -202,7 +218,7 @@
     // ===== Two-factor form =====
     const twoFactorForm = document.getElementById('ww-2fa-form');
     if (twoFactorForm) {
-        twoFactorForm.addEventListener('submit', async function (e) {
+        bindSubmit(twoFactorForm, async function (e) {
             e.preventDefault();
             if (!validateForm(twoFactorForm)) return;
 

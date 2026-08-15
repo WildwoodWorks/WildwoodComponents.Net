@@ -1,0 +1,70 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- WebForms exists only on .NET Framework. 4.8 is the last universal release:
+         it installs back to Windows 7 SP1 / Server 2008 R2 SP1, ships in-box from
+         Windows 10 / Server 2019 on, and is an in-place upgrade from 4.5-4.7.2, so a
+         legacy site moves its runtime without touching application code. 4.6.2-4.7.2
+         leave support 2027-01-12; 4.8.1 only installs on Windows 11 / Server 2022+. -->
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>WildwoodComponents.WebForms</RootNamespace>
+    <AssemblyName>WildwoodComponents.WebForms</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Package Metadata -->
+    <PackageId>WildwoodComponents.WebForms</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Wildwood Development Team</Authors>
+    <Company>Wildwood</Company>
+    <Product>WildwoodComponents.WebForms</Product>
+    <Description>Wildwood platform components for classic ASP.NET WebForms sites (.NET Framework 4.8): user controls, server-side services, in-box proxy handlers and token management.</Description>
+    <PackageTags>wildwood;webforms;aspnet;netframework;components</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Web" />
+    <Reference Include="System.Configuration" />
+    <!-- The framework assembly, deliberately not the System.Net.Http NuGet package:
+         the package ships an assembly with the same identity and is a well-known source
+         of binding-redirect breakage on .NET Framework. -->
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WildwoodComponents.Shared\WildwoodComponents.Shared.csproj" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <!-- Lets the net48 leg compile on a Linux CI runner too; tests still need Windows. -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Package\ ships as NuGet *content*: packages.config projects copy these files into
+       the consuming web application, where the ASP.NET runtime compiles the .ascx/.ashx
+       markup against the base classes in this assembly. Remove-then-Include (rather than
+       Update) so %(RecursiveDir) is relative to Package\ and the folder layout survives. -->
+  <ItemGroup>
+    <None Remove="Package\**\*" />
+    <None Include="Package\**\*" Pack="true" PackagePath="content\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Scripts and stylesheets are packed straight out of the Razor project rather than
+       copied into this one, so the two stacks cannot drift: there is one source of truth
+       per file and the packaged bytes are identical to what Razor serves. Files are listed
+       explicitly, one line per component, so adding a component is a deliberate act. -->
+  <PropertyGroup>
+    <WildwoodSharedAssets>..\WildwoodComponents.Razor\wwwroot</WildwoodSharedAssets>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(WildwoodSharedAssets)\js\wildwood-forms.js" Pack="true" PackagePath="content\Scripts\wildwood\" Visible="false" />
+    <None Include="$(WildwoodSharedAssets)\js\authentication.js" Pack="true" PackagePath="content\Scripts\wildwood\" Visible="false" />
+    <None Include="$(WildwoodSharedAssets)\js\twofactor-settings.js" Pack="true" PackagePath="content\Scripts\wildwood\" Visible="false" />
+    <None Include="$(WildwoodSharedAssets)\css\wildwood-razor-themes.css" Pack="true" PackagePath="content\Content\wildwood\" Visible="false" />
+    <None Include="$(WildwoodSharedAssets)\css\authentication.css" Pack="true" PackagePath="content\Content\wildwood\" Visible="false" />
+    <None Include="$(WildwoodSharedAssets)\css\twofactor-settings.css" Pack="true" PackagePath="content\Content\wildwood\" Visible="false" />
+  </ItemGroup>
+
+</Project>

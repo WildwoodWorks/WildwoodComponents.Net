@@ -72,8 +72,9 @@ public static class FormatHelpers
     /// </summary>
     public static bool IsRawCssColor(string? color)
     {
-        if (string.IsNullOrWhiteSpace(color)) return false;
+        if (color is null) return false;
         var trimmed = color.Trim();
+        if (trimmed.Length == 0) return false;
         return trimmed.StartsWith("#", StringComparison.Ordinal)
             || trimmed.StartsWith("rgb", StringComparison.OrdinalIgnoreCase)
             || trimmed.StartsWith("hsl", StringComparison.OrdinalIgnoreCase);
@@ -86,8 +87,9 @@ public static class FormatHelpers
     /// </summary>
     public static bool ShouldShowTierStatusBadge(string? badgeColor, string? status)
     {
-        return !string.IsNullOrEmpty(badgeColor)
-            && !string.IsNullOrEmpty(status)
+        // Pattern form narrows on netstandard2.0, whose string.IsNullOrEmpty is unannotated.
+        return badgeColor is { Length: > 0 }
+            && status is { Length: > 0 }
             && !string.Equals(status.Trim(), "Active", StringComparison.OrdinalIgnoreCase);
     }
 

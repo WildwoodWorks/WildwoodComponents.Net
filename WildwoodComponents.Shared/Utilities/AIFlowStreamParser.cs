@@ -32,16 +32,22 @@ public static class AIFlowStreamParser
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+#if NET7_0_OR_GREATER
             var line = await reader.ReadLineAsync(cancellationToken);
+#else
+            // netstandard2.0 has no cancellable ReadLineAsync; the check at the top of
+            // each iteration still ends the loop promptly between frames.
+            var line = await reader.ReadLineAsync();
+#endif
             if (line == null) break;
 
             if (line.StartsWith("event: ", StringComparison.Ordinal))
             {
-                eventName = line["event: ".Length..];
+                eventName = line.Substring("event: ".Length);
             }
             else if (line.StartsWith("data: ", StringComparison.Ordinal))
             {
-                dataBuilder.Append(line["data: ".Length..]);
+                dataBuilder.Append(line.Substring("data: ".Length));
             }
             else if (line.Length == 0 && eventName != null)
             {

@@ -14,7 +14,8 @@ namespace WildwoodComponents.Shared.Utilities
         /// </summary>
         public static string StripApiSuffix(string? baseUrl)
         {
-            if (string.IsNullOrEmpty(baseUrl))
+            // Pattern form narrows on netstandard2.0, whose string.IsNullOrEmpty is unannotated.
+            if (baseUrl is null || baseUrl.Length == 0)
                 return string.Empty;
 
             var trimmed = baseUrl.TrimEnd('/');
