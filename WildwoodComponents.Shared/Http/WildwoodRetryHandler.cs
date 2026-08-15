@@ -79,10 +79,14 @@ public sealed class WildwoodRetryHandler : DelegatingHandler
         var maxAttempts = IsIdempotent(request.Method) ? _maxAttempts : 1;
 
 #if NETSTANDARD2_0
-        // .NET Framework's HttpClient refuses to send one HttpRequestMessage twice
-        // ("The request message was already sent."), and it disposes the request content
-        // once sent — so a retryable request is buffered up front and each attempt gets a
-        // fresh copy. Requests that will only ever be attempted once are sent untouched.
+        // On .NET Framework, HttpClient.SendAsync marks a message as sent and refuses to
+        // send that same instance again ("The request message was already sent."), then
+        // disposes its content. This handler sits below that check, calling the inner
+        // handler directly, so reuse does work here today — but only as an accident of
+        // where the handler sits in the pipeline. Buffering the body once and giving each
+        // attempt its own message makes the replay independent of that, and matches the
+        // net10.0 path, where the restriction no longer exists. Requests that will only
+        // ever be attempted once are passed through untouched.
         var buffered = maxAttempts > 1 ? await BufferAsync(request).ConfigureAwait(false) : null;
 #endif
 

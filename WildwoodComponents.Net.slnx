@@ -4,5 +4,6 @@
   <Project Path="WildwoodComponents.Shared/WildwoodComponents.Shared.csproj" />
   <Project Path="WildwoodComponents.Tests/WildwoodComponents.Tests.csproj" />
   <Project Path="WildwoodComponents.WebForms/WildwoodComponents.WebForms.csproj" />
+  <Project Path="WildwoodComponents.WebForms.Tests/WildwoodComponents.WebForms.Tests.csproj" />
   <Project Path="WildwoodComponentsTestSuiteBlazor/WildwoodComponentsTestSuiteBlazor.csproj" />
 </Solution>
