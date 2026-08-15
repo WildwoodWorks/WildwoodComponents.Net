@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NuGet merges this into the consuming site's web.config on install and removes the same
+  entries on uninstall. BaseUrl points at the public WildwoodAPI; fill in the ApiKey and
+  AppId for your Wildwood app, which are left blank on purpose.
+-->
+<configuration>
+  <appSettings>
+    <add key="WildwoodAPI:BaseUrl" value="https://api.wildwoodworks.io/api" />
+    <add key="WildwoodAPI:ApiKey" value="" />
+    <add key="WildwoodAPI:AppId" value="" />
+  </appSettings>
+  <system.web>
+    <!-- Classic pipeline (IIS 6 / IIS 7+ in classic mode). -->
+    <httpModules>
+      <add name="WildwoodTokenExpiration"
+           type="WildwoodComponents.WebForms.Modules.WildwoodTokenExpirationModule, WildwoodComponents.WebForms" />
+    </httpModules>
+  </system.web>
+  <system.webServer>
+    <!-- Integrated pipeline (IIS 7+ default). -->
+    <modules>
+      <add name="WildwoodTokenExpiration"
+           type="WildwoodComponents.WebForms.Modules.WildwoodTokenExpirationModule, WildwoodComponents.WebForms" />
+    </modules>
+  </system.webServer>
+</configuration>
