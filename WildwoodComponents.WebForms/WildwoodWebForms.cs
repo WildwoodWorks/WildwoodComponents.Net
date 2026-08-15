@@ -4,6 +4,7 @@ using System.Net.Http;
 using WildwoodComponents.Shared.Http;
 using WildwoodComponents.WebForms.Configuration;
 using WildwoodComponents.WebForms.Logging;
+using WildwoodComponents.WebForms.Services;
 using WildwoodComponents.WebForms.Session;
 
 namespace WildwoodComponents.WebForms
@@ -132,6 +133,38 @@ namespace WildwoodComponents.WebForms
         public static IWildwoodSessionManager Session
         {
             get { return new WildwoodSessionManager(new HttpSessionTokenStore(), Logger); }
+        }
+
+        /// <summary>
+        /// Authentication against the WildwoodAPI. A fresh instance per call, bound to the
+        /// current request's session.
+        /// </summary>
+        public static IWildwoodAuthService Auth
+        {
+            get
+            {
+                var configured = EnsureConfigured();
+                return new WildwoodAuthService(
+                    configured.Client,
+                    Session,
+                    Logger,
+                    configured.Options.AppId,
+                    configured.Options.AppVersion);
+            }
+        }
+
+        /// <summary>Two-factor enrolment and trusted-device management for the signed-in user.</summary>
+        public static IWildwoodTwoFactorSettingsService TwoFactorSettings
+        {
+            get
+            {
+                var configured = EnsureConfigured();
+                return new WildwoodTwoFactorSettingsService(
+                    configured.Client,
+                    Session,
+                    Logger,
+                    configured.Options.AppId);
+            }
         }
 
         /// <summary>
