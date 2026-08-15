@@ -57,7 +57,8 @@ public class WildwoodException : Exception
         WildwoodErrorCode? code = null;
         object? details = null;
 
-        if (!string.IsNullOrEmpty(body))
+        // Pattern form narrows on netstandard2.0, whose string.IsNullOrEmpty is unannotated.
+        if (body is { Length: > 0 })
         {
             try
             {

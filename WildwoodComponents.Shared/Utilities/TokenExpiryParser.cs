@@ -62,7 +62,8 @@ public static class TokenExpiryParser
     /// </summary>
     public static DateTime? GetJwtExpiration(string? jwtToken)
     {
-        if (string.IsNullOrEmpty(jwtToken))
+        // Pattern form narrows on netstandard2.0, whose string.IsNullOrEmpty is unannotated.
+        if (jwtToken is null || jwtToken.Length == 0)
             return null;
 
         // JWT format: header.payload.signature

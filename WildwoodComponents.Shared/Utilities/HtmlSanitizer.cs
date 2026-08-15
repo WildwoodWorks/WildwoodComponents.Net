@@ -6,8 +6,19 @@ namespace WildwoodComponents.Shared.Utilities;
 /// Sanitizes HTML content by stripping dangerous tags and attributes
 /// while preserving safe content for display.
 /// </summary>
-public static partial class HtmlSanitizer
+public static class HtmlSanitizer
 {
+    // Compiled instances rather than [GeneratedRegex]: the regex source generator
+    // requires .NET 7+, and this library also targets netstandard2.0.
+    private static readonly Regex EventHandlerDoubleQuoted =
+        new(@"(<[^>]*?)\s+on\w+\s*=\s*""[^""]*""", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex EventHandlerSingleQuoted =
+        new(@"(<[^>]*?)\s+on\w+\s*=\s*'[^']*'", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex EventHandlerUnquoted =
+        new(@"(<[^>]*?)\s+on\w+\s*=\s*[^\s""'>]+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static readonly string[] DangerousTags =
         ["script", "style", "iframe", "object", "embed", "form", "link", "meta"];
 
@@ -26,7 +37,9 @@ public static partial class HtmlSanitizer
     /// </summary>
     public static string Sanitize(string? html)
     {
-        if (string.IsNullOrEmpty(html))
+        // Pattern form rather than string.IsNullOrEmpty: netstandard2.0's BCL lacks the
+        // [NotNullWhen(false)] annotation, so only this narrows `html` on both targets.
+        if (html is null || html.Length == 0)
             return string.Empty;
 
         var result = html;
@@ -56,11 +69,11 @@ public static partial class HtmlSanitizer
         {
             previous = result;
             // Double-quoted values: onclick="..."
-            result = EventHandlerDoubleQuotedRegex().Replace(result, "$1");
+            result = EventHandlerDoubleQuoted.Replace(result, "$1");
             // Single-quoted values: onclick='...'
-            result = EventHandlerSingleQuotedRegex().Replace(result, "$1");
+            result = EventHandlerSingleQuoted.Replace(result, "$1");
             // Unquoted values: onclick=alert(1)
-            result = EventHandlerUnquotedRegex().Replace(result, "$1");
+            result = EventHandlerUnquoted.Replace(result, "$1");
         } while (result != previous);
 
         // Remove dangerous attributes (srcdoc, formaction)
@@ -122,13 +135,4 @@ public static partial class HtmlSanitizer
 
         return result;
     }
-
-    [GeneratedRegex(@"(<[^>]*?)\s+on\w+\s*=\s*""[^""]*""", RegexOptions.IgnoreCase)]
-    private static partial Regex EventHandlerDoubleQuotedRegex();
-
-    [GeneratedRegex(@"(<[^>]*?)\s+on\w+\s*=\s*'[^']*'", RegexOptions.IgnoreCase)]
-    private static partial Regex EventHandlerSingleQuotedRegex();
-
-    [GeneratedRegex(@"(<[^>]*?)\s+on\w+\s*=\s*[^\s""'>]+", RegexOptions.IgnoreCase)]
-    private static partial Regex EventHandlerUnquotedRegex();
 }

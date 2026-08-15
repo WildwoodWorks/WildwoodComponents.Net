@@ -1,7 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- netstandard2.0 exists so WildwoodComponents.WebForms (.NET Framework 4.8)
+         can consume the same models/utilities. The Seeder is net10.0-only. -->
+    <TargetFrameworks>net10.0;netstandard2.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>WildwoodComponents.Shared</RootNamespace>
@@ -17,11 +20,21 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
-  <!-- Seeder component core: HTTP SDK + hosted runner (framework-neutral, no Blazor) -->
-  <ItemGroup>
+  <!-- Seeder component core: HTTP SDK + hosted runner (framework-neutral, no Blazor).
+       Seeder-only, so these are net10.0-only alongside the Seeder itself. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.2" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.2" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
+  </ItemGroup>
+
+  <!-- The Seeder uses records/required/init and IHostedService, none of which exist
+       on netstandard2.0; it is a server-startup harness with no WebForms counterpart. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <Compile Remove="Seeder\**" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <!-- Http\WildwoodRetryHandler is shared with WebForms and logs through ILogger. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
   </ItemGroup>
 
 </Project>
