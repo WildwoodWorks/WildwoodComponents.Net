@@ -54,6 +54,29 @@ you use.
   - Session state enabled (the default). Tokens are stored as strings, so
     StateServer and SQLServer session modes work as well as InProc.
 
+IF YOUR APP POOL RUNS IN CLASSIC MODE
+-------------------------------------
+The install registers the token module under <system.webServer><modules>, which is
+what an Integrated-mode application pool reads. Integrated has been the IIS default
+since IIS 7, so most sites need nothing further.
+
+A Classic-mode pool ignores that section, and the module simply will not run: tokens
+are then never refreshed mid-session and an expired session is noticed by the first
+API call that fails rather than on navigation. To register it for Classic mode, add
+this to web.config by hand:
+
+  <system.web>
+    <httpModules>
+      <add name="WildwoodTokenExpiration"
+           type="WildwoodComponents.WebForms.Modules.WildwoodTokenExpirationModule, WildwoodComponents.WebForms" />
+    </httpModules>
+  </system.web>
+
+Add it ONLY if the pool really is in Classic mode. That element in a site running on
+an Integrated pool makes ASP.NET refuse to start the application at all — every
+request returns "HTTP Error 500.22 - An ASP.NET setting has been detected that does
+not apply in Integrated managed pipeline mode".
+
 RECOMMENDED, NOT REQUIRED
 -------------------------
 Add Async="true" to the @Page directive of pages hosting a Wildwood control:
@@ -92,6 +115,11 @@ TROUBLESHOOTING
 
   Everything renders but no call reaches the API
       Check WildwoodAPI:ApiKey and WildwoodAPI:AppId are filled in.
+
+  HTTP Error 500.22 after install
+      A <system.web><httpModules> entry exists in web.config while the app pool runs
+      in Integrated mode. See "IF YOUR APP POOL RUNS IN CLASSIC MODE" above; the
+      package does not add that entry itself.
 
   You need the token module out of the request pipeline while diagnosing
       <add key="WildwoodAPI:DisableTokenModule" value="true" />

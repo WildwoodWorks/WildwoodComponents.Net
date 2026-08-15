@@ -28,8 +28,14 @@ namespace WildwoodComponents.WebForms.Modules
     ///   &lt;/modules&gt;
     /// &lt;/system.webServer&gt;
     /// </code>
+    /// That is the Integrated-pipeline section, which IIS has defaulted to since version 7.
+    /// The Classic-mode equivalent (<c>system.web/httpModules</c>) is left for the host to
+    /// add by hand, because declaring it on an Integrated pool stops the application
+    /// starting at all — see the package readme.
+    /// <para>
     /// It runs at <c>PostAcquireRequestState</c>, the first point where both the
     /// authenticated user and session state are available.
+    /// </para>
     /// <para>
     /// Every failure path lets the request through. A site whose API is briefly unreachable
     /// keeps serving pages; only a token that is known to be expired AND whose refresh was

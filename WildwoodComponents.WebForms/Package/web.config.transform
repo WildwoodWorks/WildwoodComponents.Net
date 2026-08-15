@@ -10,15 +10,23 @@
     <add key="WildwoodAPI:ApiKey" value="" />
     <add key="WildwoodAPI:AppId" value="" />
   </appSettings>
-  <system.web>
-    <!-- Classic pipeline (IIS 6 / IIS 7+ in classic mode). -->
-    <httpModules>
-      <add name="WildwoodTokenExpiration"
-           type="WildwoodComponents.WebForms.Modules.WildwoodTokenExpirationModule, WildwoodComponents.WebForms" />
-    </httpModules>
-  </system.web>
   <system.webServer>
-    <!-- Integrated pipeline (IIS 7+ default). -->
+    <!--
+      Integrated pipeline, the default for IIS 7 and later.
+
+      The classic-pipeline equivalent is deliberately NOT registered here. Declaring
+      <system.web><httpModules> in a site running on an Integrated-mode application pool
+      makes ASP.NET refuse to start it at all — every request returns HTTP 500.22 — so
+      adding it on install would take down the majority of sites, which run Integrated.
+      If your application pool is in Classic mode, add this by hand instead:
+
+        <system.web>
+          <httpModules>
+            <add name="WildwoodTokenExpiration"
+                 type="WildwoodComponents.WebForms.Modules.WildwoodTokenExpirationModule, WildwoodComponents.WebForms" />
+          </httpModules>
+        </system.web>
+    -->
     <modules>
       <add name="WildwoodTokenExpiration"
            type="WildwoodComponents.WebForms.Modules.WildwoodTokenExpirationModule, WildwoodComponents.WebForms" />
