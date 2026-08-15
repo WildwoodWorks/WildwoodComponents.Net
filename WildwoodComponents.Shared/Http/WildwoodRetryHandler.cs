@@ -78,14 +78,28 @@ public sealed class WildwoodRetryHandler : DelegatingHandler
         // the feedback three times, because the row commits before the response is produced.
         var maxAttempts = IsIdempotent(request.Method) ? _maxAttempts : 1;
 
+#if NETSTANDARD2_0
+        // .NET Framework's HttpClient refuses to send one HttpRequestMessage twice
+        // ("The request message was already sent."), and it disposes the request content
+        // once sent — so a retryable request is buffered up front and each attempt gets a
+        // fresh copy. Requests that will only ever be attempted once are sent untouched.
+        var buffered = maxAttempts > 1 ? await BufferAsync(request).ConfigureAwait(false) : null;
+#endif
+
         for (var attempt = 0; ; attempt++)
         {
             HttpResponseMessage? response = null;
             Exception? networkError = null;
 
+#if NETSTANDARD2_0
+            var attemptRequest = buffered == null ? request : CloneRequest(request, buffered);
+#else
+            var attemptRequest = request;
+#endif
+
             try
             {
-                response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                response = await base.SendAsync(attemptRequest, cancellationToken).ConfigureAwait(false);
                 if ((int)response.StatusCode < 500)
                 {
                     return response;
@@ -123,4 +137,55 @@ public sealed class WildwoodRetryHandler : DelegatingHandler
             await _delay(backoff, cancellationToken).ConfigureAwait(false);
         }
     }
+
+#if NETSTANDARD2_0
+    /// <summary>
+    /// Reads a retryable request's body into memory so it can be replayed. Returns an
+    /// empty array for a bodyless request, which still signals "clone each attempt".
+    /// </summary>
+    private static async Task<byte[]> BufferAsync(HttpRequestMessage request)
+    {
+        if (request.Content == null)
+        {
+            return Array.Empty<byte>();
+        }
+
+        return await request.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds a fresh request equivalent to <paramref name="request"/>, carrying the same
+    /// method, URI, version, headers and properties, with the buffered body.
+    /// </summary>
+    private static HttpRequestMessage CloneRequest(HttpRequestMessage request, byte[] body)
+    {
+        var clone = new HttpRequestMessage(request.Method, request.RequestUri)
+        {
+            Version = request.Version
+        };
+
+        foreach (var header in request.Headers)
+        {
+            clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
+
+        foreach (var property in request.Properties)
+        {
+            clone.Properties[property.Key] = property.Value;
+        }
+
+        if (request.Content != null)
+        {
+            var content = new ByteArrayContent(body);
+            foreach (var header in request.Content.Headers)
+            {
+                content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
+            clone.Content = content;
+        }
+
+        return clone;
+    }
+#endif
 }
