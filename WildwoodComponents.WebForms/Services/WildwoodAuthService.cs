@@ -336,9 +336,11 @@ namespace WildwoodComponents.WebForms.Services
         {
             try
             {
+                // Interpolated rather than concatenated so the parity checker extracts the
+                // same normalised path the other stacks produce for this call.
                 using (var response = await SendAsync(
                            HttpMethod.Get,
-                           "twofactor/configuration/" + Uri.EscapeDataString(AppId),
+                           $"twofactor/configuration/{Uri.EscapeDataString(AppId)}",
                            null,
                            cancellationToken).ConfigureAwait(false))
                 {

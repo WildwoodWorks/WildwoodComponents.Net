@@ -56,9 +56,11 @@ namespace WildwoodComponents.WebForms.Services
         {
             if (string.IsNullOrEmpty(credentialId)) throw new ArgumentException("Credential id is required.", nameof(credentialId));
 
+            // Interpolated rather than concatenated so the parity checker extracts the same
+            // normalised path the other stacks produce for this call.
             return SendForSuccessAsync(
                 HttpMethod.Put,
-                "twofactor/credentials/" + Uri.EscapeDataString(credentialId) + "/primary",
+                $"twofactor/credentials/{Uri.EscapeDataString(credentialId)}/primary",
                 null,
                 cancellationToken);
         }
@@ -70,7 +72,7 @@ namespace WildwoodComponents.WebForms.Services
 
             return SendForSuccessAsync(
                 HttpMethod.Delete,
-                "twofactor/credentials/" + Uri.EscapeDataString(credentialId),
+                $"twofactor/credentials/{Uri.EscapeDataString(credentialId)}",
                 null,
                 cancellationToken);
         }
@@ -144,7 +146,7 @@ namespace WildwoodComponents.WebForms.Services
 
             return SendForSuccessAsync(
                 HttpMethod.Delete,
-                "twofactor/trusted-devices/" + Uri.EscapeDataString(deviceId),
+                $"twofactor/trusted-devices/{Uri.EscapeDataString(deviceId)}",
                 null,
                 cancellationToken);
         }
