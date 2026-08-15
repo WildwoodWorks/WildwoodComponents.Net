@@ -61,8 +61,10 @@
   <ItemGroup>
     <None Include="$(WildwoodSharedAssets)\js\wildwood-forms.js" Pack="true" PackagePath="content\Scripts\wildwood\" Visible="false" />
     <None Include="$(WildwoodSharedAssets)\js\authentication.js" Pack="true" PackagePath="content\Scripts\wildwood\" Visible="false" />
+    <None Include="$(WildwoodSharedAssets)\js\twofactor-settings.js" Pack="true" PackagePath="content\Scripts\wildwood\" Visible="false" />
     <None Include="$(WildwoodSharedAssets)\css\wildwood-razor-themes.css" Pack="true" PackagePath="content\Content\wildwood\" Visible="false" />
     <None Include="$(WildwoodSharedAssets)\css\authentication.css" Pack="true" PackagePath="content\Content\wildwood\" Visible="false" />
+    <None Include="$(WildwoodSharedAssets)\css\twofactor-settings.css" Pack="true" PackagePath="content\Content\wildwood\" Visible="false" />
   </ItemGroup>
 
 </Project>

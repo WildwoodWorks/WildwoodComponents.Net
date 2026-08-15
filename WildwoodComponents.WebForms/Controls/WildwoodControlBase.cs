@@ -149,26 +149,78 @@ namespace WildwoodComponents.WebForms.Controls
                 false);
         }
 
+        /// <summary>Page.Items slot holding the ordered script list for this page.</summary>
+        private const string ScriptListKey = "ww-script-list";
+
         /// <summary>
-        /// Emits one script tag, at most once per page, at the end of the form so the
-        /// markup it operates on already exists.
+        /// Queues one script for the page, at most once, preserving the order in which
+        /// scripts were requested.
         /// </summary>
+        /// <remarks>
+        /// The scripts are accumulated here and emitted together from the page's
+        /// <c>PreRenderComplete</c> event rather than registered individually.
+        /// <c>ClientScriptManager</c> keeps its registrations in a
+        /// <c>HybridDictionary</c>, which stops preserving insertion order once it grows
+        /// past a handful of entries — and order matters here, because
+        /// <c>wildwood-forms.js</c> has to be in place before any component script
+        /// initialises. Emitting one ordered block removes the dependency on that
+        /// behaviour entirely.
+        /// </remarks>
         /// <param name="name">Base file name without extension.</param>
         protected void RegisterScript(string name)
         {
-            var key = "ww-js-" + name;
-            if (Page == null || Page.Items.Contains(key))
+            if (Page == null)
             {
                 return;
             }
 
-            Page.Items[key] = true;
-            var src = ResolveUrl(ScriptPath.TrimEnd('/') + "/" + name + ".js");
+            var scripts = Page.Items[ScriptListKey] as List<string>;
+            if (scripts == null)
+            {
+                scripts = new List<string>();
+                Page.Items[ScriptListKey] = scripts;
+                Page.PreRenderComplete += EmitScripts;
+            }
 
-            Page.ClientScript.RegisterStartupScript(
+            // The URL is resolved here, against THIS control's ScriptPath, rather than at
+            // emission time: the emitting handler belongs to whichever control registered
+            // first, so resolving later would silently give every script that control's
+            // path even when another set its own.
+            var src = ResolveUrl(ScriptPath.TrimEnd('/') + "/" + name + ".js");
+            if (!scripts.Contains(src))
+            {
+                scripts.Add(src);
+            }
+        }
+
+        private void EmitScripts(object? sender, EventArgs e)
+        {
+            var page = sender as Page ?? Page;
+            if (page == null)
+            {
+                return;
+            }
+
+            var scripts = page.Items[ScriptListKey] as List<string>;
+            if (scripts == null || scripts.Count == 0)
+            {
+                return;
+            }
+
+            var builder = new System.Text.StringBuilder();
+            foreach (var src in scripts)
+            {
+                builder.Append("<script src=\"")
+                       .Append(HttpUtility.HtmlAttributeEncode(src))
+                       .Append("\"></script>");
+            }
+
+            // A startup script renders at the end of the form, so the markup each script
+            // operates on already exists by the time it runs.
+            page.ClientScript.RegisterStartupScript(
                 typeof(WildwoodControlBase),
-                key,
-                "<script src=\"" + HttpUtility.HtmlAttributeEncode(src) + "\"></script>",
+                ScriptListKey,
+                builder.ToString(),
                 false);
         }
 
