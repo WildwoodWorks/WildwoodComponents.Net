@@ -28,6 +28,10 @@
   <ItemGroup>
     <Reference Include="System.Web" />
     <Reference Include="System.Configuration" />
+    <!-- The framework assembly, deliberately not the System.Net.Http NuGet package:
+         the package ships an assembly with the same identity and is a well-known source
+         of binding-redirect breakage on .NET Framework. -->
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
 
   <ItemGroup>
