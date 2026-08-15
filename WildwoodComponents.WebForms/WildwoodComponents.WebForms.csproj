@@ -50,4 +50,19 @@
     <None Include="Package\**\*" Pack="true" PackagePath="content\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!-- Scripts and stylesheets are packed straight out of the Razor project rather than
+       copied into this one, so the two stacks cannot drift: there is one source of truth
+       per file and the packaged bytes are identical to what Razor serves. Files are listed
+       explicitly, one line per component, so adding a component is a deliberate act. -->
+  <PropertyGroup>
+    <WildwoodSharedAssets>..\WildwoodComponents.Razor\wwwroot</WildwoodSharedAssets>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(WildwoodSharedAssets)\js\wildwood-forms.js" Pack="true" PackagePath="content\Scripts\wildwood\" Visible="false" />
+    <None Include="$(WildwoodSharedAssets)\js\authentication.js" Pack="true" PackagePath="content\Scripts\wildwood\" Visible="false" />
+    <None Include="$(WildwoodSharedAssets)\css\wildwood-razor-themes.css" Pack="true" PackagePath="content\Content\wildwood\" Visible="false" />
+    <None Include="$(WildwoodSharedAssets)\css\authentication.css" Pack="true" PackagePath="content\Content\wildwood\" Visible="false" />
+  </ItemGroup>
+
 </Project>
