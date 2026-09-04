@@ -212,6 +212,11 @@ public class WildwoodAuthService : IWildwoodAuthService
                 AppId = _appId
             };
 
+            // auth/reset-password is [Authorize] on the API and identifies the user from the JWT
+            // alone — the body carries no email or user id. Without the session's bearer token
+            // this always 401s.
+            _sessionManager.ApplyAuthorizationHeader(_httpClient);
+
             using var response = await _httpClient.PostAsJsonAsync("auth/reset-password", apiRequest);
             var content = await response.Content.ReadAsStringAsync();
 
