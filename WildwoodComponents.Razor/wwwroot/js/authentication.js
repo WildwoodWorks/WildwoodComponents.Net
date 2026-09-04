@@ -18,12 +18,17 @@
     // 2FA session state (set by login response when 2FA is required)
     let twoFactorSessionId = null;
 
+    // Carried from the login form so the forced-reset POST can name the user it is
+    // finishing sign-in for. The server has the token; it does not have the identity.
+    let pendingUsername = null;
+
     // ===== View switching =====
     const views = {
         login: document.getElementById('ww-login-view'),
         register: document.getElementById('ww-register-view'),
         forgot: document.getElementById('ww-forgot-view'),
-        twoFactor: document.getElementById('ww-2fa-view')
+        twoFactor: document.getElementById('ww-2fa-view'),
+        reset: document.getElementById('ww-reset-view')
     };
 
     function showView(name) {
@@ -112,6 +117,34 @@
         return await response.json();
     }
 
+    // ===== Post-credential routing =====
+    // Login and two-factor verification both land here, because both can come back needing a
+    // forced password change: a temporary password with 2FA enabled surfaces the flag only after
+    // the code is verified. Handling it in one place is what keeps the two paths in step.
+    //
+    // The order matters. requiresTwoFactor is checked first because that sign-in is not finished
+    // and no token exists yet; requiresPasswordReset carries a real token and must be dealt with
+    // before success, or the user is signed in without ever changing the temporary password.
+    function routeAuthResult(result) {
+        if (result.requiresTwoFactor) {
+            twoFactorSessionId = result.twoFactorSessionId;
+            showView('twoFactor');
+            return;
+        }
+
+        if (result.requiresPasswordReset) {
+            showView('reset');
+            return;
+        }
+
+        if (result.success) {
+            window.location.href = result.redirectUrl || returnUrl;
+            return;
+        }
+
+        showMessage(result.message || 'Sign-in failed', 'danger');
+    }
+
     // ===== Login form =====
     const loginForm = document.getElementById('ww-login-form');
     if (loginForm) {
@@ -124,21 +157,16 @@
             hideMessage();
 
             try {
+                pendingUsername = document.getElementById('ww-login-username').value;
+
                 const result = await postJson('/login', {
-                    username: document.getElementById('ww-login-username').value,
+                    username: pendingUsername,
                     password: document.getElementById('ww-login-password').value,
                     rememberMe: document.getElementById('ww-login-remember').checked,
                     returnUrl: returnUrl
                 });
 
-                if (result.requiresTwoFactor) {
-                    twoFactorSessionId = result.twoFactorSessionId;
-                    showView('twoFactor');
-                } else if (result.success) {
-                    window.location.href = result.redirectUrl || returnUrl;
-                } else {
-                    showMessage(result.message || 'Login failed', 'danger');
-                }
+                routeAuthResult(result);
             } catch (err) {
                 showMessage(err.message || 'An error occurred. Please try again.', 'danger');
             } finally {
@@ -230,13 +258,53 @@
                 const result = await postJson('/two-factor-verify', {
                     code: document.getElementById('ww-2fa-code').value,
                     sessionId: twoFactorSessionId,
-                    rememberDevice: document.getElementById('ww-2fa-remember').checked
+                    rememberDevice: document.getElementById('ww-2fa-remember').checked,
+                    returnUrl: returnUrl
+                });
+
+                // Not a plain success check: a temporary password combined with 2FA only
+                // surfaces requiresPasswordReset once the code has been verified.
+                routeAuthResult(result);
+            } catch (err) {
+                showMessage(err.message || 'An error occurred. Please try again.', 'danger');
+            } finally {
+                setLoading(btn, false);
+            }
+        });
+    }
+
+    // ===== Forced password reset =====
+    // Reached only from routeAuthResult, never from a navigation link: the user signed in with a
+    // temporary password and cannot proceed until it is replaced. The credentials are already
+    // authenticated at this point, so the server holds a real token and the reset call it makes
+    // is an authenticated one.
+    const resetForm = document.getElementById('ww-reset-form');
+    if (resetForm) {
+        bindSubmit(resetForm, async function (e) {
+            e.preventDefault();
+
+            const passwordEl = document.getElementById('ww-reset-password');
+            const confirmEl = document.getElementById('ww-reset-confirm');
+            confirmEl.setCustomValidity(passwordEl.value !== confirmEl.value ? 'Passwords must match' : '');
+
+            if (!validateForm(resetForm)) return;
+
+            const btn = document.getElementById('ww-reset-submit');
+            setLoading(btn, true);
+            hideMessage();
+
+            try {
+                const result = await postJson('/reset-password', {
+                    username: pendingUsername,
+                    newPassword: passwordEl.value,
+                    confirmPassword: confirmEl.value,
+                    returnUrl: returnUrl
                 });
 
                 if (result.success) {
                     window.location.href = result.redirectUrl || returnUrl;
                 } else {
-                    showMessage(result.message || 'Verification failed', 'danger');
+                    showMessage(result.message || 'Password reset failed', 'danger');
                 }
             } catch (err) {
                 showMessage(err.message || 'An error occurred. Please try again.', 'danger');

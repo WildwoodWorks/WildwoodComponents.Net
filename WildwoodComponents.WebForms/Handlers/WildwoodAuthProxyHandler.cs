@@ -8,18 +8,26 @@ using WildwoodComponents.WebForms.Services;
 namespace WildwoodComponents.WebForms.Handlers
 {
     /// <summary>
-    /// Same-origin proxy for the Authentication control. Exposes the four routes
+    /// Same-origin proxy for the Authentication control. Exposes the five routes
     /// <c>authentication.js</c> posts to, forwards each to
     /// <see cref="IWildwoodAuthService"/>, and — on a completed sign-in — issues the Forms
     /// Authentication cookie so the rest of the site sees an authenticated user.
     /// </summary>
     /// <remarks>
     /// Routes, all POST: <c>/login</c>, <c>/register</c>, <c>/forgot-password</c>,
-    /// <c>/two-factor-verify</c>.
+    /// <c>/two-factor-verify</c>, <c>/reset-password</c>.
     /// <para>
     /// A rejected sign-in is answered with HTTP 200 and <c>success: false</c>, not a 4xx:
     /// the script treats any non-OK status as a transport failure and replaces the API's
     /// message with a generic one, so a 401 here would hide "wrong password" from the user.
+    /// </para>
+    /// <para>
+    /// <b>The forced-reset gate.</b> A sign-in whose response carries
+    /// <c>RequiresPasswordReset</c> is authenticated but NOT finished: the tokens are stored
+    /// (so <c>/reset-password</c> can call an <c>[Authorize]</c> endpoint), but no Forms
+    /// Authentication cookie is issued. Issuing one there would sign the user into the site
+    /// with a temporary password still in force and no way for the app to know. The cookie is
+    /// issued by <c>/reset-password</c> instead, once a real password exists.
     /// </para>
     /// </remarks>
     public class WildwoodAuthProxyHandler : WildwoodProxyHandlerBase
@@ -53,6 +61,12 @@ namespace WildwoodComponents.WebForms.Handlers
             if (RouteEquals(route, "/two-factor-verify"))
             {
                 await VerifyTwoFactorAsync(context).ConfigureAwait(false);
+                return true;
+            }
+
+            if (RouteEquals(route, "/reset-password"))
+            {
+                await ResetPasswordAsync(context).ConfigureAwait(false);
                 return true;
             }
 
@@ -165,6 +179,97 @@ namespace WildwoodComponents.WebForms.Handlers
         }
 
         /// <summary>
+        /// Completes a sign-in that stalled on a temporary password: replaces the password, then
+        /// issues the auth cookie the login was refused.
+        /// </summary>
+        /// <remarks>
+        /// The reset itself is authenticated by the tokens the temporary-password login already
+        /// stored — <c>api/auth/reset-password</c> is <c>[Authorize]</c> and identifies the user
+        /// from the JWT alone, so there is no email or user id on the wire.
+        /// <para>
+        /// The cookie is issued from the SESSION token rather than by signing in again with the
+        /// new password. Re-authenticating would be the obvious alternative and is wrong here: it
+        /// would re-trigger two-factor for an account that just satisfied it on the way to this
+        /// screen. This mirrors the Blazor component, which completes the pending authentication
+        /// rather than re-logging in.
+        /// </para>
+        /// </remarks>
+        private static async Task ResetPasswordAsync(HttpContextBase context)
+        {
+            var body = await ReadJsonAsync<ResetPasswordProxyRequest>(context).ConfigureAwait(false);
+
+            if (body == null || body.NewPassword is not { Length: > 0 })
+            {
+                await WriteJsonAsync(context, AuthProxyResponse.Fail("A new password is required.")).ConfigureAwait(false);
+                return;
+            }
+
+            if (body.ConfirmPassword is not { Length: > 0 }
+                || !string.Equals(body.NewPassword, body.ConfirmPassword, StringComparison.Ordinal))
+            {
+                await WriteJsonAsync(context, AuthProxyResponse.Fail("Passwords must match.")).ConfigureAwait(false);
+                return;
+            }
+
+            var session = WildwoodWebForms.Session;
+            var accessToken = session.GetAccessToken();
+
+            // No token means no temporary-password sign-in happened, so there is nobody to reset.
+            // Refusing here keeps this route from being an anonymous password-change surface.
+            if (accessToken is not { Length: > 0 })
+            {
+                await WriteJsonAsync(context, AuthProxyResponse.Fail(
+                    "Your session has expired. Please sign in again.")).ConfigureAwait(false);
+                return;
+            }
+
+            var result = await WildwoodWebForms.Auth.ResetPasswordAsync(new ResetPasswordRequest
+            {
+                NewPassword = body.NewPassword,
+                ConfirmPassword = body.ConfirmPassword
+            }).ConfigureAwait(false);
+
+            if (!result.Succeeded)
+            {
+                await WriteJsonAsync(context, AuthProxyResponse.Fail(
+                    result.Message ?? "Password reset failed.")).ConfigureAwait(false);
+                return;
+            }
+
+            // The password is real now, so the sign-in the login refused can be completed.
+            var userName = body.Username;
+            if (userName is not { Length: > 0 })
+            {
+                // The reset succeeded; only the cookie could not be issued. Say so plainly and
+                // send the user to sign in with the password they just set, rather than reporting
+                // a failure for work that actually landed.
+                Logger.Warn("Password reset succeeded but no user name was supplied; no auth cookie was issued.");
+                await WriteJsonAsync(context, new AuthProxyResponse
+                {
+                    Success = false,
+                    Message = "Your password has been changed. Please sign in with your new password."
+                }).ConfigureAwait(false);
+                return;
+            }
+
+            WildwoodFormsAuthHelper.IssueAuthCookie(
+                context,
+                userName,
+                accessToken,
+                session.GetRefreshToken(),
+                session.GetTokenExpiryUtc() ?? DateTime.UtcNow.AddMinutes(15),
+                createPersistentCookie: false,
+                Logger);
+
+            await WriteJsonAsync(context, new AuthProxyResponse
+            {
+                Success = true,
+                RedirectUrl = ResolveReturnUrl(body.ReturnUrl),
+                Message = "Password updated."
+            }).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Turns a successful <see cref="AuthResult"/> into a signed-in browser session:
         /// the Forms Authentication cookie carrying a backup of the tokens, plus the
         /// redirect the script follows.
@@ -183,6 +288,23 @@ namespace WildwoodComponents.WebForms.Handlers
             }
 
             var response = result.Response;
+
+            // Authenticated, but the sign-in is NOT finished: the account is on a temporary
+            // password. The tokens are already in session (LoginAsync stores them for this
+            // branch), which is what lets /reset-password call an [Authorize] endpoint — but no
+            // auth cookie is issued, because the site must not treat this as a signed-in user
+            // until a real password exists.
+            if (response.RequiresPasswordReset)
+            {
+                await WriteJsonAsync(context, new AuthProxyResponse
+                {
+                    Success = false,
+                    RequiresPasswordReset = true,
+                    Message = "Please choose a new password to finish signing in."
+                }).ConfigureAwait(false);
+                return;
+            }
+
             var session = WildwoodWebForms.Session;
             var expiry = session.GetTokenExpiryUtc() ?? DateTime.UtcNow.AddMinutes(15);
             var userName = response.Email ?? response.UserId ?? response.DisplayName;
@@ -249,9 +371,22 @@ namespace WildwoodComponents.WebForms.Handlers
         }
 
         /// <summary>
+        /// The forced-reset POST. <c>Username</c> comes from the login form the script still
+        /// holds: the API identifies the user from the JWT, but the Forms Authentication cookie
+        /// needs a name, and the session stores tokens only — no identity.
+        /// </summary>
+        private sealed class ResetPasswordProxyRequest
+        {
+            public string? Username { get; set; }
+            public string? NewPassword { get; set; }
+            public string? ConfirmPassword { get; set; }
+            public string? ReturnUrl { get; set; }
+        }
+
+        /// <summary>
         /// The response shape <c>authentication.js</c> expects: it reads
-        /// <c>requiresTwoFactor</c>, <c>twoFactorSessionId</c>, <c>success</c>,
-        /// <c>redirectUrl</c> and <c>message</c>.
+        /// <c>requiresTwoFactor</c>, <c>twoFactorSessionId</c>, <c>requiresPasswordReset</c>,
+        /// <c>success</c>, <c>redirectUrl</c> and <c>message</c>.
         /// </summary>
         private sealed class AuthProxyResponse
         {
@@ -259,6 +394,7 @@ namespace WildwoodComponents.WebForms.Handlers
             public string? Message { get; set; }
             public bool RequiresTwoFactor { get; set; }
             public string? TwoFactorSessionId { get; set; }
+            public bool RequiresPasswordReset { get; set; }
             public string? RedirectUrl { get; set; }
 
             public static AuthProxyResponse Fail(string message)
