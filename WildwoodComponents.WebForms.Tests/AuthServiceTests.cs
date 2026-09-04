@@ -251,5 +251,75 @@ namespace WildwoodComponents.WebForms.Tests
             Assert.True(result.Succeeded);
             Assert.Contains("If an account", result.Message);
         }
+
+        // ── Temporary passwords and the forced reset ─────────────────────────────
+
+        private const string LoginNeedsPasswordReset =
+            "{\"jwtToken\":\"jwt-access\",\"refreshToken\":\"jwt-refresh\",\"id\":\"user-1\"," +
+            "\"email\":\"a@b.test\",\"requiresTwoFactor\":false,\"requiresPasswordReset\":true}";
+
+        /// <summary>
+        /// The reset endpoint is [Authorize] and identifies the user from the JWT alone, so the
+        /// tokens must be stored on this branch even though the sign-in is not finished. The
+        /// proxy withholds the auth COOKIE instead — that is what keeps the user out of the site.
+        /// </summary>
+        [Fact]
+        public async Task A_temporary_password_login_still_stores_the_tokens()
+        {
+            var handler = new FakeHttpMessageHandler().WhenOk("auth/login", LoginNeedsPasswordReset);
+            IWildwoodSessionManager session;
+            HttpClient client;
+            var service = Create(handler, out session, out client);
+
+            var result = await service.LoginAsync(new LoginRequest { Username = "ada", Password = "temp-pw" });
+
+            Assert.True(result.Succeeded);
+            Assert.True(result.Response.RequiresPasswordReset);
+            Assert.Equal("jwt-access", session.GetAccessToken());
+        }
+
+        [Fact]
+        public async Task Reset_password_sends_the_bearer_token_from_the_session()
+        {
+            var handler = new FakeHttpMessageHandler().WhenOk("auth/reset-password", "{}");
+            IWildwoodSessionManager session;
+            HttpClient client;
+            var service = Create(handler, out session, out client);
+            session.SetTokens("jwt-access", "jwt-refresh", DateTime.UtcNow.AddHours(1));
+
+            var result = await service.ResetPasswordAsync(new ResetPasswordRequest
+            {
+                NewPassword = "NewP@ss1!",
+                ConfirmPassword = "NewP@ss1!"
+            });
+
+            Assert.True(result.Succeeded);
+
+            var request = handler.Single("auth/reset-password");
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("Bearer jwt-access", request.Authorization);
+        }
+
+        [Fact]
+        public async Task Reset_password_surfaces_the_API_error_message()
+        {
+            var handler = new FakeHttpMessageHandler().When(
+                "auth/reset-password",
+                HttpStatusCode.BadRequest,
+                "{\"error\":\"PasswordValidationFailed\",\"message\":\"Password must have numbers (0-9).\"}");
+            IWildwoodSessionManager session;
+            HttpClient client;
+            var service = Create(handler, out session, out client);
+            session.SetTokens("jwt-access", "jwt-refresh", DateTime.UtcNow.AddHours(1));
+
+            var result = await service.ResetPasswordAsync(new ResetPasswordRequest
+            {
+                NewPassword = "weak",
+                ConfirmPassword = "weak"
+            });
+
+            Assert.False(result.Succeeded);
+            Assert.Contains("numbers", result.Message);
+        }
     }
 }
