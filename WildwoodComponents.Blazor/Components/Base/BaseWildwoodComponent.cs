@@ -181,23 +181,43 @@ namespace WildwoodComponents.Blazor.Components.Base
             
             // Call the derived component's error handler
             await OnComponentErrorAsync(exception, context);
-            
+
             // Trigger the error event callback
-            if (OnError.HasDelegate)
-            {
-                var errorArgs = new ComponentErrorEventArgs
-                {
-                    Exception = exception,
-                    Context = context,
-                    ComponentType = GetType().Name,
-                    ComponentId = ComponentId
-                };
-                await OnError.InvokeAsync(errorArgs);
-            }
-            
+            await InvokeOnErrorAsync(exception, context);
+
             StateHasChanged();
         }
-        
+
+        /// <summary>
+        /// Raises <see cref="OnError"/> with a populated <see cref="ComponentErrorEventArgs"/>,
+        /// without touching <see cref="ErrorMessage"/>, the root CSS classes, or the log.
+        /// </summary>
+        /// <remarks>
+        /// Derived components that surface their own inline error UI use this instead of hiding
+        /// <see cref="OnError"/> with a <c>new</c> declaration of their own. Two
+        /// <c>[Parameter]</c> properties with the same name — which is what hiding produces, since
+        /// Blazor's parameter discovery collapses overrides but not hidden members — makes the
+        /// component impossible to render at all: <c>ComponentProperties</c> throws
+        /// "declares more than one parameter matching the name" the first time it is parameterised,
+        /// and on Blazor Server that unhandled render exception terminates the circuit.
+        /// See ComponentParameterContractTests, which pins this for every component in the library.
+        /// </remarks>
+        protected async Task InvokeOnErrorAsync(Exception exception, string context = "")
+        {
+            if (!OnError.HasDelegate)
+            {
+                return;
+            }
+
+            await OnError.InvokeAsync(new ComponentErrorEventArgs
+            {
+                Exception = exception,
+                Context = context,
+                ComponentType = GetType().Name,
+                ComponentId = ComponentId
+            });
+        }
+
         /// <summary>
         /// Clears the current error message.
         /// </summary>

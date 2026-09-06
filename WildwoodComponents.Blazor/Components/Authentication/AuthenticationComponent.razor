@@ -804,9 +804,9 @@
         StateHasChanged();
     }
 
-    private async Task HandleDisclaimerError(string error)
+    private async Task HandleDisclaimerError(ComponentErrorEventArgs args)
     {
-        await HandleErrorAsync(new InvalidOperationException(error), "Disclaimer acceptance");
+        await HandleErrorAsync(args.Exception, args.Context);
     }
 
     [Inject] private IDisclaimerService? DisclaimerServiceInstance { get; set; }

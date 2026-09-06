@@ -18,8 +18,10 @@ public partial class DisclaimerComponent : BaseWildwoodComponent
 
     [Parameter] public EventCallback<List<DisclaimerAcceptanceResult>> OnDisclaimersAccepted { get; set; }
     [Parameter] public EventCallback OnDisclaimersCancelled { get; set; }
-    // Hides the base ComponentErrorEventArgs callback with a string payload (public API)
-    [Parameter] public new EventCallback<string> OnError { get; set; }
+    // Errors are raised through the base OnError (ComponentErrorEventArgs) via InvokeOnErrorAsync.
+    // Re-declaring OnError here with `new` gave the type two [Parameter] properties named "onerror",
+    // which Blazor rejects at render time and which killed the login circuit — see
+    // ComponentParameterContractTests.
 
     [Inject] private IDisclaimerService? DisclaimerService { get; set; }
 
@@ -76,7 +78,7 @@ public partial class DisclaimerComponent : BaseWildwoodComponent
                 if (result.ErrorMessage != null)
                 {
                     _errorMessage = result.ErrorMessage;
-                    await OnError.InvokeAsync(_errorMessage);
+                    await InvokeOnErrorAsync(new InvalidOperationException(_errorMessage), "Loading disclaimers");
                 }
                 else
                 {
@@ -88,7 +90,7 @@ public partial class DisclaimerComponent : BaseWildwoodComponent
         {
             _errorMessage = "An unexpected error occurred while loading disclaimers.";
             Logger?.LogError(ex, "Unexpected error loading disclaimers for app {AppId}", AppId);
-            await OnError.InvokeAsync(_errorMessage);
+            await InvokeOnErrorAsync(new InvalidOperationException(_errorMessage, ex), "Loading disclaimers");
         }
         finally
         {
@@ -127,7 +129,7 @@ public partial class DisclaimerComponent : BaseWildwoodComponent
         {
             _errorMessage = "Failed to submit disclaimer acceptances. Please try again.";
             Logger?.LogError(ex, "Error accepting disclaimers for app {AppId}", AppId);
-            await OnError.InvokeAsync(_errorMessage);
+            await InvokeOnErrorAsync(new InvalidOperationException(_errorMessage, ex), "Accepting disclaimers");
         }
         finally
         {
