@@ -581,6 +581,9 @@ namespace WildwoodComponents.Blazor.Components.Registration
             {
                 if (acceptances.Count > 0)
                 {
+                    // accept-bulk is [Authorize]; the signup response carries the JWT for the new user.
+                    DisclaimerService.SetAuthToken(_authResponse?.JwtToken);
+
                     var result = await DisclaimerService.AcceptDisclaimersAsync(AppId, acceptances);
                     if (!result.Success)
                     {

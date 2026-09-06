@@ -64,11 +64,9 @@ public partial class AIProxyComponent : BaseWildwoodComponent
     /// </summary>
     [Parameter] public EventCallback<AIChatResponse> OnResponse { get; set; }
 
-    /// <summary>
-    /// Callback invoked when an error occurs.
-    /// Hides the base ComponentErrorEventArgs callback with a string payload (public API).
-    /// </summary>
-    [Parameter] public new EventCallback<string> OnError { get; set; }
+    // Errors are raised through the base OnError (ComponentErrorEventArgs) via InvokeOnErrorAsync.
+    // Re-declaring OnError here with `new` gave the type two [Parameter] properties named "onerror",
+    // which Blazor rejects at render time — see ComponentParameterContractTests.
 
     #endregion
 
@@ -194,8 +192,7 @@ public partial class AIProxyComponent : BaseWildwoodComponent
             if (response.IsError)
             {
                 _errorMessage = response.ErrorMessage ?? "An error occurred processing your request.";
-                if (OnError.HasDelegate)
-                    await OnError.InvokeAsync(_errorMessage);
+                await InvokeOnErrorAsync(new InvalidOperationException(_errorMessage), "AI proxy request");
             }
             else
             {
@@ -213,8 +210,7 @@ public partial class AIProxyComponent : BaseWildwoodComponent
             _errorMessage = "Failed to process request. Please try again.";
             Logger?.LogError(ex, "Error sending AI proxy request");
 
-            if (OnError.HasDelegate)
-                await OnError.InvokeAsync(_errorMessage);
+            await InvokeOnErrorAsync(new InvalidOperationException(_errorMessage, ex), "AI proxy request");
         }
         finally
         {

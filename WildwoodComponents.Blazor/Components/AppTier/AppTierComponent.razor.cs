@@ -41,7 +41,10 @@ namespace WildwoodComponents.Blazor.Components.AppTier
 
         [Parameter] public EventCallback<AppTierSelectedEventArgs> OnTierSelected { get; set; }
         [Parameter] public EventCallback<AppTierSubscriptionChangedEventArgs> OnSubscriptionChanged { get; set; }
-        [Parameter] public new EventCallback<ComponentErrorEventArgs> OnError { get; set; }
+        // OnError is inherited from BaseWildwoodComponent and raised by HandleErrorAsync. Re-declaring
+        // it here with `new` (same type, so it changed nothing) gave the type two [Parameter]
+        // properties named "onerror", which Blazor rejects at render time — see
+        // ComponentParameterContractTests.
 
         #endregion
 

@@ -773,6 +773,10 @@
             var disclaimerService = DisclaimerServiceInstance;
             if (disclaimerService != null && !string.IsNullOrEmpty(AppId))
             {
+                // accept-bulk is [Authorize]. The login that surfaced these disclaimers already
+                // returned the JWT alongside them, so hand it over before accepting or the call 401s.
+                disclaimerService.SetAuthToken(_pendingAuthResponse?.JwtToken);
+
                 var result = await disclaimerService.AcceptDisclaimersAsync(AppId, acceptances);
                 if (!result.Success)
                 {
@@ -804,9 +808,9 @@
         StateHasChanged();
     }
 
-    private async Task HandleDisclaimerError(string error)
+    private async Task HandleDisclaimerError(ComponentErrorEventArgs args)
     {
-        await HandleErrorAsync(new InvalidOperationException(error), "Disclaimer acceptance");
+        await HandleErrorAsync(args.Exception, args.Context);
     }
 
     [Inject] private IDisclaimerService? DisclaimerServiceInstance { get; set; }

@@ -8,6 +8,7 @@
 @using WildwoodComponents.Blazor.Extensions
 @using WildwoodComponents.Blazor.Models
 @using WildwoodComponents.Blazor.Services
+@using WildwoodComponents.Blazor.Components.Base
 @using WildwoodComponents.Blazor.Components.Payment
 @inject IHttpClientFactory HttpClientFactory
 @inject ILogger<TokenRegistrationComponent> Logger
@@ -1124,8 +1125,9 @@
     /// <summary>
     /// Called when an error occurs in the disclaimer component.
     /// </summary>
-    private async Task HandleDisclaimerError(string error)
+    private async Task HandleDisclaimerError(ComponentErrorEventArgs args)
     {
+        var error = args.Exception.Message;
         Logger.LogWarning("Disclaimer error during registration: {Error}", error);
         _registrationError = error;
         _showRegistrationDisclaimers = false;

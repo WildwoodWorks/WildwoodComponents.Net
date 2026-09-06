@@ -87,8 +87,9 @@
         StateHasChanged();
     }
 
-    private void HandleError(string error)
+    private void HandleError(ComponentErrorEventArgs args)
     {
+        var error = args.Exception.Message;
         var msg = $"Error: {error}";
         AddEvent(msg);
         LifecycleTracker.TrackError("DisclaimerComponent", error);

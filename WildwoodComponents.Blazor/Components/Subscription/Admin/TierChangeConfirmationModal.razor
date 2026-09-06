@@ -22,7 +22,7 @@
                     <span>Confirm Plan Change</span>
                 }
             </h5>
-            <button type="button" class="btn-close" @onclick="HandleCancel" disabled="@IsLoading"></button>
+            <button type="button" class="btn-close" @onclick="HandleCancel" disabled="@IsProcessing"></button>
         </div>
 
         <div class="ww-modal-body" style="padding: 1.5rem; max-height: 70vh; overflow-y: auto;">
@@ -215,14 +215,14 @@
             <button type="button"
                     class="btn btn-outline-secondary"
                     @onclick="HandleCancel"
-                    disabled="@IsLoading">
+                    disabled="@IsProcessing">
                 Cancel
             </button>
             <button type="button"
                     class="btn @(Preview.IsDowngrade ? "btn-warning" : "btn-primary")"
                     @onclick="HandleConfirm"
-                    disabled="@(IsLoading || ShowNoProviderWarning || (!Preview.Success && !string.IsNullOrEmpty(Preview.ErrorMessage)))">
-                @if (IsLoading)
+                    disabled="@(IsProcessing || ShowNoProviderWarning || (!Preview.Success && !string.IsNullOrEmpty(Preview.ErrorMessage)))">
+                @if (IsProcessing)
                 {
                     <span class="spinner-border spinner-border-sm me-1" role="status"></span>
                     <span>Processing...</span>

@@ -17,8 +17,21 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         [Parameter]
         public EventCallback OnCancel { get; set; }
 
+        /// <summary>
+        /// True while the PARENT is applying the confirmed tier change. Distinct from the base
+        /// class's <c>IsLoading</c>, which tracks this component's own async work (nothing here
+        /// calls <c>SetLoadingAsync</c>, so that flag is always false).
+        /// </summary>
+        /// <remarks>
+        /// This was previously declared as <c>[Parameter] public new bool IsLoading</c>, hiding the
+        /// base property. Blazor tolerates that only because the base member carries no
+        /// <c>[Parameter]</c> — had it done so, the duplicate parameter name would have made the
+        /// component impossible to render (see ComponentParameterContractTests). It still left the
+        /// base's <c>GetRootCssClasses</c> reading one flag while this component's markup read
+        /// another, so the two concepts now have two names.
+        /// </remarks>
         [Parameter]
-        public new bool IsLoading { get; set; }
+        public bool IsProcessing { get; set; }
 
         private bool _immediate = true;
         private bool _bypassPayment;
@@ -71,7 +84,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
         private void HandleOverlayClick()
         {
-            if (!IsLoading)
+            if (!IsProcessing)
             {
                 _ = HandleCancel();
             }
