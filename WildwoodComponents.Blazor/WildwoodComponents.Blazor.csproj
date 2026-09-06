@@ -9,7 +9,7 @@
 
     <!-- Package Metadata -->
     <PackageId>WildwoodComponents.Blazor</PackageId>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Authors>Wildwood Development Team</Authors>
     <Company>Wildwood</Company>
     <Product>WildwoodComponents.Blazor</Product>

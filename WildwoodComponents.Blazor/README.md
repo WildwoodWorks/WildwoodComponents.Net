@@ -342,6 +342,20 @@ public static class MauiProgram
 - Service registration pattern has changed
 - Theme management is now automatic
 
+### Breaking Changes in 1.2.0
+
+- **`DisclaimerComponent`, `AIProxyComponent` and `AppTierComponent` no longer redeclare `OnError`.**
+  They had hidden the inherited parameter with `new`, which gave each type two `[Parameter]`
+  properties named `onerror` — a combination Blazor rejects at render time, so those components
+  could not be rendered at all (on Blazor Server the exception terminated the circuit). They now use
+  the inherited `EventCallback<ComponentErrorEventArgs> OnError`, in line with the contract above.
+  Handlers bound to them must take `ComponentErrorEventArgs`; the message previously delivered as
+  the `string` payload is `args.Exception.Message`.
+- **`IDisclaimerService` gains `void SetAuthToken(string? token)`.** Both acceptance endpoints are
+  `[Authorize]`, and the service had no way to send a bearer token, so every acceptance returned 401.
+  Callers set the current user's JWT before accepting. This breaks external *implementers* of the
+  interface, not consumers of it.
+
 ## Troubleshooting
 
 ### Common Issues
