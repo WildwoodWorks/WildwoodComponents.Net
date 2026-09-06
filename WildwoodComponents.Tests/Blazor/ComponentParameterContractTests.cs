@@ -67,9 +67,45 @@ public class ComponentParameterContractTests
     }
 
     /// <summary>
-    /// Proves the mechanism the theory above relies on, so that test can never quietly become
+    /// The broader rule, of which the fatal case above is a subset: a <c>[Parameter]</c> must not
+    /// hide a base-class property at all.
+    /// </summary>
+    /// <remarks>
+    /// Blazor only rejects the hiding when the BASE member is also a <c>[Parameter]</c>. Hiding a
+    /// plain base property compiles, renders, and quietly gives the component two properties of the
+    /// same name: the base class's own methods keep reading theirs while the derived markup reads
+    /// the parameter. <c>TierChangeConfirmationModal</c> did this with <c>IsLoading</c> — the base's
+    /// <c>GetRootCssClasses</c> and <c>SetLoadingAsync</c> operated on a flag the component never
+    /// showed, and the parameter the parent set was invisible to them. Two concepts sharing one
+    /// name is worth catching even when the framework tolerates it, so the fix is a distinct name
+    /// rather than a <c>new</c> declaration.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(RenderableComponentTypeNames))]
+    public void Component_DoesNotHideABasePropertyWithAParameter(string typeName)
+    {
+        var type = BlazorAssembly.GetType(typeName, throwOnError: true)!;
+
+        var offenders = type
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .Where(property => property.IsDefined(typeof(ParameterAttribute), inherit: false))
+            .Where(property => HidesABaseProperty(type, property))
+            .Select(property => property.Name)
+            .ToArray();
+
+        if (offenders.Length > 0)
+        {
+            Assert.Fail($"{typeName} declares [Parameter] {string.Join(", ", offenders)} hiding a " +
+                        "base-class property of the same name. Give the parameter its own name " +
+                        "instead — the base class keeps reading its own property, so the two names " +
+                        "silently diverge.");
+        }
+    }
+
+    /// <summary>
+    /// Proves the mechanism the first theory relies on, so that test can never quietly become
     /// vacuous if the framework changes how parameters are discovered. This component lives in the
-    /// test assembly, so the theory never sees it.
+    /// test assembly, so the theories never see it.
     /// </summary>
     [Fact]
     public void HidingABaseParameterWithNew_IsRejectedByBlazor()
@@ -80,6 +116,41 @@ public class ComponentParameterContractTests
             () => ParameterView.Empty.SetParameterProperties(instance));
 
         Assert.Contains("more than one parameter", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// True when a base class declares a property of the same name — i.e. the derived one hides it
+    /// (with <c>new</c>, or with the CS0108 warning suppressed some other way). A genuine override
+    /// is not hiding, so it is excluded via <c>GetBaseDefinition</c>, the same test Blazor's own
+    /// parameter discovery uses to collapse overrides.
+    /// </summary>
+    private static bool HidesABaseProperty(Type declaringType, PropertyInfo property)
+    {
+        const BindingFlags Flags = BindingFlags.Public | BindingFlags.NonPublic
+                                   | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+
+        var derivedDefinition = property.GetMethod?.GetBaseDefinition();
+
+        for (var baseType = declaringType.BaseType; baseType != null; baseType = baseType.BaseType)
+        {
+            foreach (var candidate in baseType.GetProperties(Flags))
+            {
+                if (!string.Equals(candidate.Name, property.Name, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                // An override shares the base definition of its accessor; hiding does not.
+                if (derivedDefinition != null && candidate.GetMethod?.GetBaseDefinition() == derivedDefinition)
+                {
+                    continue;
+                }
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsRenderableComponent(Type type) =>
