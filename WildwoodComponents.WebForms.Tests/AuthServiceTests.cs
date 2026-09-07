@@ -298,6 +298,89 @@ namespace WildwoodComponents.WebForms.Tests
             var request = handler.Single("auth/reset-password");
             Assert.Equal(HttpMethod.Post, request.Method);
             Assert.Equal("Bearer jwt-access", request.Authorization);
+            Assert.DoesNotContain("resetToken", request.Body);
+        }
+
+        [Fact]
+        public async Task A_refresh_preserves_a_pending_password_reset()
+        {
+            // The refresh-token response never carries requiresPasswordReset, so mapping it
+            // verbatim would stop asking a user who refreshed before resetting.
+            var handler = new FakeHttpMessageHandler()
+                .WhenOk("auth/refresh-token", "{\"jwtToken\":\"jwt-2\",\"refreshToken\":\"refresh-2\"}");
+            IWildwoodSessionManager session;
+            HttpClient client;
+            var service = Create(handler, out session, out client);
+            session.SetTokens("jwt-access", "jwt-refresh", DateTime.UtcNow.AddHours(1));
+            session.SetRequiresPasswordReset(true);
+
+            var result = await service.RefreshTokenAsync();
+
+            Assert.True(result.Succeeded);
+            Assert.True(result.Response!.RequiresPasswordReset);
+            Assert.True(session.RequiresPasswordReset);
+        }
+
+        [Fact]
+        public async Task A_refresh_does_not_invent_a_password_reset()
+        {
+            var handler = new FakeHttpMessageHandler()
+                .WhenOk("auth/refresh-token", "{\"jwtToken\":\"jwt-2\",\"refreshToken\":\"refresh-2\"}");
+            IWildwoodSessionManager session;
+            HttpClient client;
+            var service = Create(handler, out session, out client);
+            session.SetTokens("jwt-access", "jwt-refresh", DateTime.UtcNow.AddHours(1));
+
+            var result = await service.RefreshTokenAsync();
+
+            Assert.True(result.Succeeded);
+            Assert.False(result.Response!.RequiresPasswordReset);
+            Assert.False(session.RequiresPasswordReset);
+        }
+
+        [Fact]
+        public async Task A_successful_reset_clears_the_pending_flag()
+        {
+            var handler = new FakeHttpMessageHandler().WhenOk("auth/reset-password", "{}");
+            IWildwoodSessionManager session;
+            HttpClient client;
+            var service = Create(handler, out session, out client);
+            session.SetTokens("jwt-access", "jwt-refresh", DateTime.UtcNow.AddHours(1));
+            session.SetRequiresPasswordReset(true);
+
+            var result = await service.ResetPasswordAsync(new ResetPasswordRequest
+            {
+                NewPassword = "NewP@ss1!",
+                ConfirmPassword = "NewP@ss1!"
+            });
+
+            Assert.True(result.Succeeded);
+            Assert.False(session.RequiresPasswordReset);
+        }
+
+        [Fact]
+        public async Task A_reset_with_an_emailed_token_is_sent_anonymously()
+        {
+            // Wire parity with the JS SDK's skipAuth emailed-link path; WildwoodAPI does not
+            // bind resetToken yet, so this is a shape guarantee rather than a working flow.
+            var handler = new FakeHttpMessageHandler().WhenOk("auth/reset-password", "{}");
+            IWildwoodSessionManager session;
+            HttpClient client;
+            var service = Create(handler, out session, out client);
+            session.SetTokens("jwt-access", "jwt-refresh", DateTime.UtcNow.AddHours(1));
+
+            var result = await service.ResetPasswordAsync(new ResetPasswordRequest
+            {
+                Token = "tok-1",
+                NewPassword = "NewP@ss1!",
+                ConfirmPassword = "NewP@ss1!"
+            });
+
+            Assert.True(result.Succeeded);
+
+            var request = handler.Single("auth/reset-password");
+            Assert.Null(request.Authorization);
+            Assert.Contains("\"resetToken\":\"tok-1\"", request.Body);
         }
 
         [Fact]

@@ -20,8 +20,8 @@
    ======================================== */
 
 .ww-pricing-card {
-    background: var(--ww-pricing-bg);
-    border-color: var(--ww-pricing-border);
+    background: var(--ww-pricing-bg, var(--ww-bg-primary, #ffffff));
+    border-color: var(--ww-pricing-border, var(--ww-border-color, #dee2e6));
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -32,7 +32,7 @@
 
 .ww-pricing-card.ww-highlighted {
     border-width: 2px;
-    border-color: var(--ww-pricing-highlight);
+    border-color: var(--ww-pricing-highlight, var(--ww-primary, #0d6efd));
 }
 
 /* ========================================

@@ -68,6 +68,7 @@ namespace WildwoodComponents.WebForms.Services
                             if (!wwResponse.RequiresTwoFactor)
                             {
                                 SessionManager.SetTokens(wwResponse.JwtToken, wwResponse.RefreshToken);
+                                SessionManager.SetRequiresPasswordReset(wwResponse.RequiresPasswordReset);
                             }
 
                             return AuthResult.Success(authResponse);
@@ -122,6 +123,7 @@ namespace WildwoodComponents.WebForms.Services
                         {
                             var authResponse = AuthResponse.FromWildwoodResponse(wwResponse);
                             SessionManager.SetTokens(wwResponse.JwtToken, wwResponse.RefreshToken);
+                            SessionManager.SetRequiresPasswordReset(wwResponse.RequiresPasswordReset);
                             return AuthResult.Success(authResponse);
                         }
                     }
@@ -194,6 +196,16 @@ namespace WildwoodComponents.WebForms.Services
                         var wwResponse = Deserialize<WildwoodAuthenticateResponse>(content);
                         if (wwResponse != null)
                         {
+                            // The refresh-token endpoint never returns requiresPasswordReset, so
+                            // mapping its response verbatim would clear a pending forced reset and
+                            // a user who refreshed before resetting would silently stop being
+                            // asked. Carry the prior flag forward (true stays true; false never
+                            // becomes true), mirroring @wildwood/core authService.refreshToken.
+                            if (SessionManager.RequiresPasswordReset)
+                            {
+                                wwResponse.RequiresPasswordReset = true;
+                            }
+
                             var authResponse = AuthResponse.FromWildwoodResponse(wwResponse);
                             SessionManager.SetTokens(wwResponse.JwtToken, wwResponse.RefreshToken);
                             return AuthResult.Success(authResponse);
@@ -257,13 +269,23 @@ namespace WildwoodComponents.WebForms.Services
                 {
                     NewPassword = request.NewPassword,
                     ConfirmPassword = request.ConfirmPassword,
-                    AppId = AppId
+                    AppId = AppId,
+                    ResetToken = request.Token is { Length: > 0 } ? request.Token : null
                 };
 
-                using (var response = await SendAsync(HttpMethod.Post, "auth/reset-password", apiRequest, cancellationToken).ConfigureAwait(false))
+                // auth/reset-password is [Authorize] and identifies the user from the JWT alone,
+                // so the forced reset needs the session's bearer token. An emailed reset token is
+                // the one anonymous case (the JS SDK's skipAuth path).
+                using (var response = await SendAsync(
+                           HttpMethod.Post,
+                           "auth/reset-password",
+                           apiRequest,
+                           apiRequest.ResetToken == null,
+                           cancellationToken).ConfigureAwait(false))
                 {
                     if (response.IsSuccessStatusCode)
                     {
+                        SessionManager.SetRequiresPasswordReset(false);
                         return ApiResult.Ok("Password has been reset successfully.");
                     }
 
@@ -310,6 +332,7 @@ namespace WildwoodComponents.WebForms.Services
                             SessionManager.SetTokens(
                                 wwResponse.AuthResponse.JwtToken,
                                 wwResponse.AuthResponse.RefreshToken);
+                            SessionManager.SetRequiresPasswordReset(wwResponse.AuthResponse.RequiresPasswordReset);
                             return AuthResult.Success(authResponse);
                         }
 

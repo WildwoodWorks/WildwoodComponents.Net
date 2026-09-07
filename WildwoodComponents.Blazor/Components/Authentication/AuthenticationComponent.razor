@@ -428,33 +428,35 @@
                 <p>
                     @if (_isLogin)
                     {
-                        @if (_authConfig?.AllowTokenRegistration == true ||
-                             _authConfig?.AllowOpenRegistration == true)
+                        @if (AllowRegistration == false)
                         {
-                            <span>Don't have an account? </span>
-                            <button type="button" class="btn-link" @onclick="() => ToggleMode()">Sign up</button>
+                            @* The host hid sign-up, as the React footer does: render nothing at all,
+                               not even an explanation of a gate the host chose. *@
                         }
-                        else if (_authConfig != null &&
-                                 !_authConfig.AllowTokenRegistration &&
-                                 !_authConfig.AllowOpenRegistration)
-                        {
-                            <small class="text-muted">
-                                <i class="fas fa-info-circle"></i>
-                                Registration is currently disabled for this application.
-                            </small>
-                        }
-                        else if (_authConfig == null && IsLoading)
+                        else if (_authConfig == null && AllowRegistration != true && IsLoading)
                         {
                             <small class="text-muted">
                                 <i class="fas fa-spinner fa-spin"></i>
                                 Loading authentication configuration...
                             </small>
                         }
-                        else if (_authConfig == null)
+                        else if (_authConfig == null && AllowRegistration != true)
                         {
                             <small class="text-muted">
                                 <i class="fas fa-exclamation-circle"></i>
                                 Unable to load authentication configuration.
+                            </small>
+                        }
+                        else if (ShowRegistration)
+                        {
+                            <span>Don't have an account? </span>
+                            <button type="button" class="btn-link" @onclick="HandleRegisterClick">Sign up</button>
+                        }
+                        else
+                        {
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                Registration is currently disabled for this application.
                             </small>
                         }
                     }
@@ -495,6 +497,22 @@
     [Parameter] public List<AuthProvider>? AvailableProviders { get; set; }
     [Parameter] public CaptchaConfiguration? CaptchaConfig { get; set; }
     [Parameter] public AuthenticationConfiguration? AuthConfig { get; set; }
+
+    /// <summary>
+    /// Overrides the configuration's registration gate. <c>false</c> hides the sign-up link and
+    /// makes the register view unreachable even when the app allows open or token registration;
+    /// <c>true</c> shows it even when the configuration denies registration or has not loaded;
+    /// <c>null</c> (the default) leaves the configuration in charge. Mirrors the React
+    /// <c>allowRegistration</c> prop.
+    /// </summary>
+    [Parameter] public bool? AllowRegistration { get; set; }
+
+    /// <summary>
+    /// Replaces the footer sign-up action. When set, "Sign up" invokes this instead of switching
+    /// to the component's own register view — for apps whose signup lives elsewhere. Still gated by
+    /// <see cref="AllowRegistration"/> and the configuration. Mirrors React <c>onRegisterClick</c>.
+    /// </summary>
+    [Parameter] public EventCallback OnRegisterClick { get; set; }
 
     private bool _isLogin = true;
     private bool _showPassword = false;
@@ -543,6 +561,17 @@
     {
         public string Email { get; set; } = string.Empty;
     }
+
+    /// <summary>
+    /// Whether the authentication configuration permits registration. An unknown configuration
+    /// counts as allowed, matching useAuthenticationLogic's default of true.
+    /// </summary>
+    private bool ConfigAllowsRegistration =>
+        _authConfig == null || _authConfig.AllowTokenRegistration || _authConfig.AllowOpenRegistration;
+
+    /// <summary>Whether the sign-up affordance is rendered.</summary>
+    private bool ShowRegistration =>
+        RegistrationAccess.Resolve(AllowRegistration, ConfigAllowsRegistration, _isLogin).ShowRegistration;
 
     /// <summary>
     /// Gets the title to display, using the custom Title parameter if provided,
@@ -622,6 +651,9 @@
         
         // Apply default provider settings
         ApplyDefaultProviderSettings();
+
+        // The configuration has only just arrived; re-run the gate against it.
+        CollapseHiddenRegisterView();
     }
 
     protected override async Task OnComponentFirstRenderAsync()
@@ -991,10 +1023,9 @@
     private void ToggleMode()
     {
         // Check if we're trying to switch to registration mode but it's not allowed
-        var registrationAllowed = _authConfig?.AllowTokenRegistration == true || _authConfig?.AllowOpenRegistration == true;
-        if (_isLogin && _authConfig != null && !registrationAllowed)
+        if (_isLogin && !ShowRegistration)
         {
-            _ = HandleErrorAsync(new InvalidOperationException("Registration is not allowed for this application."), 
+            _ = HandleErrorAsync(new InvalidOperationException("Registration is not allowed for this application."),
                 "Switching to registration mode");
             return;
         }
@@ -1002,11 +1033,43 @@
         _isLogin = !_isLogin;
         ClearError();
         _successMessage = "";
-        
+
         // Initialize login model with AppId
         _model = new LoginRequest { AppId = AppId, AppVersion = WildwoodOptions?.AppVersion ?? "1.0.0" };
-        
+
         StateHasChanged();
+    }
+
+    private async Task HandleRegisterClick()
+    {
+        // OnRegisterClick hands sign-up to the host (a plan-first wizard on its own route); without
+        // it the button falls back to this component's own register view. Both are gated above.
+        if (OnRegisterClick.HasDelegate)
+        {
+            await OnRegisterClick.InvokeAsync();
+            return;
+        }
+
+        ToggleMode();
+    }
+
+    /// <inheritdoc />
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        CollapseHiddenRegisterView();
+    }
+
+    /// <summary>Keeps the register view unreachable when registration is hidden, even if it was
+    /// already active when the parameter or configuration changed (the JS collapse).</summary>
+    private void CollapseHiddenRegisterView()
+    {
+        if (_isLogin) return;
+        if (!RegistrationAccess.Resolve(AllowRegistration, ConfigAllowsRegistration, _isLogin).IsLoginView) return;
+
+        _isLogin = true;
+        ClearError();
+        _successMessage = "";
     }
 
     private void ApplyAuthenticationSettings()

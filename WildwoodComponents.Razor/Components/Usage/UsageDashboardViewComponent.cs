@@ -35,6 +35,8 @@ public class UsageDashboardViewComponent : ViewComponent
     /// fetched/merged data for display (subscription is still loaded). Mirrors the React limitStatuses override.</param>
     /// <param name="onMergeUsage">Optional callback to merge/transform fetched limit statuses before display.
     /// Mirrors the React onMergeUsage option.</param>
+    /// <param name="subscriptionOverride">Optional externally-managed subscription that replaces the fetched one
+    /// for display (the fetch still runs and feeds onMergeUsage). Mirrors the React subscription override.</param>
     public async Task<IViewComponentResult> InvokeAsync(
         string appId,
         string proxyBaseUrl = "/api/wildwood-app-tiers",
@@ -43,7 +45,8 @@ public class UsageDashboardViewComponent : ViewComponent
         bool showOverageInfo = true,
         int warningThreshold = 80,
         List<AppTierLimitStatusModel>? limitStatusesOverride = null,
-        Func<List<AppTierLimitStatusModel>, UserTierSubscriptionModel?, Task<List<AppTierLimitStatusModel>>>? onMergeUsage = null)
+        Func<List<AppTierLimitStatusModel>, UserTierSubscriptionModel?, Task<List<AppTierLimitStatusModel>>>? onMergeUsage = null,
+        UserTierSubscriptionModel? subscriptionOverride = null)
     {
         var limitStatuses = new List<AppTierLimitStatusModel>();
         UserTierSubscriptionModel? subscription = null;
@@ -81,7 +84,7 @@ public class UsageDashboardViewComponent : ViewComponent
             Subtitle = subtitle,
             ShowOverageInfo = showOverageInfo,
             WarningThreshold = warningThreshold,
-            Subscription = subscription,
+            Subscription = subscriptionOverride ?? subscription,
             LimitStatuses = limitStatuses
         };
         return View(model);

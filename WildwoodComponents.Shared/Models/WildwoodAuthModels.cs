@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace WildwoodComponents.Shared.Models;
 
 // ──────────────────────────────────────────────
@@ -51,6 +53,14 @@ public class WildwoodResetPasswordRequest
     public string NewPassword { get; set; } = string.Empty;
     public string ConfirmPassword { get; set; } = string.Empty;
     public string AppId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Emailed-link reset token, sent anonymously when present. Reserved: WildwoodAPI's
+    /// reset-password is [Authorize] and its DTO does not bind this field yet, so today only
+    /// the JWT-authenticated forced reset succeeds. Null omits the key, as the JS SDK does.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ResetToken { get; set; }
 }
 
 /// <summary>

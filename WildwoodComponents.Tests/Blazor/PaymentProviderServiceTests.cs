@@ -90,4 +90,86 @@ public class PaymentProviderServiceTests
         Assert.Empty(result.AvailableProviders);
         Assert.Equal("app-1", result.AppId);
     }
+
+    [Fact]
+    public async Task ValidateStorePurchaseAsync_PostsTheStoreContractToTheAppleEndpoint()
+    {
+        var (service, handler) = CreateService();
+        handler.WhenOk("validate-apple-receipt", """{"success":true,"transactionId":"txn-1"}""");
+
+        var result = await service.ValidateStorePurchaseAsync("app-1", new StorePurchase
+        {
+            ProviderType = PaymentProviderType.AppleAppStore,
+            ProductId = "com.app.pro.monthly",
+            PurchaseToken = "jws-token",
+            TransactionId = "2000000123",
+            IsRestore = true
+        });
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Contains("/payment/validate-apple-receipt", request.Url);
+
+        using var body = JsonDocument.Parse(request.Body!);
+        Assert.Equal("app-1", body.RootElement.GetProperty("appId").GetString());
+        Assert.Equal(10, body.RootElement.GetProperty("providerType").GetInt32());
+        Assert.Equal("com.app.pro.monthly", body.RootElement.GetProperty("productId").GetString());
+        Assert.Equal("jws-token", body.RootElement.GetProperty("purchaseToken").GetString());
+        // The API binds the proof of purchase to receiptData, so it is sent alongside purchaseToken.
+        Assert.Equal("jws-token", body.RootElement.GetProperty("receiptData").GetString());
+        Assert.Equal("2000000123", body.RootElement.GetProperty("transactionId").GetString());
+        Assert.True(body.RootElement.GetProperty("isRestore").GetBoolean());
+
+        Assert.True(result.Success);
+        Assert.Equal("txn-1", result.TransactionId);
+    }
+
+    [Fact]
+    public async Task ValidateStorePurchaseAsync_RoutesGooglePlayToTheGoogleEndpoint()
+    {
+        var (service, handler) = CreateService();
+        handler.WhenOk("validate-google-receipt", """{"success":true,"transactionId":"txn-2"}""");
+
+        var result = await service.ValidateStorePurchaseAsync("app-1", new StorePurchase
+        {
+            ProviderType = PaymentProviderType.GooglePlayStore,
+            ProductId = "pro_monthly",
+            PurchaseToken = "play-token"
+        });
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Contains("/payment/validate-google-receipt", request.Url);
+
+        using var body = JsonDocument.Parse(request.Body!);
+        Assert.Equal(11, body.RootElement.GetProperty("providerType").GetInt32());
+        Assert.Equal("play-token", body.RootElement.GetProperty("purchaseToken").GetString());
+        Assert.Equal("play-token", body.RootElement.GetProperty("receiptData").GetString());
+
+        Assert.True(result.Success);
+        Assert.Equal("txn-2", result.TransactionId);
+    }
+
+    [Fact]
+    public async Task ValidateAppStoreReceiptAsync_StillValidatesThroughTheNewPath()
+    {
+        var (service, handler) = CreateService();
+        handler.WhenOk("validate-apple-receipt", """{"success":true,"transactionId":"txn-3"}""");
+
+#pragma warning disable CS0618 // Deliberately exercising the obsolete overload's delegation.
+        var result = await service.ValidateAppStoreReceiptAsync(
+            "app-1", "legacy-receipt", PaymentProviderType.AppleAppStore);
+#pragma warning restore CS0618
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Contains("/payment/validate-apple-receipt", request.Url);
+
+        using var body = JsonDocument.Parse(request.Body!);
+        Assert.Equal("legacy-receipt", body.RootElement.GetProperty("purchaseToken").GetString());
+        Assert.Equal("legacy-receipt", body.RootElement.GetProperty("receiptData").GetString());
+        // The old signature carries no product id, so the contract's field goes out empty.
+        Assert.Equal(string.Empty, body.RootElement.GetProperty("productId").GetString());
+
+        Assert.True(result.Success);
+        Assert.Equal("txn-3", result.TransactionId);
+    }
 }

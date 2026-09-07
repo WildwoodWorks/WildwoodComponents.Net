@@ -17,6 +17,12 @@ public class WildwoodSessionManager : IWildwoodSessionManager
     public const string RefreshTokenKey = "WildwoodAPI_RefreshToken";
     public const string TokenExpiryKey = "WildwoodAPI_TokenExpiry";
 
+    /// <summary>
+    /// Session key for the pending forced-reset flag. Present with the value "true" only
+    /// while a reset is due; removed otherwise, so absence means "nothing pending".
+    /// </summary>
+    public const string RequiresPasswordResetKey = "WildwoodAPI_RequiresPasswordReset";
+
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<WildwoodSessionManager> _logger;
 
@@ -72,7 +78,31 @@ public class WildwoodSessionManager : IWildwoodSessionManager
         session.Remove(AccessTokenKey);
         session.Remove(RefreshTokenKey);
         session.Remove(TokenExpiryKey);
+        session.Remove(RequiresPasswordResetKey);
         _logger.LogDebug("WildwoodAPI tokens cleared from session");
+    }
+
+    /// <inheritdoc />
+    public bool RequiresPasswordReset =>
+        string.Equals(
+            _httpContextAccessor.HttpContext?.Session.GetString(RequiresPasswordResetKey),
+            "true",
+            StringComparison.Ordinal);
+
+    /// <inheritdoc />
+    public void SetRequiresPasswordReset(bool value)
+    {
+        var session = _httpContextAccessor.HttpContext?.Session;
+        if (session == null) return;
+
+        if (value)
+        {
+            session.SetString(RequiresPasswordResetKey, "true");
+        }
+        else
+        {
+            session.Remove(RequiresPasswordResetKey);
+        }
     }
 
     public bool IsAuthenticated

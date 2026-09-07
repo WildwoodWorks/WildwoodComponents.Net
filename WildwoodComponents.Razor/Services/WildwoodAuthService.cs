@@ -64,6 +64,7 @@ public class WildwoodAuthService : IWildwoodAuthService
                     if (!wwResponse.RequiresTwoFactor)
                     {
                         _sessionManager.SetTokens(wwResponse.JwtToken, wwResponse.RefreshToken);
+                        _sessionManager.SetRequiresPasswordReset(wwResponse.RequiresPasswordReset);
                     }
 
                     return AuthResult.Success(authResponse);
@@ -110,6 +111,7 @@ public class WildwoodAuthService : IWildwoodAuthService
                 {
                     var authResponse = AuthResponse.FromWildwoodResponse(wwResponse);
                     _sessionManager.SetTokens(wwResponse.JwtToken, wwResponse.RefreshToken);
+                    _sessionManager.SetRequiresPasswordReset(wwResponse.RequiresPasswordReset);
                     return AuthResult.Success(authResponse);
                 }
             }
@@ -162,6 +164,16 @@ public class WildwoodAuthService : IWildwoodAuthService
                 var wwResponse = JsonSerializer.Deserialize<WildwoodAuthenticateResponse>(content, JsonOptions);
                 if (wwResponse != null)
                 {
+                    // The refresh-token endpoint never returns requiresPasswordReset, so mapping
+                    // its response verbatim would clear a pending forced reset and a user who
+                    // refreshed before resetting would silently stop being asked. Carry the prior
+                    // flag forward (true stays true; false never becomes true), mirroring
+                    // @wildwood/core authService.refreshToken.
+                    if (_sessionManager.RequiresPasswordReset)
+                    {
+                        wwResponse.RequiresPasswordReset = true;
+                    }
+
                     var authResponse = AuthResponse.FromWildwoodResponse(wwResponse);
                     _sessionManager.SetTokens(wwResponse.JwtToken, wwResponse.RefreshToken);
                     return AuthResult.Success(authResponse);
@@ -209,19 +221,27 @@ public class WildwoodAuthService : IWildwoodAuthService
             {
                 NewPassword = request.NewPassword,
                 ConfirmPassword = request.ConfirmPassword,
-                AppId = _appId
+                AppId = _appId,
+                ResetToken = string.IsNullOrEmpty(request.Token) ? null : request.Token
             };
 
             // auth/reset-password is [Authorize] on the API and identifies the user from the JWT
             // alone — the body carries no email or user id. Without the session's bearer token
-            // this always 401s.
-            _sessionManager.ApplyAuthorizationHeader(_httpClient);
+            // this always 401s. An emailed reset token is the one anonymous case (the JS SDK's
+            // skipAuth path), so the header is applied only when no token was supplied.
+            if (apiRequest.ResetToken is null)
+            {
+                _sessionManager.ApplyAuthorizationHeader(_httpClient);
+            }
 
             using var response = await _httpClient.PostAsJsonAsync("auth/reset-password", apiRequest);
             var content = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
+            {
+                _sessionManager.SetRequiresPasswordReset(false);
                 return ApiResult.Ok("Password has been reset successfully.");
+            }
 
             var errorResponse = JsonSerializer.Deserialize<ApiErrorResponse>(content, JsonOptions);
             return ApiResult.Fail(errorResponse?.Message ?? "Password reset failed.");
@@ -256,6 +276,7 @@ public class WildwoodAuthService : IWildwoodAuthService
                     _sessionManager.SetTokens(
                         wwResponse.AuthResponse.JwtToken,
                         wwResponse.AuthResponse.RefreshToken);
+                    _sessionManager.SetRequiresPasswordReset(wwResponse.AuthResponse.RequiresPasswordReset);
                     return AuthResult.Success(authResponse);
                 }
 

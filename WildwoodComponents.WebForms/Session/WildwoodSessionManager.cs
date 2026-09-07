@@ -23,6 +23,12 @@ namespace WildwoodComponents.WebForms.Session
         public const string TokenExpiryKey = "WildwoodAPI_TokenExpiry";
 
         /// <summary>
+        /// Session key for the pending forced-reset flag. Present with the value "true" only
+        /// while a reset is due; removed otherwise, so absence means "nothing pending".
+        /// </summary>
+        public const string RequiresPasswordResetKey = "WildwoodAPI_RequiresPasswordReset";
+
+        /// <summary>
         /// Assumed lifetime when a token carries no readable <c>exp</c> claim. Short on
         /// purpose: it only decides when the package proactively refreshes, and the API
         /// remains the authority on whether a token is actually still good.
@@ -119,7 +125,32 @@ namespace WildwoodComponents.WebForms.Session
             _store.Remove(AccessTokenKey);
             _store.Remove(RefreshTokenKey);
             _store.Remove(TokenExpiryKey);
+            _store.Remove(RequiresPasswordResetKey);
             _logger.Debug("Wildwood tokens cleared from session.");
+        }
+
+        /// <inheritdoc />
+        public bool RequiresPasswordReset
+        {
+            get { return string.Equals(_store.Get(RequiresPasswordResetKey), "true", StringComparison.Ordinal); }
+        }
+
+        /// <inheritdoc />
+        public void SetRequiresPasswordReset(bool value)
+        {
+            if (!_store.IsAvailable)
+            {
+                return;
+            }
+
+            if (value)
+            {
+                _store.Set(RequiresPasswordResetKey, "true");
+            }
+            else
+            {
+                _store.Remove(RequiresPasswordResetKey);
+            }
         }
 
         /// <inheritdoc />

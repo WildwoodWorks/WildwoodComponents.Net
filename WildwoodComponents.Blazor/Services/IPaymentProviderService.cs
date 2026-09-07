@@ -59,10 +59,22 @@ namespace WildwoodComponents.Blazor.Services
         /// <param name="receiptData">The receipt data from the app store</param>
         /// <param name="providerType">Apple App Store or Google Play Store</param>
         /// <returns>Payment completion result</returns>
+        [Obsolete("Use ValidateStorePurchaseAsync - it carries the product id, restore flag and store transaction id the server needs for in-app purchases.")]
         Task<PaymentCompletionResult> ValidateAppStoreReceiptAsync(
             string appId,
             string receiptData,
             PaymentProviderType providerType);
+
+        /// <summary>
+        /// Validates a native App Store / Play Store purchase and records it as a Wildwood payment
+        /// transaction. The returned TransactionId is the Wildwood transaction id to pass as
+        /// paymentTransactionId to IAppTierComponentService.ChangeTierAsync / SubscribeToTierAsync.
+        /// Mirrors @wildwood/core PaymentService.validateStorePurchase.
+        /// </summary>
+        /// <param name="appId">The app ID</param>
+        /// <param name="purchase">The completed store purchase to validate</param>
+        /// <returns>Payment completion result</returns>
+        Task<PaymentCompletionResult> ValidateStorePurchaseAsync(string appId, StorePurchase purchase);
 
         /// <summary>
         /// Gets saved payment methods for a customer

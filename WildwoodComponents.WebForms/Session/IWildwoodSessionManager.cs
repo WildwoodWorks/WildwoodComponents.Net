@@ -52,5 +52,15 @@ namespace WildwoodComponents.WebForms.Session
         /// in. Attach it to one request; never to a shared client's default headers.
         /// </summary>
         AuthenticationHeaderValue? GetAuthorizationHeader();
+
+        /// <summary>
+        /// Whether the signed-in user still has to replace a temporary password. Recorded from
+        /// the login / two-factor response because the refresh-token response never carries it,
+        /// so a refresh must not clear a pending forced reset.
+        /// </summary>
+        bool RequiresPasswordReset { get; }
+
+        /// <summary>Records (true) or clears (false) the pending forced-reset flag.</summary>
+        void SetRequiresPasswordReset(bool value);
     }
 }

@@ -21,6 +21,42 @@ namespace WildwoodComponents.WebForms.Tests
             Assert.Equal("WildwoodAPI_AccessToken", WildwoodSessionManager.AccessTokenKey);
             Assert.Equal("WildwoodAPI_RefreshToken", WildwoodSessionManager.RefreshTokenKey);
             Assert.Equal("WildwoodAPI_TokenExpiry", WildwoodSessionManager.TokenExpiryKey);
+            Assert.Equal("WildwoodAPI_RequiresPasswordReset", WildwoodSessionManager.RequiresPasswordResetKey);
+        }
+
+        [Fact]
+        public void SetRequiresPasswordReset_round_trips_through_the_store()
+        {
+            // Absence means "nothing pending", so clearing removes the key rather than
+            // writing "false".
+            InMemoryTokenStore store;
+            var manager = Create(out store);
+
+            Assert.False(manager.RequiresPasswordReset);
+
+            manager.SetRequiresPasswordReset(true);
+
+            Assert.True(manager.RequiresPasswordReset);
+            Assert.Equal("true", store.Get(WildwoodSessionManager.RequiresPasswordResetKey));
+
+            manager.SetRequiresPasswordReset(false);
+
+            Assert.False(manager.RequiresPasswordReset);
+            Assert.Null(store.Get(WildwoodSessionManager.RequiresPasswordResetKey));
+        }
+
+        [Fact]
+        public void ClearTokens_also_clears_the_pending_reset_flag()
+        {
+            InMemoryTokenStore store;
+            var manager = Create(out store);
+            manager.SetTokens("access", "refresh", DateTime.UtcNow.AddHours(1));
+            manager.SetRequiresPasswordReset(true);
+
+            manager.ClearTokens();
+
+            Assert.False(manager.RequiresPasswordReset);
+            Assert.Null(store.Get(WildwoodSessionManager.RequiresPasswordResetKey));
         }
 
         [Fact]

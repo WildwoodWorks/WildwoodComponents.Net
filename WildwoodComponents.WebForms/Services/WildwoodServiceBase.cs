@@ -74,18 +74,45 @@ namespace WildwoodComponents.WebForms.Services
         /// <param name="path">Path relative to the configured base URL, e.g. <c>auth/login</c>.</param>
         /// <param name="body">Optional body, serialized as JSON.</param>
         /// <param name="cancellationToken">Cancels the request.</param>
-        protected async Task<HttpResponseMessage> SendAsync(
+        protected Task<HttpResponseMessage> SendAsync(
             HttpMethod method,
             string path,
             object? body = null,
             CancellationToken cancellationToken = default)
         {
+            return SendAsync(method, path, body, true, cancellationToken);
+        }
+
+        /// <summary>
+        /// Sends one request, optionally without the current user's bearer token. The caller
+        /// owns the returned response and must dispose it.
+        /// </summary>
+        /// <remarks>
+        /// Pass <c>false</c> only for the rare endpoint that is legitimately anonymous — a
+        /// password reset authenticated by an emailed token rather than by the session, for
+        /// instance. Everything else must carry the bearer, so the default overload does.
+        /// </remarks>
+        /// <param name="method">HTTP method.</param>
+        /// <param name="path">Path relative to the configured base URL, e.g. <c>auth/login</c>.</param>
+        /// <param name="body">Optional body, serialized as JSON.</param>
+        /// <param name="includeAuthorization">Whether to attach the caller's bearer token.</param>
+        /// <param name="cancellationToken">Cancels the request.</param>
+        protected async Task<HttpResponseMessage> SendAsync(
+            HttpMethod method,
+            string path,
+            object? body,
+            bool includeAuthorization,
+            CancellationToken cancellationToken = default)
+        {
             using (var request = new HttpRequestMessage(method, path))
             {
-                var authorization = SessionManager.GetAuthorizationHeader();
-                if (authorization != null)
+                if (includeAuthorization)
                 {
-                    request.Headers.Authorization = authorization;
+                    var authorization = SessionManager.GetAuthorizationHeader();
+                    if (authorization != null)
+                    {
+                        request.Headers.Authorization = authorization;
+                    }
                 }
 
                 if (body != null)

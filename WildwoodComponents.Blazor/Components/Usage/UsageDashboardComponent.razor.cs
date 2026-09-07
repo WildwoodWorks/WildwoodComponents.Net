@@ -49,6 +49,17 @@ namespace WildwoodComponents.Blazor.Components.Usage
         [Parameter]
         public Func<List<AppTierLimitStatusModel>, UserTierSubscriptionModel?, Task<List<AppTierLimitStatusModel>>>? OnMergeUsage { get; set; }
 
+        /// <summary>
+        /// Optionally inject an externally-managed subscription for display, bypassing the fetched one.
+        /// Mirrors the React <c>subscription</c> override prop. The API subscription is still loaded and
+        /// is what <see cref="OnMergeUsage"/> receives. (C# cannot tell "not set" from null, so unlike
+        /// React an explicit null cannot hide a fetched subscription.)
+        /// </summary>
+        [Parameter] public UserTierSubscriptionModel? SubscriptionOverride { get; set; }
+
+        /// <summary>The subscription shown: the override when supplied, else the fetched one.</summary>
+        private UserTierSubscriptionModel? EffectiveSubscription => SubscriptionOverride ?? _subscription;
+
         #endregion
 
         #region State
@@ -165,7 +176,7 @@ namespace WildwoodComponents.Blazor.Components.Usage
         /// <summary>
         /// Gets the current subscription for external consumers.
         /// </summary>
-        public UserTierSubscriptionModel? GetSubscription() => _subscription;
+        public UserTierSubscriptionModel? GetSubscription() => EffectiveSubscription;
 
         #endregion
 

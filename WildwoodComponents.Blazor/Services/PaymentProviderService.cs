@@ -361,24 +361,39 @@ namespace WildwoodComponents.Blazor.Services
             }
         }
 
-        public async Task<PaymentCompletionResult> ValidateAppStoreReceiptAsync(
+        [Obsolete("Use ValidateStorePurchaseAsync - it carries the product id, restore flag and store transaction id the server needs for in-app purchases.")]
+        public Task<PaymentCompletionResult> ValidateAppStoreReceiptAsync(
             string appId,
             string receiptData,
             PaymentProviderType providerType)
+            => ValidateStorePurchaseAsync(appId, new StorePurchase
+            {
+                ProviderType = providerType,
+                PurchaseToken = receiptData
+            });
+
+        public async Task<PaymentCompletionResult> ValidateStorePurchaseAsync(string appId, StorePurchase purchase)
         {
             try
             {
+                // Field names match @wildwood/core validateStorePurchase. receiptData is added because it is the
+                // property WildwoodAPI's ValidateReceiptRequest binds the proof of purchase to; the JS
+                // contract's purchaseToken is not bound server-side yet, so both are sent.
                 var request = new
                 {
                     AppId = appId,
-                    ReceiptData = receiptData,
-                    ProviderType = providerType
+                    ProviderType = purchase.ProviderType,
+                    ProductId = purchase.ProductId,
+                    PurchaseToken = purchase.PurchaseToken,
+                    ReceiptData = purchase.PurchaseToken,
+                    TransactionId = purchase.TransactionId,
+                    IsRestore = purchase.IsRestore
                 };
 
                 var json = JsonSerializer.Serialize(request, JsonOptions);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                var endpoint = providerType == PaymentProviderType.AppleAppStore
+                var endpoint = purchase.ProviderType == PaymentProviderType.AppleAppStore
                     ? "payment/validate-apple-receipt"
                     : "payment/validate-google-receipt";
 

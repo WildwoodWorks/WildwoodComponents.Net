@@ -37,7 +37,7 @@
 }
 
 .ww-cancel-confirmation {
-    border-color: var(--ww-admin-danger);
+    border-color: var(--ww-admin-danger, var(--bs-danger, #dc3545));
 }
 
 /* Tier plans panel */

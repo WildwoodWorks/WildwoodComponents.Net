@@ -9,6 +9,7 @@ public class FakeSessionManager : IWildwoodSessionManager
     private string? _accessToken;
     private string? _refreshToken;
     private DateTime? _expiryUtc;
+    private bool _requiresPasswordReset;
 
     public int ApplyAuthorizationHeaderCalls { get; private set; }
 
@@ -39,7 +40,12 @@ public class FakeSessionManager : IWildwoodSessionManager
         _accessToken = null;
         _refreshToken = null;
         _expiryUtc = null;
+        _requiresPasswordReset = false;
     }
+
+    public bool RequiresPasswordReset => _requiresPasswordReset;
+
+    public void SetRequiresPasswordReset(bool value) => _requiresPasswordReset = value;
 
     public bool IsAuthenticated => !string.IsNullOrEmpty(_accessToken);
 
