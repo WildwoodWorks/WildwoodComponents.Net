@@ -54,6 +54,27 @@ namespace WildwoodComponents.WebForms.Controls
         /// </summary>
         public string ExternalLoginPath { get; set; } = "~/Account/ExternalLogin.aspx";
 
+        /// <summary>
+        /// When set, the sign-in footer's "Register" link navigates here instead of opening the
+        /// control's own registration view - for sites whose sign-up lives on its own page. Still
+        /// hidden when <see cref="AllowRegistration"/> or the app's configuration says no. Accepts an
+        /// application-relative (~/) path. Mirrors the Razor component's registerUrl.
+        /// </summary>
+        public string? RegisterUrl { get; set; }
+
+        /// <summary>The register URL as the browser should use it, or empty when unset.</summary>
+        protected string ResolvedRegisterUrl
+        {
+            get { return ResolvePath(RegisterUrl); }
+        }
+
+        /// <summary>Whether the in-control registration view is rendered: registration is allowed and
+        /// the host has not taken sign-up over with <see cref="RegisterUrl"/>.</summary>
+        protected bool RenderRegisterView
+        {
+            get { return EffectiveAllowRegistration && ResolvedRegisterUrl.Length == 0; }
+        }
+
         /// <summary>The app's authentication configuration, read during initialisation.</summary>
         protected AuthConfigResponse Config
         {

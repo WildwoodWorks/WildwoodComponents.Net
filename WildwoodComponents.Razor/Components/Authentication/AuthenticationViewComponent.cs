@@ -30,13 +30,15 @@ public class AuthenticationViewComponent : ViewComponent
     /// <param name="title">Card header title</param>
     /// <param name="subtitle">Card header subtitle</param>
     /// <param name="externalLoginPath">Path for external login redirect (default: /Account/ExternalLogin)</param>
+    /// <param name="registerUrl">When set, the login footer's "Register" link navigates here instead of opening the component's own registration view (rendered as data-register-url). Still hidden when registration is off.</param>
     public async Task<IViewComponentResult> InvokeAsync(
         string? returnUrl = null,
         string proxyBaseUrl = "/api/wildwood-auth",
         bool allowRegistration = true,
         string title = "Welcome",
         string? subtitle = null,
-        string externalLoginPath = "/Account/ExternalLogin")
+        string externalLoginPath = "/Account/ExternalLogin",
+        string? registerUrl = null)
     {
         AuthConfigResponse? config = null;
         try
@@ -57,7 +59,8 @@ public class AuthenticationViewComponent : ViewComponent
             EnableTwoFactor = config?.EnableTwoFactor ?? false,
             Title = title,
             Subtitle = subtitle ?? "Sign in to your account",
-            ExternalLoginPath = externalLoginPath
+            ExternalLoginPath = externalLoginPath,
+            RegisterUrl = string.IsNullOrWhiteSpace(registerUrl) ? null : registerUrl
         };
 
         return View(model);

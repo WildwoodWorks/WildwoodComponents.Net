@@ -20,6 +20,9 @@ public class AuthenticationViewModel
     public string Title { get; set; } = "Welcome";
     public string Subtitle { get; set; } = "Sign in to your account";
     public string ExternalLoginPath { get; set; } = "/Account/ExternalLogin";
+
+    /// <summary>Host-owned sign-up page; when set the footer link navigates there and the in-component register view is not rendered.</summary>
+    public string? RegisterUrl { get; set; }
 }
 
 // ──────────────────────────────────────────────

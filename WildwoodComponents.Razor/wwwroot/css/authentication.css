@@ -65,26 +65,27 @@ button:disabled .ww-btn-spinner {
     color: var(--ww-text-secondary);
 }
 
-/* Password field with visibility toggle (future) */
-.ww-password-wrapper {
-    position: relative;
+/* Password field with visibility toggle. Bootstrap's input-group keeps .invalid-feedback a later
+   sibling of the input, which .was-validated :invalid ~ .invalid-feedback needs; a plain wrapper
+   div would break that. */
+.ww-password-group .ww-password-toggle {
+    display: inline-flex;
+    align-items: center;
+    color: var(--ww-text-muted, #6c757d);
 }
 
-.ww-password-toggle {
-    position: absolute;
-    right: 0.75rem;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    color: var(--ww-text-muted);
-    cursor: pointer;
-    padding: 0;
-    line-height: 1;
+.ww-password-group .ww-password-toggle:hover,
+.ww-password-group .ww-password-toggle:focus {
+    color: var(--ww-text-primary, #212529);
 }
 
-.ww-password-toggle:hover {
-    color: var(--ww-text-primary);
+.ww-password-toggle .ww-eye-off,
+.ww-password-toggle[aria-pressed="true"] .ww-eye {
+    display: none;
+}
+
+.ww-password-toggle[aria-pressed="true"] .ww-eye-off {
+    display: inline;
 }
 
 /* ========================================

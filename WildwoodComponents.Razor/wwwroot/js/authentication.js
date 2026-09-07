@@ -13,6 +13,10 @@
 
     const proxyUrl = component.dataset.proxyUrl;
     const returnUrl = component.dataset.returnUrl || '/';
+    // Host-owned sign-up: when set, the Register link navigates there instead of toggling to the
+    // in-component register view. The link is rendered only when registration is allowed, so a
+    // hidden sign-up stays hidden regardless of this value.
+    const registerUrl = component.dataset.registerUrl || '';
     const messageEl = document.getElementById('ww-auth-message');
 
     // 2FA session state (set by login response when 2FA is required)
@@ -38,7 +42,13 @@
     }
 
     // Navigation links
-    bindClick('ww-show-register', () => showView('register'));
+    bindClick('ww-show-register', () => {
+        if (registerUrl) {
+            window.location.href = registerUrl;
+            return;
+        }
+        showView('register');
+    });
     bindClick('ww-show-forgot', () => showView('forgot'));
     bindClick('ww-show-login-from-register', () => showView('login'));
     bindClick('ww-show-login-from-forgot', () => showView('login'));
@@ -48,6 +58,22 @@
         const el = document.getElementById(id);
         if (el) el.addEventListener('click', function (e) { e.preventDefault(); handler(); });
     }
+
+    // ===== Password visibility toggles =====
+    // Same affordance as the React (.ww-password-toggle) and Blazor (.password-toggle) components.
+    // type="button" without data-ww-submit, so wildwood-forms.js never treats one as the submitter;
+    // flipping type= leaves constraint validation and autocomplete untouched.
+    component.querySelectorAll('[data-ww-password-toggle]').forEach(function (button) {
+        button.addEventListener('click', function (e) {
+            e.preventDefault();
+            const input = document.getElementById(button.getAttribute('data-ww-password-toggle'));
+            if (!input) return;
+            const reveal = input.type === 'password';
+            input.type = reveal ? 'text' : 'password';
+            button.setAttribute('aria-pressed', reveal ? 'true' : 'false');
+            button.setAttribute('aria-label', reveal ? 'Hide password' : 'Show password');
+        });
+    });
 
     // ===== Message display =====
     function showMessage(text, type) {
