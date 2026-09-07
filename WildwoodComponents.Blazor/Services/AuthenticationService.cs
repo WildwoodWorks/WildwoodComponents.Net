@@ -74,7 +74,15 @@ namespace WildwoodComponents.Blazor.Services
         Task<string> GetPasswordRequirementsAsync(string appId);
         Task<bool> HasRegistrationTokensAsync(string appId);
         Task<bool> ValidateRegistrationTokenAsync(string token);
-        Task<bool> ResetPasswordAsync(string newPassword, string confirmPassword, string appId);
+        /// <summary>
+        /// Completes a password reset. The forced (temporary-password) flow leaves
+        /// <paramref name="resetToken"/> null and is authenticated with the stored bearer
+        /// token; supplying a token instead sends the request anonymously, matching the JS
+        /// SDK's <c>skipAuth</c> emailed-link path. See
+        /// <see cref="WildwoodResetPasswordRequest.ResetToken"/> — the API does not bind that
+        /// field yet, so the anonymous form is wire parity only.
+        /// </summary>
+        Task<bool> ResetPasswordAsync(string newPassword, string confirmPassword, string appId, string? resetToken = null);
         Task<bool> RequestPasswordResetAsync(string email, string appId);
         Task LogoutAsync();
         Task<bool> RefreshTokenAsync();
@@ -756,6 +764,18 @@ namespace WildwoodComponents.Blazor.Services
                     var authResponse = await response.Content.ReadFromJsonAsync<AuthenticationResponse>();
                     if (authResponse != null)
                     {
+                        // The refresh-token endpoint never returns requiresPasswordReset, so
+                        // storing its response verbatim would clear a pending forced reset and a
+                        // user who refreshed before resetting would silently stop being asked.
+                        // Carry the prior flag forward (true stays true; false never becomes
+                        // true), mirroring @wildwood/core authService.refreshToken.
+                        var prior = await _localStorage.GetItemWithMigrationAsync<AuthenticationResponse>(
+                            WildwoodStorageKeys.User, WildwoodStorageKeys.Legacy.User);
+                        if (prior?.RequiresPasswordReset == true)
+                        {
+                            authResponse.RequiresPasswordReset = true;
+                        }
+
                         await StoreAuthenticationAsync(authResponse);
                         OnAuthenticationChanged?.Invoke(authResponse);
                         return true;
@@ -787,20 +807,39 @@ namespace WildwoodComponents.Blazor.Services
             }
         }
 
-        public async Task<bool> ResetPasswordAsync(string newPassword, string confirmPassword, string appId)
+        public async Task<bool> ResetPasswordAsync(string newPassword, string confirmPassword, string appId, string? resetToken = null)
         {
             try
             {
                 _logger.LogInformation("Attempting password reset for app: {AppId}", appId);
 
-                var request = new
+                var payload = new WildwoodResetPasswordRequest
                 {
                     NewPassword = newPassword,
                     ConfirmPassword = confirmPassword,
-                    AppId = appId
+                    AppId = appId,
+                    ResetToken = string.IsNullOrEmpty(resetToken) ? null : resetToken
                 };
 
-                var response = await _httpClient.PostAsJsonAsync("api/auth/reset-password", request);
+                // The bearer goes on THIS request, never on the shared client:
+                // RefreshTokenAsync nulls DefaultRequestHeaders.Authorization, so a reset that
+                // leaned on the client-level header 401'd after any refresh. An emailed reset
+                // token is the one anonymous case (the JS SDK's skipAuth path). Same idiom as
+                // Services/DisclaimerService.cs CreateRequest.
+                using var request = new HttpRequestMessage(HttpMethod.Post, "api/auth/reset-password");
+                if (payload.ResetToken is null)
+                {
+                    var accessToken = await _localStorage.GetItemWithMigrationAsync<string>(
+                        WildwoodStorageKeys.AccessToken, WildwoodStorageKeys.Legacy.AccessToken);
+                    if (!string.IsNullOrEmpty(accessToken))
+                    {
+                        request.Headers.Authorization =
+                            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+                    }
+                }
+
+                request.Content = JsonContent.Create(payload);
+                var response = await _httpClient.SendAsync(request);
 
                 if (response.IsSuccessStatusCode)
                 {

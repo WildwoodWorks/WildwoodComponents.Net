@@ -47,4 +47,15 @@ public interface IWildwoodSessionManager
     /// Applies the current access token to an HttpClient's Authorization header
     /// </summary>
     void ApplyAuthorizationHeader(HttpClient httpClient);
+
+    /// <summary>
+    /// Whether the signed-in user still has to replace a temporary password. Recorded from the
+    /// login / two-factor response because the refresh-token response never carries it, so a
+    /// refresh must not clear a pending forced reset. Defaults to false so existing
+    /// implementations keep compiling.
+    /// </summary>
+    bool RequiresPasswordReset => false;
+
+    /// <summary>Records (true) or clears (false) the pending forced-reset flag.</summary>
+    void SetRequiresPasswordReset(bool value) { }
 }

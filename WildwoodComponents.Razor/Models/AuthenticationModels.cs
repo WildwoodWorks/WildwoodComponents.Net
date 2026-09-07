@@ -79,14 +79,25 @@ public class ForgotPasswordRequest
 }
 
 /// <summary>
-/// Password reset request
+/// Password reset request.
+/// <para>
+/// The forced (temporary-password) reset uses only <see cref="NewPassword"/> and
+/// <see cref="ConfirmPassword"/> — the API's reset-password endpoint is [Authorize] and
+/// identifies the user from the session JWT, so nothing else is needed to complete it.
+/// </para>
+/// <para>
+/// <see cref="Token"/> is the emailed-link reset token; when set it is forwarded as
+/// <c>resetToken</c> and the request is sent anonymously, matching the JS SDK. WildwoodAPI
+/// does not bind that field yet, so the anonymous form is wire parity only.
+/// <see cref="Email"/> is never sent to the API; it is kept for the reset form's own display
+/// and validation.
+/// </para>
 /// </summary>
 public class ResetPasswordRequest
 {
-    [Required]
     public string Token { get; set; } = string.Empty;
 
-    [Required, EmailAddress]
+    [EmailAddress]
     public string Email { get; set; } = string.Empty;
 
     [Required, MinLength(8)]

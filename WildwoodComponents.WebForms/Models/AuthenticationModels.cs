@@ -58,10 +58,17 @@ namespace WildwoodComponents.WebForms.Models
     /// <summary>Password reset completion request.</summary>
     public class ResetPasswordRequest
     {
-        /// <summary>Reset token from the emailed link. Required.</summary>
+        /// <summary>
+        /// Reset token from the emailed link, forwarded to the API as <c>resetToken</c>; when
+        /// set the request is sent anonymously. Empty in the forced-reset flow, where the
+        /// session JWT identifies the user and the API needs nothing else.
+        /// </summary>
         public string Token { get; set; } = string.Empty;
 
-        /// <summary>Email address the reset was requested for. Required.</summary>
+        /// <summary>
+        /// Email address the reset was requested for. Not sent to the API; kept for shape
+        /// parity with the Razor package and for the reset form's own display.
+        /// </summary>
         public string Email { get; set; } = string.Empty;
 
         /// <summary>The new password. Required, minimum eight characters.</summary>
