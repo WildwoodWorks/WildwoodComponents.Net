@@ -1076,13 +1076,20 @@
             }
 
             var providerType = (PaymentProviderType)_selectedProvider.ProviderType;
-            var receiptData = await InvokeJSAsync<string>("wildwoodPayment.purchaseAppStoreProduct", 
-                response.ProductIds[0], providerType == PaymentProviderType.AppleAppStore);
+            var productId = response.ProductIds[0];
+            var receiptData = await InvokeJSAsync<string>("wildwoodPayment.purchaseAppStoreProduct",
+                productId, providerType == PaymentProviderType.AppleAppStore);
 
             if (!string.IsNullOrEmpty(receiptData))
             {
-                var validationResult = await PaymentProviderService.ValidateAppStoreReceiptAsync(
-                    AppId, receiptData, providerType);
+                // The interop returns only the proof of purchase; the store transaction id is unknown here
+                // and the server extracts it from the validated receipt.
+                var validationResult = await PaymentProviderService.ValidateStorePurchaseAsync(AppId, new StorePurchase
+                {
+                    ProviderType = providerType,
+                    ProductId = productId,
+                    PurchaseToken = receiptData
+                });
 
                 if (validationResult.Success)
                 {

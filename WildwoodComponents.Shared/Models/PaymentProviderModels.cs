@@ -302,6 +302,28 @@ public class PaymentCompletionResult
 }
 
 /// <summary>
+/// A completed native store purchase, ready for server validation - the platform-agnostic
+/// hand-off seam shared with @wildwood/core's StorePurchase. Property names match that contract.
+/// </summary>
+public class StorePurchase
+{
+    /// <summary>AppleAppStore (10) or GooglePlayStore (11).</summary>
+    public PaymentProviderType ProviderType { get; set; }
+
+    /// <summary>The store product id that was purchased.</summary>
+    public string ProductId { get; set; } = string.Empty;
+
+    /// <summary>The proof of purchase: Apple receipt / StoreKit 2 signed JWS; Google Play purchaseToken.</summary>
+    public string PurchaseToken { get; set; } = string.Empty;
+
+    /// <summary>The store's own transaction id, when the client has it.</summary>
+    public string? TransactionId { get; set; }
+
+    /// <summary>True when the purchase came from a restore flow rather than a fresh purchase.</summary>
+    public bool IsRestore { get; set; }
+}
+
+/// <summary>
 /// Saved payment method for a customer
 /// </summary>
 public class SavedPaymentMethodDto

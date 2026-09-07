@@ -23,7 +23,7 @@
     else
     {
         @* Header *@
-        @if (!string.IsNullOrEmpty(Title) || !string.IsNullOrEmpty(Subtitle) || _subscription != null)
+        @if (!string.IsNullOrEmpty(Title) || !string.IsNullOrEmpty(Subtitle) || EffectiveSubscription != null)
         {
             <div class="ww-usage-header">
                 <div class="ww-usage-header-text">
@@ -36,11 +36,11 @@
                         <p class="ww-usage-subtitle">@Subtitle</p>
                     }
                 </div>
-                @if (_subscription != null)
+                @if (EffectiveSubscription != null)
                 {
                     <div class="ww-usage-tier-badge">
-                        <span class="ww-badge @(_subscription.IsFreeTier ? "ww-badge-secondary" : "ww-badge-primary")">
-                            @_subscription.TierName
+                        <span class="ww-badge @(EffectiveSubscription.IsFreeTier ? "ww-badge-secondary" : "ww-badge-primary")">
+                            @EffectiveSubscription.TierName
                         </span>
                     </div>
                 }
