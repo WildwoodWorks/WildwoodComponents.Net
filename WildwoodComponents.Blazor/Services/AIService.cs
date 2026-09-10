@@ -72,6 +72,18 @@ namespace WildwoodComponents.Blazor.Services
         /// <param name="configurationId">Optional AI configuration ID</param>
         /// <returns>Base64-encoded audio data and content type</returns>
         Task<(string AudioBase64, string ContentType)?> SynthesizeSpeechAsync(string text, string voice, double speed = 1.0, string? configurationId = null);
+
+        /// <summary>
+        /// Transcribe recorded audio to text via the server (POST /api/stt/transcribe).
+        /// Used when the browser has no working Web Speech API (Firefox, Brave, WebView2, ...).
+        /// Never throws: every failure comes back as <c>Success = false</c> with a message.
+        /// </summary>
+        /// <param name="audio">The recorded audio bytes</param>
+        /// <param name="contentType">MIME type the recorder produced, e.g. "audio/webm;codecs=opus"</param>
+        /// <param name="configurationId">Optional AI configuration whose provider key should be used</param>
+        /// <param name="language">Optional spoken-language hint, e.g. "en" or "en-US"</param>
+        /// <returns>The transcription result</returns>
+        Task<SpeechTranscriptionResult> TranscribeAudioAsync(byte[] audio, string contentType, string? configurationId = null, string? language = null);
     }
 
     // TTSVoice now lives in WildwoodComponents.Shared.Models
@@ -748,6 +760,116 @@ namespace WildwoodComponents.Blazor.Services
                 _logger.LogError(ex, "?? AIService: Error synthesizing speech");
                 return null;
             }
+        }
+
+        // Upload extension per recorded format — the server's transcription provider infers the
+        // container from the file name. Mirrors WildwoodAPI's STTAudioFormats.
+        private static readonly Dictionary<string, string> AudioExtensionByMediaType = new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "audio/webm", ".webm" },
+            { "audio/ogg", ".ogg" },
+            { "audio/mp4", ".mp4" },
+            { "audio/x-m4a", ".m4a" },
+            { "audio/m4a", ".m4a" },
+            { "audio/mpeg", ".mp3" },
+            { "audio/mp3", ".mp3" },
+            { "audio/wav", ".wav" },
+            { "audio/x-wav", ".wav" },
+            { "audio/wave", ".wav" }
+        };
+
+        /// <inheritdoc/>
+        public async Task<SpeechTranscriptionResult> TranscribeAudioAsync(byte[] audio, string contentType, string? configurationId = null, string? language = null)
+        {
+            if (audio == null || audio.Length == 0)
+            {
+                return TranscriptionFailure("No audio was recorded.");
+            }
+
+            try
+            {
+                var url = $"{_apiBaseUrl}/stt/transcribe";
+                var mediaType = GetBareMediaType(contentType);
+                _logger.LogInformation("?? AIService: Transcribing {Size} bytes of {MediaType}", audio.Length, mediaType ?? "unknown audio");
+
+                // No manual request Content-Type: MultipartFormDataContent sets multipart/form-data with
+                // the boundary itself. The part carries the bare media type ("audio/webm", not
+                // "audio/webm;codecs=opus") — the server ignores codec parameters anyway.
+                using var form = new MultipartFormDataContent();
+                var filePart = new ByteArrayContent(audio);
+                if (mediaType != null && MediaTypeHeaderValue.TryParse(mediaType, out var partType))
+                {
+                    filePart.Headers.ContentType = partType;
+                }
+
+                var extension = string.Empty;
+                if (mediaType != null && AudioExtensionByMediaType.TryGetValue(mediaType, out var found))
+                {
+                    extension = found;
+                }
+                form.Add(filePart, "file", "speech" + extension);
+
+                if (!string.IsNullOrEmpty(configurationId))
+                {
+                    form.Add(new StringContent(configurationId), "configurationId");
+                }
+                if (!string.IsNullOrEmpty(language))
+                {
+                    form.Add(new StringContent(language), "language");
+                }
+
+                using var response = await _httpClient.PostAsync(url, form);
+                CheckForAuthFailure(response, "TranscribeAudio");
+
+                var body = await response.Content.ReadAsStringAsync();
+                SpeechTranscriptionResult? parsed = null;
+                try
+                {
+                    parsed = JsonSerializer.Deserialize<SpeechTranscriptionResult>(body, JsonOpts);
+                }
+                catch (JsonException)
+                {
+                    // Non-JSON body (e.g. a 413 from the web server) — reported by status code below
+                }
+
+                if (response.IsSuccessStatusCode && parsed != null && parsed.Success)
+                {
+                    return new SpeechTranscriptionResult { Success = true, Text = parsed.Text ?? string.Empty };
+                }
+
+                var message = !string.IsNullOrEmpty(parsed?.ErrorMessage)
+                    ? parsed!.ErrorMessage!
+                    : $"Transcription failed ({(int)response.StatusCode}).";
+                _logger.LogWarning("?? AIService: Transcription unsuccessful. Status: {StatusCode}, Error: {Error}",
+                    response.StatusCode, message);
+                return TranscriptionFailure(message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "?? AIService: Error transcribing audio");
+                return TranscriptionFailure("Transcription failed. Please try again.");
+            }
+        }
+
+        private static SpeechTranscriptionResult TranscriptionFailure(string message) => new()
+        {
+            Success = false,
+            ErrorMessage = message
+        };
+
+        /// <summary>
+        /// "audio/webm;codecs=opus" → "audio/webm". Null for a blank input.
+        /// </summary>
+        private static string? GetBareMediaType(string? contentType)
+        {
+            if (string.IsNullOrWhiteSpace(contentType))
+            {
+                return null;
+            }
+
+            var separator = contentType.IndexOf(';');
+            var bare = (separator >= 0 ? contentType.Substring(0, separator) : contentType).Trim().ToLowerInvariant();
+            return bare.Length == 0 ? null : bare;
         }
     }
 

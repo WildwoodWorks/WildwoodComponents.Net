@@ -182,3 +182,24 @@ public class TTSVoice
     public bool IsDefault { get; set; }
     public string Provider { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Result of a server-side speech-to-text transcription (POST /api/stt/transcribe).
+/// </summary>
+public class SpeechTranscriptionResult
+{
+    /// <summary>
+    /// Whether the audio was transcribed. False on any server, provider, or network failure.
+    /// </summary>
+    public bool Success { get; set; }
+
+    /// <summary>
+    /// The transcribed text (empty when the clip contained no speech).
+    /// </summary>
+    public string? Text { get; set; }
+
+    /// <summary>
+    /// A user-presentable reason when <see cref="Success"/> is false.
+    /// </summary>
+    public string? ErrorMessage { get; set; }
+}
