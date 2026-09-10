@@ -64,13 +64,17 @@ window.clearTextareaValue = (element) => {
     element.style.height = 'auto';
 };
 
-// Set up Enter key handler for chat input that prevents default newline behavior
+// Set up Enter key handler for chat input that prevents default newline behavior,
+// plus client-side auto-resize so typing costs no extra server round trip
 window.setupChatInputKeyHandler = (element, dotNetRef) => {
     if (!element || !dotNetRef) return;
 
-    // Remove any existing handler first
+    // Remove any existing handlers first
     if (element._chatKeyHandler) {
         element.removeEventListener('keydown', element._chatKeyHandler);
+    }
+    if (element._chatInputHandler) {
+        element.removeEventListener('input', element._chatInputHandler);
     }
 
     element._chatKeyHandler = async (e) => {
@@ -84,14 +88,23 @@ window.setupChatInputKeyHandler = (element, dotNetRef) => {
         }
     };
 
+    element._chatInputHandler = () => window.autoResizeTextarea(element);
+
     element.addEventListener('keydown', element._chatKeyHandler);
+    element.addEventListener('input', element._chatInputHandler);
 };
 
-// Clean up the Enter key handler
+// Clean up the Enter key and auto-resize handlers
 window.removeChatInputKeyHandler = (element) => {
-    if (!element || !element._chatKeyHandler) return;
-    element.removeEventListener('keydown', element._chatKeyHandler);
-    element._chatKeyHandler = null;
+    if (!element) return;
+    if (element._chatKeyHandler) {
+        element.removeEventListener('keydown', element._chatKeyHandler);
+        element._chatKeyHandler = null;
+    }
+    if (element._chatInputHandler) {
+        element.removeEventListener('input', element._chatInputHandler);
+        element._chatInputHandler = null;
+    }
 };
 
 window.aiChatInterop = {
