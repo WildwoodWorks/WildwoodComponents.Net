@@ -16,6 +16,7 @@ namespace WildwoodComponents.Blazor.Components.AI;
 /// This component is split into multiple partial class files for maintainability:
 /// - AIChatComponent.razor.cs - Core: Parameters, fields, lifecycle, disposal
 /// - AIChatComponent.SpeechToText.cs - Speech-to-text functionality
+/// - AIChatComponent.SpeechRecorder.cs - Recorded voice input (MediaRecorder + server transcription)
 /// - AIChatComponent.TextToSpeech.cs - Text-to-speech functionality
 /// - AIChatComponent.Configuration.cs - Configuration management
 /// - AIChatComponent.Session.cs - Session management
@@ -318,7 +319,7 @@ public partial class AIChatComponent : BaseWildwoodComponent
             if (IsSpeechToTextEnabled && Settings.EnableSpeechToText && _autoListenOnLoad && !IsListeningForSpeech)
             {
                 Logger?.LogInformation("?? STT: Auto-starting speech recognition from saved auto-listen preference");
-                await StartListening();
+                await StartListeningAutomaticallyAsync();
             }
             else if (IsSpeechToTextEnabled && !_autoListenOnLoad)
             {
@@ -374,6 +375,19 @@ public partial class AIChatComponent : BaseWildwoodComponent
         catch
         {
             // Ignore errors during disposal
+        }
+
+        // Release the microphone if a recording is still running
+        if (IsRecorderMode)
+        {
+            try
+            {
+                _ = JSRuntime.InvokeVoidAsync("aiChatInterop.cancelRecording");
+            }
+            catch
+            {
+                // Ignore errors during disposal (e.g. the circuit is already gone)
+            }
         }
 
         inputHandlerRef?.Dispose();

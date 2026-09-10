@@ -39,7 +39,8 @@ public partial class AIChatComponent
         if (IsSpeechToTextEnabled)
         {
             StateHasChanged();
-            await StartListening();
+            // Enabling the feature is not a request to record: in recorder mode the mic button starts it
+            await StartListeningCoreAsync(explicitStart: false);
         }
         else if (IsListeningForSpeech)
         {
@@ -96,10 +97,53 @@ public partial class AIChatComponent
         }
     }
 
-    private async Task StartListening()
+    /// <summary>
+    /// Starts voice input from an explicit user action (mic button, permission retry).
+    /// </summary>
+    private Task StartListening() => StartListeningCoreAsync(explicitStart: true);
+
+    /// <summary>
+    /// Starts voice input automatically (auto-listen on load, resume after TTS). Never starts a
+    /// recording — in recorder mode each clip is a server call, so it waits for the mic button.
+    /// </summary>
+    private Task StartListeningAutomaticallyAsync() => StartListeningCoreAsync(explicitStart: false);
+
+    private async Task StartListeningCoreAsync(bool explicitStart)
     {
-        if (IsListeningForSpeech) return;
-        
+        if (IsListeningForSpeech || IsTranscribing) return;
+
+        await EnsureSpeechInputModeAsync();
+
+        if (_speechInputMode == SpeechInputMode.None)
+        {
+            Logger?.LogWarning("?? STT C#: No voice input available in this browser");
+            IsSpeechToTextEnabled = false;
+            await HandleErrorAsync(new Exception("Voice input isn't supported in this browser."), "Starting speech recognition");
+            return;
+        }
+
+        if (IsRecorderMode)
+        {
+            if (!explicitStart)
+            {
+                Logger?.LogInformation("?? STT C#: Recorder mode - waiting for the mic button instead of auto-starting");
+                return;
+            }
+
+            _listeningStartedExplicitly = true;
+            try
+            {
+                await StartRecordingAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError(ex, "?? STT C#: Exception starting voice recording");
+                IsSpeechToTextEnabled = false;
+                await HandleErrorAsync(ex, "Starting voice recording");
+            }
+            return;
+        }
+
         // Don't start listening if TTS is currently speaking
         if (IsSpeakingMessage)
         {
@@ -109,6 +153,7 @@ public partial class AIChatComponent
         }
 
         Logger?.LogInformation("?? STT C#: StartListening called - browser will prompt for permission if needed");
+        _listeningStartedExplicitly = explicitStart;
 
         try
         {
@@ -159,6 +204,13 @@ public partial class AIChatComponent
 
     private async Task StopListening()
     {
+        if (IsRecorderMode)
+        {
+            // Stopping a recording means "done talking": transcribe it into the input
+            await FinalizeRecordingAsync();
+            return;
+        }
+
         if (!IsListeningForSpeech) return;
 
         Logger?.LogInformation("?? STT C#: StopListening called");
@@ -188,6 +240,8 @@ public partial class AIChatComponent
     /// </summary>
     private async Task PauseSpeechRecognition()
     {
+        // A recording belongs to the user; TTS never interrupts it
+        if (IsRecorderMode) return;
         if (!IsListeningForSpeech) return;
 
         Logger?.LogInformation("?? STT C#: Pausing speech recognition");
@@ -211,6 +265,7 @@ public partial class AIChatComponent
     /// </summary>
     private async Task ResumeSpeechRecognition()
     {
+        if (IsRecorderMode) return;
         if (!IsSpeechToTextEnabled || IsListeningForSpeech) return;
         if (!WasPausedForTTS) return;
 
@@ -220,7 +275,7 @@ public partial class AIChatComponent
         // Add a small delay to ensure TTS audio has fully stopped
         await Task.Delay(300);
 
-        await StartListening();
+        await StartListeningAutomaticallyAsync();
     }
 
     private async Task RetryMicrophonePermission()
@@ -251,10 +306,7 @@ public partial class AIChatComponent
 
         if (isFinal)
         {
-            CurrentMessage = string.IsNullOrEmpty(CurrentMessage)
-                ? transcript
-                : CurrentMessage + " " + transcript;
-            InterimTranscript = string.Empty;
+            AppendFinalTranscript(transcript);
         }
         else
         {
@@ -263,9 +315,23 @@ public partial class AIChatComponent
         _ = InvokeAsync(StateHasChanged);
     }
 
+    /// <summary>
+    /// Appends finished speech to the input box. Shared by live recognition and recorded input.
+    /// </summary>
+    private void AppendFinalTranscript(string transcript)
+    {
+        CurrentMessage = string.IsNullOrEmpty(CurrentMessage)
+            ? transcript
+            : CurrentMessage + " " + transcript;
+        InterimTranscript = string.Empty;
+    }
+
     [JSInvokable]
     public void OnSpeechToTextError(string error)
     {
+        // Late events from an abandoned Web Speech session must not reset a recording
+        if (IsRecorderMode) return;
+
         Logger?.LogWarning("?? STT C#: Error callback - {Error}", error);
         IsListeningForSpeech = false;
         InterimTranscript = string.Empty;
@@ -287,6 +353,9 @@ public partial class AIChatComponent
     [JSInvokable]
     public void OnSpeechToTextEnded()
     {
+        // Late events from an abandoned Web Speech session must not reset a recording
+        if (IsRecorderMode) return;
+
         Logger?.LogInformation("?? STT C#: Ended callback - was listening: {WasListening}", IsListeningForSpeech);
         IsListeningForSpeech = false;
         InterimTranscript = string.Empty;
