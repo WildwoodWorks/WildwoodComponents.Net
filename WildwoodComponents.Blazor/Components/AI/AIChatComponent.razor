@@ -466,8 +466,8 @@
                     }
                     
                     <button @onclick="SendMessage" 
-                            class="ai-chat-send-btn @(CanSendMessage ? "enabled" : "")" 
-                            disabled="@(!CanSendMessage)"
+                            class="ai-chat-send-btn @(IsSendButtonEnabled ? "enabled" : "")"
+                            disabled="@(!IsSendButtonEnabled)"
                             title="Send">
                         @if (IsLoading)
                         {

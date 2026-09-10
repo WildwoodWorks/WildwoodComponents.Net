@@ -51,6 +51,13 @@ public partial class AIChatComponent
     private bool IsMicButtonDisabled =>
         IsTranscribing || (IsLoading && !(IsRecorderMode && IsListeningForSpeech));
 
+    /// <summary>
+    /// Send is also available while a clip is recording or transcribing, even with an empty input:
+    /// SendMessage finishes the clip first, so "speak, then tap Send" works.
+    /// </summary>
+    private bool IsSendButtonEnabled =>
+        CanSendMessage || (IsRecorderMode && !IsLoading && (IsListeningForSpeech || IsTranscribing));
+
     #endregion
 
     #region Speech Recorder Methods
@@ -205,7 +212,10 @@ public partial class AIChatComponent
         {
             IsTranscribing = false;
             IsListeningForSpeech = false;
-            await InvokeAsync(StateHasChanged);
+            if (!_isDisposed)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
         }
     }
 
@@ -239,7 +249,16 @@ public partial class AIChatComponent
 
             if (_listeningStartedExplicitly && IsSpeechToTextEnabled)
             {
-                await StartRecordingAsync();
+                try
+                {
+                    await StartRecordingAsync();
+                }
+                catch (Exception ex)
+                {
+                    Logger?.LogError(ex, "?? STT C#: Exception starting voice recording after Web Speech failed");
+                    IsSpeechToTextEnabled = false;
+                    await HandleErrorAsync(ex, "Starting voice recording");
+                }
             }
         });
     }

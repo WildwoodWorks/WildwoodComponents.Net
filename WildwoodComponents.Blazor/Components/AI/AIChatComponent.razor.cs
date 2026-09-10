@@ -365,35 +365,47 @@ public partial class AIChatComponent : BaseWildwoodComponent
 
     #region IDisposable
 
-    public new void Dispose()
-    {
-        // Clean up JS event handler
-        try
-        {
-            _ = JSRuntime.InvokeVoidAsync("removeChatInputKeyHandler", messageInput);
-        }
-        catch
-        {
-            // Ignore errors during disposal
-        }
+    // Set once disposal starts; late async work (e.g. an in-flight transcription) checks it
+    private bool _isDisposed;
 
-        // Release the microphone if a recording is still running
-        if (IsRecorderMode)
+    // Override (not `new`): the renderer disposes through IDisposable, which lands on the base
+    // class's Dispose() → Dispose(bool). A hiding `new Dispose()` is never called by Blazor.
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && !_isDisposed)
         {
+            _isDisposed = true;
+
+            // Clean up JS event handler
             try
             {
-                _ = JSRuntime.InvokeVoidAsync("aiChatInterop.cancelRecording");
+                _ = JSRuntime.InvokeVoidAsync("removeChatInputKeyHandler", messageInput);
             }
             catch
             {
-                // Ignore errors during disposal (e.g. the circuit is already gone)
+                // Ignore errors during disposal
             }
+
+            // Release the microphone if a recording is still running (also clears its auto-stop timer,
+            // so an abandoned clip is never uploaded)
+            if (IsRecorderMode)
+            {
+                try
+                {
+                    _ = JSRuntime.InvokeVoidAsync("aiChatInterop.cancelRecording");
+                }
+                catch
+                {
+                    // Ignore errors during disposal (e.g. the circuit is already gone)
+                }
+            }
+
+            inputHandlerRef?.Dispose();
+            speechToTextRef?.Dispose();
+            textToSpeechRef?.Dispose();
         }
 
-        inputHandlerRef?.Dispose();
-        speechToTextRef?.Dispose();
-        textToSpeechRef?.Dispose();
-        base.Dispose();
+        base.Dispose(disposing);
     }
 
     #endregion
