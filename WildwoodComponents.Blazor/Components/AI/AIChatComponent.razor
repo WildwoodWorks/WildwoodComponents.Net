@@ -420,8 +420,8 @@
                     }
                 }
                 
-                <textarea value="@CurrentMessage"
-                         @oninput="OnInputChanged"
+                <textarea @bind="CurrentMessage"
+                         @bind:event="oninput"
                          placeholder="@(Settings.PlaceholderText ?? "Ask anything")"
                          class="ai-chat-input"
                          rows="1"

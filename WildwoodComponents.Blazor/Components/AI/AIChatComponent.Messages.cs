@@ -199,6 +199,10 @@ public partial class AIChatComponent
         }
         finally
         {
+            // Keys typed in the round trip after Enter can reach CurrentMessage after the clear above,
+            // while the box on screen is already empty. Drop them so the next Enter can't resend them.
+            // The input is disabled while loading, so nothing the user can still see is lost.
+            CurrentMessage = string.Empty;
             await SetLoadingAsync(false);
             Logger?.LogInformation("?? AIChatComponent: SendMessage completed, loading state cleared");
         }
@@ -264,21 +268,6 @@ public partial class AIChatComponent
     #endregion
 
     #region Input Event Handlers
-
-    private async Task OnInputChanged(ChangeEventArgs e)
-    {
-        CurrentMessage = e.Value?.ToString() ?? string.Empty;
-        StateHasChanged();
-
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("autoResizeTextarea", messageInput);
-        }
-        catch (Exception ex)
-        {
-            Logger?.LogWarning(ex, "Failed to auto-resize textarea");
-        }
-    }
 
     private async Task ScrollToBottom()
     {
