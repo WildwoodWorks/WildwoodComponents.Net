@@ -16,6 +16,12 @@ public partial class AIChatComponent
 
     private async Task SendMessage()
     {
+        // A recording in progress (or still transcribing) is part of this message: finish it first
+        if (IsRecorderMode && (IsListeningForSpeech || IsTranscribing))
+        {
+            await FinalizeRecordingAsync();
+        }
+
         if (!CanSendMessage) return;
 
         var messageText = CurrentMessage.Trim();

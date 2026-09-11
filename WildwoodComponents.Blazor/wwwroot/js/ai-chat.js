@@ -224,15 +224,7 @@ window.aiChatInterop = {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             stream.getTracks().forEach(track => track.stop());
         } catch (permError) {
-            const instructions = this.getMicrophonePermissionInstructions();
-            return { 
-                success: false, 
-                error: permError.name === 'NotFoundError' ? 'No microphone found.' : 'Microphone permission denied.',
-                requiresPermission: true,
-                permissionState: permError.name === 'NotFoundError' ? 'not-found' : 'denied',
-                instructions: instructions.instructions,
-                platform: instructions.platform
-            };
+            return this._microphoneErrorResult(permError);
         }
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -262,6 +254,16 @@ window.aiChatInterop = {
         recognition.onerror = function (event) {
             if (event.error === 'not-allowed') {
                 dotNetRef.invokeMethodAsync('OnSpeechToTextPermissionDenied');
+            } else if (event.error === 'network' || event.error === 'service-not-allowed' || event.error === 'language-not-supported') {
+                // The engine exposes Web Speech but cannot run it here (Brave/Opera/Vivaldi/WebView2
+                // ship no recognition backend; Safari with dictation off). Detach so the trailing
+                // onend never reaches .NET, then let the component switch to recorded voice input.
+                recognition.onresult = null;
+                recognition.onend = null;
+                if (window._currentSpeechRecognition === recognition) {
+                    window._currentSpeechRecognition = null;
+                }
+                dotNetRef.invokeMethodAsync('OnSpeechRecognitionUnavailable', event.error);
             } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
                 dotNetRef.invokeMethodAsync('OnSpeechToTextError', event.error);
             }
@@ -285,6 +287,213 @@ window.aiChatInterop = {
             window._currentSpeechRecognition.stop();
             window._currentSpeechRecognition = null;
         }
+    },
+
+    // Maps a getUserMedia failure to the result shape the component expects.
+    _microphoneErrorResult: function (permError) {
+        const instructions = this.getMicrophonePermissionInstructions();
+        return {
+            success: false,
+            error: permError.name === 'NotFoundError' ? 'No microphone found.' : 'Microphone permission denied.',
+            requiresPermission: true,
+            permissionState: permError.name === 'NotFoundError' ? 'not-found' : 'denied',
+            instructions: instructions.instructions,
+            platform: instructions.platform
+        };
+    },
+
+    // ---- Recorded voice input -------------------------------------------------------------
+    // Used where the browser has no working Web Speech API (Firefox has none; some engines
+    // expose it without a backend). Audio is captured with MediaRecorder and handed to .NET,
+    // which transcribes it server-side.
+
+    // 'native' = Web Speech API, 'recorder' = MediaRecorder + server transcription, 'none'.
+    getSpeechInputMode: function () {
+        if (this.isSpeechToTextSupported()) {
+            return 'native';
+        }
+        if (this._isRecordingSupported()) {
+            return 'recorder';
+        }
+        return 'none';
+    },
+
+    _isRecordingSupported: function () {
+        return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) &&
+            typeof window.MediaRecorder !== 'undefined';
+    },
+
+    // First container the browser can record: Chrome/Edge → webm, Firefox → webm or ogg, Safari → mp4.
+    _pickRecordingMimeType: function () {
+        if (typeof window.MediaRecorder.isTypeSupported !== 'function') {
+            return '';
+        }
+        const candidates = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm'];
+        for (let i = 0; i < candidates.length; i++) {
+            if (window.MediaRecorder.isTypeSupported(candidates[i])) {
+                return candidates[i];
+            }
+        }
+        return '';
+    },
+
+    _releaseRecorderStream: function (session) {
+        if (session && session.stream) {
+            session.stream.getTracks().forEach(track => track.stop());
+            session.stream = null;
+        }
+    },
+
+    startRecording: async function (dotNetRef, maxSeconds) {
+        if (!this._isRecordingSupported()) {
+            return { success: false, error: 'Voice recording is not supported in this browser.', requiresPermission: false };
+        }
+
+        // Never run two recorders at once
+        this.cancelRecording();
+
+        let stream;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+        } catch (permError) {
+            return this._microphoneErrorResult(permError);
+        }
+
+        const requestedMimeType = this._pickRecordingMimeType();
+        let recorder;
+        try {
+            recorder = requestedMimeType
+                ? new MediaRecorder(stream, { mimeType: requestedMimeType })
+                : new MediaRecorder(stream);
+        } catch (error) {
+            stream.getTracks().forEach(track => track.stop());
+            return { success: false, error: 'Voice recording could not start: ' + error.message, requiresPermission: false };
+        }
+
+        const self = this;
+        const session = {
+            recorder: recorder,
+            stream: stream,
+            chunks: [],
+            requestedMimeType: requestedMimeType,
+            timer: null,
+            error: null,
+            stopped: null
+        };
+
+        recorder.ondataavailable = function (event) {
+            if (event.data && event.data.size > 0) {
+                session.chunks.push(event.data);
+            }
+        };
+        recorder.onerror = function (event) {
+            session.error = (event && event.error && event.error.message) || 'Recording failed.';
+            console.warn('MediaRecorder error:', session.error);
+        };
+        // Resolves after the final dataavailable, whoever stopped the recorder
+        session.stopped = new Promise(function (resolve) {
+            recorder.addEventListener('stop', function () {
+                self._releaseRecorderStream(session);
+                resolve();
+            });
+        });
+
+        try {
+            recorder.start(1000);
+        } catch (error) {
+            stream.getTracks().forEach(track => track.stop());
+            return { success: false, error: 'Voice recording could not start: ' + error.message, requiresPermission: false };
+        }
+
+        window._currentSpeechRecorder = session;
+
+        if (maxSeconds && maxSeconds > 0) {
+            session.timer = setTimeout(function () {
+                session.timer = null;
+                if (window._currentSpeechRecorder !== session) {
+                    return;
+                }
+                try {
+                    if (recorder.state !== 'inactive') {
+                        recorder.stop();
+                    }
+                } catch (error) {
+                    console.warn('Failed to auto-stop recording:', error.message);
+                }
+                dotNetRef.invokeMethodAsync('OnRecordingAutoStopped');
+            }, maxSeconds * 1000);
+        }
+
+        return { success: true, requiresPermission: false };
+    },
+
+    // Stops the active recording and holds the audio for takeRecordingBlob().
+    stopRecording: async function () {
+        const session = window._currentSpeechRecorder;
+        window._lastRecordingBlob = null;
+        if (!session) {
+            return { success: false, error: 'No recording in progress.', mimeType: null, size: 0 };
+        }
+        window._currentSpeechRecorder = null;
+
+        if (session.timer) {
+            clearTimeout(session.timer);
+            session.timer = null;
+        }
+        try {
+            if (session.recorder.state !== 'inactive') {
+                session.recorder.stop();
+            }
+        } catch (error) {
+            console.warn('Failed to stop recording:', error.message);
+        }
+
+        // 'stop' normally follows within milliseconds; never hang the caller if it does not
+        await Promise.race([session.stopped, new Promise(resolve => setTimeout(resolve, 3000))]);
+        this._releaseRecorderStream(session);
+
+        const firstChunkType = session.chunks.length > 0 ? session.chunks[0].type : '';
+        const mimeType = session.recorder.mimeType || firstChunkType || session.requestedMimeType || 'audio/webm';
+        const blob = new Blob(session.chunks, { type: mimeType });
+        session.chunks = [];
+        window._lastRecordingBlob = blob.size > 0 ? blob : null;
+
+        return {
+            success: blob.size > 0,
+            error: blob.size > 0 ? null : (session.error || 'No audio was captured.'),
+            mimeType: mimeType,
+            size: blob.size
+        };
+    },
+
+    // Returns the audio captured by the last stopRecording() (.NET reads it as an IJSStreamReference).
+    takeRecordingBlob: function () {
+        const blob = window._lastRecordingBlob || new Blob([]);
+        window._lastRecordingBlob = null;
+        return blob;
+    },
+
+    // Stops any active recording, releases the microphone, and discards the audio.
+    cancelRecording: function () {
+        const session = window._currentSpeechRecorder;
+        window._currentSpeechRecorder = null;
+        window._lastRecordingBlob = null;
+        if (!session) {
+            return;
+        }
+        if (session.timer) {
+            clearTimeout(session.timer);
+            session.timer = null;
+        }
+        session.chunks = [];
+        try {
+            if (session.recorder.state !== 'inactive') {
+                session.recorder.stop();
+            }
+        } catch (error) {
+            console.warn('Failed to cancel recording:', error.message);
+        }
+        this._releaseRecorderStream(session);
     },
 
     isTextToSpeechSupported: function () {

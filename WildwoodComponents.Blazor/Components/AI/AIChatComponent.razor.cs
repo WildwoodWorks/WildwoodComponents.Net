@@ -16,6 +16,7 @@ namespace WildwoodComponents.Blazor.Components.AI;
 /// This component is split into multiple partial class files for maintainability:
 /// - AIChatComponent.razor.cs - Core: Parameters, fields, lifecycle, disposal
 /// - AIChatComponent.SpeechToText.cs - Speech-to-text functionality
+/// - AIChatComponent.SpeechRecorder.cs - Recorded voice input (MediaRecorder + server transcription)
 /// - AIChatComponent.TextToSpeech.cs - Text-to-speech functionality
 /// - AIChatComponent.Configuration.cs - Configuration management
 /// - AIChatComponent.Session.cs - Session management
@@ -318,7 +319,7 @@ public partial class AIChatComponent : BaseWildwoodComponent
             if (IsSpeechToTextEnabled && Settings.EnableSpeechToText && _autoListenOnLoad && !IsListeningForSpeech)
             {
                 Logger?.LogInformation("?? STT: Auto-starting speech recognition from saved auto-listen preference");
-                await StartListening();
+                await StartListeningAutomaticallyAsync();
             }
             else if (IsSpeechToTextEnabled && !_autoListenOnLoad)
             {
@@ -364,22 +365,47 @@ public partial class AIChatComponent : BaseWildwoodComponent
 
     #region IDisposable
 
-    public new void Dispose()
+    // Set once disposal starts; late async work (e.g. an in-flight transcription) checks it
+    private bool _isDisposed;
+
+    // Override (not `new`): the renderer disposes through IDisposable, which lands on the base
+    // class's Dispose() → Dispose(bool). A hiding `new Dispose()` is never called by Blazor.
+    protected override void Dispose(bool disposing)
     {
-        // Clean up JS event handler
-        try
+        if (disposing && !_isDisposed)
         {
-            _ = JSRuntime.InvokeVoidAsync("removeChatInputKeyHandler", messageInput);
-        }
-        catch
-        {
-            // Ignore errors during disposal
+            _isDisposed = true;
+
+            // Clean up JS event handler
+            try
+            {
+                _ = JSRuntime.InvokeVoidAsync("removeChatInputKeyHandler", messageInput);
+            }
+            catch
+            {
+                // Ignore errors during disposal
+            }
+
+            // Release the microphone if a recording is still running (also clears its auto-stop timer,
+            // so an abandoned clip is never uploaded)
+            if (IsRecorderMode)
+            {
+                try
+                {
+                    _ = JSRuntime.InvokeVoidAsync("aiChatInterop.cancelRecording");
+                }
+                catch
+                {
+                    // Ignore errors during disposal (e.g. the circuit is already gone)
+                }
+            }
+
+            inputHandlerRef?.Dispose();
+            speechToTextRef?.Dispose();
+            textToSpeechRef?.Dispose();
         }
 
-        inputHandlerRef?.Dispose();
-        speechToTextRef?.Dispose();
-        textToSpeechRef?.Dispose();
-        base.Dispose();
+        base.Dispose(disposing);
     }
 
     #endregion
