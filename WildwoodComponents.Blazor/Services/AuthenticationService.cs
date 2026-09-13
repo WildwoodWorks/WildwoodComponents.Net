@@ -292,7 +292,8 @@ namespace WildwoodComponents.Blazor.Services
                     LastName = request.LastName,
                     AppId = request.AppId,
                     Platform = request.Platform,
-                    DeviceInfo = request.DeviceInfo
+                    DeviceInfo = request.DeviceInfo,
+                    Attribution = request.Attribution
                 };                _logger.LogDebug("RegisterWithTokenAsync - Making registration request to api/userregistration/register-with-token with Email: {Email}, Username: {Username}, AppId: {AppId}, Platform: {Platform}", 
                     request.Email, request.Username ?? request.Email, request.AppId, request.Platform);
 

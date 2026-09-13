@@ -112,6 +112,9 @@ public class TokenRegistrationRequest
     public string? Platform { get; set; }
     public string? DeviceInfo { get; set; }
     public List<DisclaimerAcceptanceResult>? DisclaimerAcceptances { get; set; }
+
+    /// <summary>Campaign Attribution payload captured by the browser attribution engine, when any.</summary>
+    public WildwoodComponents.Shared.Models.AttributionPayloadModel? Attribution { get; set; }
 }
 
 public class OpenRegistrationRequest
@@ -126,6 +129,9 @@ public class OpenRegistrationRequest
     public string? DeviceInfo { get; set; }
     public string? PricingModelId { get; set; }
     public List<DisclaimerAcceptanceResult>? DisclaimerAcceptances { get; set; }
+
+    /// <summary>Campaign Attribution payload captured by the browser attribution engine, when any.</summary>
+    public WildwoodComponents.Shared.Models.AttributionPayloadModel? Attribution { get; set; }
 }
 
 public class ValidateRegistrationRequest
