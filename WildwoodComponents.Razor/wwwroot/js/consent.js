@@ -110,6 +110,7 @@
         this.state.decided = false;
         return this._record('RejectAll', this._encode(this.state.categories)).then(function () {
             self._clearCookie();
+            self._emitChange();
             return self.state;
         });
     };
@@ -143,6 +144,15 @@
         return this.config.geo.inTarget === true;
     };
 
+    // Tells consent-gated consumers (attribution.js) that the decision changed, via a DOM event so they
+    // need no reference to this script.
+    ConsentEngine.prototype._emitChange = function () {
+        if (typeof document === 'undefined' || typeof CustomEvent !== 'function') return;
+        try {
+            document.dispatchEvent(new CustomEvent('wildwood:consent-change', { detail: this.state }));
+        } catch (e) { /* best-effort */ }
+    };
+
     ConsentEngine.prototype._applyNonTargetDefault = function (gpcPresent) {
         var cats = emptyCategories();
         if (this.config.nonTargetDefault === 'LoadAll') {
@@ -155,7 +165,11 @@
         this.state.categories = cats;
         this.state.decided = true;
         this._injectConsented();
-        return this._persist(gpcPresent ? 'Gpc' : 'NonTargetDefault');
+        var self = this;
+        return this._persist(gpcPresent ? 'Gpc' : 'NonTargetDefault').then(function (result) {
+            self._emitChange();
+            return result;
+        });
     };
 
     ConsentEngine.prototype._applyCategories = function (cats, method) {
@@ -166,7 +180,10 @@
         this.state.decided = true;
         this._injectConsented();
         var self = this;
-        return this._persist(method).then(function () { return self.state; });
+        return this._persist(method).then(function () {
+            self._emitChange();
+            return self.state;
+        });
     };
 
     ConsentEngine.prototype._persist = function (method) {

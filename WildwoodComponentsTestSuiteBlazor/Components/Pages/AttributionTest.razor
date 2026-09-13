@@ -1,0 +1,141 @@
+@page "/test/attribution"
+@rendermode InteractiveServer
+@using System.Text.Json
+@using WildwoodComponents.Blazor.Services
+@using WildwoodComponents.Shared.Models
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@inject IAttributionService Attribution
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<ComponentTestPage PageTitle="Campaign Attribution Test" ComponentName="AttributionBootstrap" IconClass="fas fa-bullseye"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">AppId</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">URL to capture</label>
+            <input class="form-control form-control-sm" @bind="url" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Referrer (optional)</label>
+            <input class="form-control form-control-sm" @bind="referrer" />
+        </div>
+        <button class="btn btn-sm btn-primary w-100 mb-2" @onclick="CaptureAsync">Capture URL</button>
+        <button class="btn btn-sm btn-outline-warning w-100 mb-2" @onclick="ClearAsync">Clear touches</button>
+        <p class="small text-muted mb-0">
+            The layout's AttributionBootstrap captured this page's landing URL. Touches are written to localStorage
+            (ww_attribution) only once the app's consent category is granted. The app must have Campaign Attribution
+            enabled in WildwoodAdmin for the config to load.
+        </p>
+    </Settings>
+    <Component>
+        <div style="min-height: 200px;">
+            @if (state is null)
+            {
+                <p class="text-muted">Attribution state is not available yet.</p>
+            }
+            else
+            {
+                <p><strong>Visitor key:</strong> <code>@state.VisitorKey</code></p>
+                <p><strong>App config:</strong> @DescribeConfig(state.Config)</p>
+                <p><strong>Persisted:</strong> @(state.Persisted ? "yes" : "no (memory only until consent allows it)")</p>
+                <p><strong>First touch:</strong> @Describe(state.First)</p>
+                <p><strong>Last touch:</strong> @Describe(state.Last)</p>
+                <pre class="small">@payloadJson</pre>
+            }
+        </div>
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private const string SampleUrl = "https://cairnfed.ai/?utm_source=reddit&utm_medium=paid&utm_campaign=govcon-test-sep26&utm_content=ad1";
+    private static readonly JsonSerializerOptions PrettyJson = new() { WriteIndented = true };
+
+    private string appId = "";
+    private string url = SampleUrl;
+    private string referrer = "";
+    private AttributionStateModel? state;
+    private string payloadJson = "null";
+    private List<EventEntry> events = new();
+
+    protected override void OnInitialized()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        LifecycleTracker.TrackInitialized("AttributionBootstrap");
+        AddEvent("Campaign Attribution test initialized");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Attribution.InitializeAsync(appId);
+        await RefreshAsync();
+        StateHasChanged();
+    }
+
+    private async Task CaptureAsync()
+    {
+        var touch = await Attribution.CaptureUrlAsync(url, string.IsNullOrWhiteSpace(referrer) ? null : referrer);
+        var msg = touch is null ? "Capture: direct visit (no campaign data)" : $"Captured {Describe(touch)}";
+        AddEvent(msg);
+        LifecycleTracker.TrackCallback("AttributionBootstrap", "CaptureUrl", msg);
+        await RefreshAsync();
+    }
+
+    private async Task ClearAsync()
+    {
+        await Attribution.ClearAsync();
+        AddEvent("Touches cleared");
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        state = await Attribution.GetStateAsync();
+        var payload = await Attribution.GetForRegistrationAsync();
+        payloadJson = payload is null ? "null" : JsonSerializer.Serialize(payload, PrettyJson);
+    }
+
+    private async Task ApplySettings()
+    {
+        await Attribution.InitializeAsync(appId);
+        await RefreshAsync();
+        AddEvent($"Settings applied - AppId: {appId}");
+    }
+
+    private async Task ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        url = SampleUrl;
+        referrer = "";
+        events.Clear();
+        await RefreshAsync();
+        AddEvent("Settings reset to defaults");
+    }
+
+    private static string Describe(AttributionTouchModel? touch)
+        => touch is null ? "none" : $"{touch.Source ?? "(none)"} / {touch.Medium ?? "(none)"} / {touch.Campaign ?? "(none)"}";
+
+    private static string DescribeConfig(AttributionConfigModel? config)
+        => config is null ? "not loaded" : config.IsEnabled ? "attribution enabled" : "attribution disabled for this app";
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}
