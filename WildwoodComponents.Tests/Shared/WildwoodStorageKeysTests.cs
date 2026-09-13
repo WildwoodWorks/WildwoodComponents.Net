@@ -14,6 +14,7 @@ public class WildwoodStorageKeysTests
     [InlineData("ww_user")]
     [InlineData("ww_theme")]
     [InlineData("ww_draft_")]
+    [InlineData("ww_attribution")]
     public void CurrentKeys_AllCarryTheWwPrefix(string key)
     {
         Assert.StartsWith("ww_", key);
@@ -27,6 +28,7 @@ public class WildwoodStorageKeysTests
         Assert.Equal("ww_user", WildwoodStorageKeys.User);
         Assert.Equal("ww_theme", WildwoodStorageKeys.Theme);
         Assert.Equal("ww_draft_", WildwoodStorageKeys.DraftPrefix);
+        Assert.Equal("ww_attribution", WildwoodStorageKeys.Attribution);
     }
 
     [Fact]
