@@ -27,6 +27,18 @@ namespace WildwoodComponents.Blazor.Components.Registration
         [Inject] private IHttpClientFactory HttpClientFactory { get; set; } = default!;
         [Inject] private IOptions<WildwoodComponentsOptions> OptionsAccessor { get; set; } = default!;
         [Inject] private new ILogger<SignupWithSubscriptionComponent> Logger { get; set; } = default!;
+        [Inject] private System.IServiceProvider ServiceProvider { get; set; } = default!;
+
+        // Campaign Attribution, resolved optionally so hosts that register services by hand keep working.
+        private IAttributionService? AttributionEngine => ServiceProvider.GetService(typeof(IAttributionService)) as IAttributionService;
+
+        private async Task<WildwoodComponents.Shared.Models.AttributionPayloadModel?> GetAttributionPayloadAsync()
+            => AttributionEngine is { } attribution ? await attribution.GetForRegistrationAsync() : null;
+
+        private async Task ClearAttributionAsync()
+        {
+            if (AttributionEngine is { } attribution) await attribution.ClearAsync();
+        }
 
         #endregion
 
@@ -408,7 +420,8 @@ namespace WildwoodComponents.Blazor.Components.Registration
                             Password = _collectedFormData.Password ?? string.Empty,
                             AppId = AppId,
                             Platform = "Web",
-                            DeviceInfo = "Browser"
+                            DeviceInfo = "Browser",
+                            Attribution = await GetAttributionPayloadAsync()
                         };
                         response = await httpClient.PostAsJsonAsync("api/userregistration/register-with-token", request);
                     }
@@ -424,7 +437,8 @@ namespace WildwoodComponents.Blazor.Components.Registration
                             AppId = AppId,
                             Platform = "Web",
                             DeviceInfo = "Browser",
-                            PricingModelId = _collectedFormData.PricingModelId
+                            PricingModelId = _collectedFormData.PricingModelId,
+                            Attribution = await GetAttributionPayloadAsync()
                         };
                         response = await httpClient.PostAsJsonAsync("api/userregistration/register", request);
                     }
@@ -459,6 +473,8 @@ namespace WildwoodComponents.Blazor.Components.Registration
                     }
 
                     _registered = true;
+                    // Recorded with the account: a later signup from this browser must not reuse the touches.
+                    await ClearAttributionAsync();
                 }
 
                 // Step 2: Login (if not already logged in from a retry)

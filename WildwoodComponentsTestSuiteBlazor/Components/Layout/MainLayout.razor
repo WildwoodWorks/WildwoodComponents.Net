@@ -1,9 +1,14 @@
 @inherits LayoutComponentBase
+@using WildwoodComponents.Blazor.Components.Attribution
 @inject AuthenticationStateProvider AuthStateProvider
 @inject TestSuiteAuthService AuthService
 @inject DebugHubConnectionService DebugHub
 @inject NavigationManager Navigation
+@inject IConfiguration Configuration
 @implements IAsyncDisposable
+
+@* Campaign Attribution capture, outside the authorization gate so every entry page's URL is read. *@
+<AttributionBootstrap AppId="@(Configuration["WildwoodAPI:AppId"] ?? string.Empty)" />
 
 <div class="wrapper">
     <AuthorizeView>

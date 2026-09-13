@@ -914,7 +914,9 @@
             platform: 'Web',
             deviceInfo: 'Browser',
             username: form.querySelector('[name="username"]').value.trim(),
-            disclaimerAcceptances: this.disclaimerAcceptances
+            disclaimerAcceptances: this.disclaimerAcceptances,
+            // Campaign Attribution payload, when the page loads attribution.js.
+            attribution: window.wildwoodAttribution ? window.wildwoodAttribution.getForRegistration() : null
         };
 
         var url, body;
@@ -929,6 +931,7 @@
         return this._apiPost(url, body)
             .then(function (result) {
                 if (result && result.success) {
+                    if (window.wildwoodAttribution) window.wildwoodAttribution.clear();
                     self.registrationResponse = result;
                     self.registrationPending = false;
                     self.registrationSuccessful = true;

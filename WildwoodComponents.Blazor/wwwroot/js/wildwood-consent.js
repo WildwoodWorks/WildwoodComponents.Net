@@ -90,6 +90,7 @@ class ConsentEngine {
     this.state.decided = false;
     await this._record('RejectAll', this._encode(this.state.categories));
     this._clearCookie();
+    this._emitChange();
     return this.state;
   }
 
@@ -115,6 +116,19 @@ class ConsentEngine {
     return this.config.geo.inTarget === true;
   }
 
+  /**
+   * Tells consent-gated consumers (the Campaign Attribution engine) that the decision changed. A DOM event,
+   * so they need no reference to this module.
+   */
+  _emitChange() {
+    if (typeof document === 'undefined' || typeof CustomEvent !== 'function') return;
+    try {
+      document.dispatchEvent(new CustomEvent('wildwood:consent-change', { detail: this.state }));
+    } catch {
+      /* best-effort */
+    }
+  }
+
   async _applyNonTargetDefault(gpcPresent) {
     const cats = emptyCategories();
     if (this.config.nonTargetDefault === 'LoadAll') {
@@ -127,6 +141,7 @@ class ConsentEngine {
     this.state.decided = true;
     this._injectConsented();
     await this._persist(gpcPresent ? 'Gpc' : 'NonTargetDefault');
+    this._emitChange();
   }
 
   async _applyCategories(cats, method) {
@@ -137,6 +152,7 @@ class ConsentEngine {
     this.state.decided = true;
     this._injectConsented();
     await this._persist(method);
+    this._emitChange();
     return this.state;
   }
 

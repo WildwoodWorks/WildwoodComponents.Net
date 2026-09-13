@@ -566,6 +566,16 @@ namespace WildwoodComponents.Blazor.Extensions
             {
                 // Service may not exist, ignore
             }
+
+            // Register Campaign Attribution service if available
+            try
+            {
+                RegisterAttributionService(services, options);
+            }
+            catch
+            {
+                // Service may not exist, ignore
+            }
         }
 
         /// <summary>
@@ -582,6 +592,23 @@ namespace WildwoodComponents.Blazor.Extensions
                     ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.ConsentService>.Instance;
 
                 return new WildwoodComponents.Blazor.Services.ConsentService(js, logger, options.BaseUrl ?? string.Empty);
+            });
+        }
+
+        /// <summary>
+        /// Registers the Campaign Attribution service. Like consent, the engine runs in JS (loaded via JS
+        /// isolation); the service only needs IJSRuntime and the configured base URL.
+        /// </summary>
+        private static void RegisterAttributionService(IServiceCollection services, WildwoodComponentsOptions options)
+        {
+            services.AddScoped<WildwoodComponents.Blazor.Services.IAttributionService>(serviceProvider =>
+            {
+                var js = serviceProvider.GetRequiredService<Microsoft.JSInterop.IJSRuntime>();
+                var loggerFactory = serviceProvider.GetService<ILoggerFactory>();
+                var logger = loggerFactory?.CreateLogger<WildwoodComponents.Blazor.Services.AttributionService>()
+                    ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.AttributionService>.Instance;
+
+                return new WildwoodComponents.Blazor.Services.AttributionService(js, logger, options.BaseUrl ?? string.Empty);
             });
         }
 

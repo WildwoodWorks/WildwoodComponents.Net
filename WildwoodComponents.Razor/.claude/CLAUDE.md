@@ -43,6 +43,7 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 | Disclaimer | DisclaimerComponent | DisclaimerViewComponent | disclaimerService | DisclaimerComponent | -- | -- |
 | Feedback | FeedbackWidgetComponent | FeedbackWidgetViewComponent | feedbackService | FeedbackComponent | FeedbackComponent | -- |
 | Signup + Sub | SignupWithSubscriptionComponent | SignupWithSubscriptionViewComponent | -- | -- | -- | -- |
+| Campaign Attribution | AttributionBootstrap + IAttributionService (wildwood-attribution.js) | attribution.js (window.wildwoodAttribution) | AttributionService (attribution engine) | useAttribution (WildwoodProvider starts capture) | useAttribution (provider captures deep links) | -- |
 
 *`--` = not yet implemented on that platform*
 

@@ -16,6 +16,7 @@
 @inject IOptions<WildwoodComponentsOptions> OptionsAccessor
 @inject IAuthenticationService AuthService
 @inject IPaymentProviderService PaymentProviderService
+@inject IServiceProvider ServiceProvider
 
 <div class="registration-token-component">
     <!-- Step Indicator - Dynamic based on token requirement and payment requirement -->
@@ -1162,7 +1163,8 @@
                     Platform = "Web",
                     DeviceInfo = "Browser",
                     Username = _registrationModel.Username,
-                    DisclaimerAcceptances = _disclaimerAcceptances
+                    DisclaimerAcceptances = _disclaimerAcceptances,
+                    Attribution = await GetAttributionPayloadAsync()
                 };
 
                 response = await GetHttpClient().PostAsJsonAsync("api/userregistration/register-with-token", registrationRequest);
@@ -1181,7 +1183,8 @@
                     DeviceInfo = "Browser",
                     Username = _registrationModel.Username,
                     PricingModelId = DefaultPricingModelId,
-                    DisclaimerAcceptances = _disclaimerAcceptances
+                    DisclaimerAcceptances = _disclaimerAcceptances,
+                    Attribution = await GetAttributionPayloadAsync()
                 };
 
                 response = await GetHttpClient().PostAsJsonAsync("api/userregistration/register", registrationRequest);
@@ -1196,6 +1199,8 @@
                     _registrationResponse = result;
                     _registrationPending = false;
                     _registrationSuccessful = true;
+                    // Recorded with the account: a later signup from this browser must not reuse the touches.
+                    await ClearAttributionAsync();
                     
                     await OnRegistrationSuccess.InvokeAsync(new RegistrationSuccessEventArgs
                     {
@@ -1635,6 +1640,17 @@
         public bool RequiresStripeSetup { get; set; }
     }
 
+    // Campaign Attribution, resolved optionally so hosts that register services by hand keep working.
+    private IAttributionService? AttributionEngine => ServiceProvider.GetService(typeof(IAttributionService)) as IAttributionService;
+
+    private async Task<WildwoodComponents.Shared.Models.AttributionPayloadModel?> GetAttributionPayloadAsync()
+        => AttributionEngine is { } attribution ? await attribution.GetForRegistrationAsync() : null;
+
+    private async Task ClearAttributionAsync()
+    {
+        if (AttributionEngine is { } attribution) await attribution.ClearAsync();
+    }
+
     public class TokenRegistrationRequest
     {
         public string Token { get; set; } = string.Empty;
@@ -1647,6 +1663,7 @@
         public string? Platform { get; set; }
         public string? DeviceInfo { get; set; }
         public List<DisclaimerAcceptanceResult>? DisclaimerAcceptances { get; set; }
+        public WildwoodComponents.Shared.Models.AttributionPayloadModel? Attribution { get; set; }
     }
 
     public class OpenRegistrationRequest
@@ -1661,6 +1678,7 @@
         public string? DeviceInfo { get; set; }
         public string? PricingModelId { get; set; }
         public List<DisclaimerAcceptanceResult>? DisclaimerAcceptances { get; set; }
+        public WildwoodComponents.Shared.Models.AttributionPayloadModel? Attribution { get; set; }
     }
 
     public class RegistrationSuccessResponse

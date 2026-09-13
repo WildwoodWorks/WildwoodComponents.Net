@@ -4,7 +4,8 @@ namespace WildwoodComponents.Shared.Utilities;
 /// Centralized browser localStorage key names used by the Wildwood SDK components.
 /// These MUST stay in sync with the JS SDK (@wildwood/core) for cross-stack parity:
 /// authService STORAGE_KEYS (ww_accessToken / ww_refreshToken / ww_user),
-/// themeService THEME_STORAGE_KEY (ww_theme), messagingService DRAFT_STORAGE_PREFIX (ww_draft_).
+/// themeService THEME_STORAGE_KEY (ww_theme), messagingService DRAFT_STORAGE_PREFIX (ww_draft_),
+/// attribution ATTRIBUTION_STORAGE_KEY (ww_attribution).
 /// </summary>
 public static class WildwoodStorageKeys
 {
@@ -25,6 +26,12 @@ public static class WildwoodStorageKeys
 
     /// <summary>The draft key for a specific thread.</summary>
     public static string Draft(string threadId) => DraftPrefix + threadId;
+
+    /// <summary>
+    /// Campaign Attribution blob (<c>{ v, visitorKey, first, last, updatedAt }</c>): the first and last
+    /// campaign touch, persisted only once the app's consent category allows it.
+    /// </summary>
+    public const string Attribution = "ww_attribution";
 
     /// <summary>
     /// Pre-<c>ww_</c>-prefix key names. Retained ONLY for one-time migration-on-read so an

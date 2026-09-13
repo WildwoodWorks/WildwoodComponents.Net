@@ -78,6 +78,12 @@ namespace WildwoodComponents.Blazor.Models
         public string? LicenseToken { get; set; }
 
         public string? RegistrationToken { get; set; }
+
+        /// <summary>
+        /// Campaign Attribution payload from the attribution engine (IAttributionService.GetForRegistrationAsync).
+        /// Null sends none.
+        /// </summary>
+        public WildwoodComponents.Shared.Models.AttributionPayloadModel? Attribution { get; set; }
     }
     public class AuthenticationResponse
     {
