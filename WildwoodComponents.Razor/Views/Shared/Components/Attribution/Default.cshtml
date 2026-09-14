@@ -1,0 +1,10 @@
+@using WildwoodComponents.Razor.Models
+@model AttributionViewModel
+
+@* Campaign Attribution has no UI. attribution.js reads the landing URL, keeps the first and last touch (persisted in
+   the browser only once the app's consent category is granted), beacons the landing when the app has the beacon on,
+   and exposes window.wildwoodAttribution for the registration scripts. It starts itself from these data attributes;
+   an empty app id loads the engine without starting it. *@
+<script src="~/_content/WildwoodComponents.Razor/js/attribution.js"
+        data-app-id="@Model.AppId"
+        data-base-url="@Model.BaseUrl"></script>
