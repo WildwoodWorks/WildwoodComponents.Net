@@ -40,6 +40,36 @@ const body = { email, password, attribution: window.wildwoodAttribution ? window
 if (window.wildwoodAttribution) window.wildwoodAttribution.clear();
 ```
 
+## Sign-in provider signups (the claim)
+
+A sign-in provider signup has no registration request to carry the payload, and a Razor app keeps the user's JWT in
+the server session, so the claim goes through a same-origin proxy that ships with this library:
+
+1. `AddWildwoodComponentsRazor(...)` registers `IWildwoodAttributionService`, which uses the configured `AppId`.
+2. Make `WildwoodAttributionProxyController` (`POST /api/wildwood-attribution/claim`) reachable and keep server-side
+   session on, as for the notifications proxy:
+
+   ```csharp
+   builder.Services.AddControllers();
+   // ...
+   app.UseSession();
+   app.MapControllers();
+   ```
+
+When a page renders for a signed-in session, `<vc:attribution>` adds `data-claim-url` to the script tag and the engine
+posts its captured touches there. The proxy forwards them with the session token; the touches are cleared when it
+answers OK, and a failed attempt is not repeated for the rest of the browser session. WildwoodAPI records a claim only
+for an account created in the last 15 minutes that has no attribution yet, so claiming on later signed-in pages is
+harmless.
+
+```cshtml
+<vc:attribution app-id="my-app" enable-claim="false" />              @* no claim *@
+<vc:attribution app-id="my-app" claim-url="/my-proxy/claim" />      @* your own proxy route *@
+```
+
+A provider sign-in is a full-page redirect: touches captured before the visitor granted the consent category live in
+memory only and do not survive it.
+
 ## Host-app control (`window.wildwoodAttribution`)
 
 ```js

@@ -518,6 +518,45 @@
 
     var engine = new AttributionEngine();
 
+    // ===== Claim for a signed-in session =========================================================
+    // A Razor app keeps the user's JWT in the server session, so the payload goes to the same-origin proxy
+    // (WildwoodAttributionProxyController), which forwards it with the session token. That is how a sign-in
+    // provider signup, which has no registration request to carry the payload, is attributed. The touches are
+    // cleared only when the proxy answers OK. A marker records an attempt that did not succeed, so a failing claim
+    // is not re-sent on every page for the rest of the browser session.
+    var CLAIM_MARKER_KEY = 'ww_attribution_claim_attempted';
+
+    function readClaimMarker() {
+        try { return window.sessionStorage.getItem(CLAIM_MARKER_KEY) === '1'; } catch (e) { return false; }
+    }
+
+    function writeClaimMarker(attempted) {
+        try {
+            if (attempted) window.sessionStorage.setItem(CLAIM_MARKER_KEY, '1');
+            else window.sessionStorage.removeItem(CLAIM_MARKER_KEY);
+        } catch (e) { /* storage blocked: best-effort */ }
+    }
+
+    function claimThroughProxy(claimUrl) {
+        try {
+            if (!claimUrl || typeof fetch !== 'function' || readClaimMarker()) return;
+            var payload = engine.getForRegistration();
+            if (!payload) return;
+            writeClaimMarker(true);
+            fetch(claimUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(payload)
+            }).then(function (response) {
+                if (response && response.ok) {
+                    engine.clear();
+                    writeClaimMarker(false);
+                }
+            }).catch(function () { return undefined; });
+        } catch (e) { /* best-effort */ }
+    }
+
     window.wildwoodAttribution = {
         initialize: function (baseUrl, appId) { return engine.initialize(baseUrl, appId); },
         captureUrl: function (url, referrer) { return engine.captureUrl(url, referrer); },
@@ -529,6 +568,10 @@
     var script = document.currentScript;
     var scriptAppId = script ? script.getAttribute('data-app-id') : null;
     if (scriptAppId) {
-        window.wildwoodAttribution.initialize(script.getAttribute('data-base-url') || '', scriptAppId);
+        var scriptClaimUrl = script.getAttribute('data-claim-url');
+        var started = window.wildwoodAttribution.initialize(script.getAttribute('data-base-url') || '', scriptAppId);
+        if (scriptClaimUrl) {
+            started.then(function () { claimThroughProxy(scriptClaimUrl); }, function () { return undefined; });
+        }
     }
 })();

@@ -11,4 +11,10 @@ public class AttributionViewModel
 
     /// <summary>WildwoodAPI host root without the <c>/api</c> suffix (the engine appends <c>/api/attribution/...</c>).</summary>
     public string BaseUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Same-origin claim proxy route, set only for a signed-in session. Null renders no <c>data-claim-url</c>, so the
+    /// engine never claims.
+    /// </summary>
+    public string? ClaimUrl { get; set; }
 }

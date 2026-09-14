@@ -265,6 +265,16 @@ public static class ServiceCollectionExtensions
             var logger = sp.GetRequiredService<ILogger<WildwoodConsentService>>();
             return new WildwoodConsentService(httpClient, logger);
         });
+
+        // Campaign Attribution claim service: backs the /api/wildwood-attribution proxy, which forwards a signed-in
+        // session's captured touches to WildwoodAPI with the session token (the JWT never reaches the browser).
+        services.AddScoped<IWildwoodAttributionService>(sp =>
+        {
+            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
+            var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
+            var logger = sp.GetRequiredService<ILogger<WildwoodAttributionService>>();
+            return new WildwoodAttributionService(httpClient, sessionManager, logger, options.AppId ?? string.Empty);
+        });
     }
 }
 
