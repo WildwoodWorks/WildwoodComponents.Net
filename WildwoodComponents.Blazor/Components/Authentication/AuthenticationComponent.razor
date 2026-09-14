@@ -960,6 +960,11 @@
                 throw new InvalidOperationException("Failed to parse authentication response from OAuth callback.");
             }
 
+            // Campaign Attribution: a provider signup has no registration request to carry the captured campaign
+            // tags, so claim them now that the user holds a JWT. Before the disclaimer branch, because the token is
+            // already valid there and the host may navigate away as soon as sign-in completes.
+            await ClaimAttributionAsync(response.JwtToken);
+
             // Check if disclaimer acceptance is required
             if (response.RequiresDisclaimerAcceptance && response.PendingDisclaimers?.Count > 0)
             {
@@ -972,6 +977,39 @@
 
             await OnAuthenticationSuccess.InvokeAsync(response);
         }, $"Social authentication with {provider.Name}");
+    }
+
+    // Campaign Attribution, resolved optionally so hosts that register services by hand keep working.
+    [Inject] private IServiceProvider ServiceProvider { get; set; } = default!;
+    [Inject] private System.Net.Http.IHttpClientFactory HttpClientFactory { get; set; } = default!;
+
+    /// <summary>
+    /// Best-effort Campaign Attribution claim after a provider sign-in. It never throws: a failed claim must not
+    /// surface as an authentication error.
+    /// </summary>
+    private async Task ClaimAttributionAsync(string? jwtToken)
+    {
+        try
+        {
+            if (ServiceProvider.GetService(typeof(IAttributionService)) is not IAttributionService attribution)
+            {
+                return;
+            }
+
+            var baseUrl = WildwoodOptions?.BaseUrl;
+            if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(AppId) || string.IsNullOrWhiteSpace(jwtToken))
+            {
+                return;
+            }
+
+            var http = HttpClientFactory.CreateClient(WildwoodComponents.Blazor.Extensions.ServiceCollectionExtensions.WildwoodHttpClientName);
+            http.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+            await attribution.ClaimAsync(http, AppId, jwtToken);
+        }
+        catch (Exception)
+        {
+            // Attribution is best-effort; the sign-in continues regardless.
+        }
     }
 
     /// <summary>

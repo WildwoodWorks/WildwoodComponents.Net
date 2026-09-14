@@ -51,6 +51,43 @@ namespace WildwoodComponents.Shared.Models
         public string Sdk { get; set; } = "dotnet";
     }
 
+    /// <summary>
+    /// The body of POST /api/attribution/claim: the captured payload plus the app id, which must match the
+    /// <c>appId</c> query parameter. Used for sign-in provider signups, which have no registration request to
+    /// carry the payload (mirrors @wildwood/core claimAttribution).
+    /// </summary>
+    public class AttributionClaimRequestModel : AttributionPayloadModel
+    {
+        public string AppId { get; set; } = string.Empty;
+
+        /// <summary>Copies a captured payload into a claim for <paramref name="appId"/>.</summary>
+        public static AttributionClaimRequestModel From(string appId, AttributionPayloadModel payload)
+        {
+            return new AttributionClaimRequestModel
+            {
+                AppId = appId,
+                Version = payload.Version,
+                VisitorKey = payload.VisitorKey,
+                FirstTouch = payload.FirstTouch,
+                LastTouch = payload.LastTouch,
+                Platform = payload.Platform,
+                Sdk = payload.Sdk
+            };
+        }
+    }
+
+    /// <summary>The response of POST /api/attribution/claim.</summary>
+    public class AttributionClaimResultModel
+    {
+        public bool Recorded { get; set; }
+
+        /// <summary>
+        /// Why nothing was recorded: <c>Disabled</c>, <c>WindowExpired</c>, <c>AlreadyRecorded</c>, <c>Empty</c> or
+        /// <c>NotAppUser</c>. Null when recorded.
+        /// </summary>
+        public string? Reason { get; set; }
+    }
+
     /// <summary>The public attribution config returned by GET /api/attribution/config.</summary>
     public class AttributionConfigModel
     {
