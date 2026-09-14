@@ -26,6 +26,54 @@ public class WildwoodAuthServiceTests
         return (service, handler, session);
     }
 
+    // ── Campaign Attribution rides along on registration ──
+
+    [Fact]
+    public async Task RegisterAsync_SendsTheAttributionPayload()
+    {
+        var (service, handler, _) = CreateService();
+        handler.WhenOk("auth/register", LoginOk);
+
+        var result = await service.RegisterAsync(new RegisterRequest
+        {
+            Email = "a@b.test",
+            Password = "password-1",
+            ConfirmPassword = "password-1",
+            Attribution = new WildwoodComponents.Shared.Models.AttributionPayloadModel
+            {
+                VisitorKey = "visitor-key-0001",
+                LastTouch = new WildwoodComponents.Shared.Models.AttributionTouchModel { Source = "reddit", Campaign = "spring-launch" }
+            }
+        });
+
+        Assert.True(result.Succeeded);
+        var request = Assert.Single(handler.Requests);
+        using var body = JsonDocument.Parse(request.Body!);
+        var attribution = body.RootElement.GetProperty("attribution");
+        Assert.Equal("visitor-key-0001", attribution.GetProperty("visitorKey").GetString());
+        Assert.Equal("reddit", attribution.GetProperty("lastTouch").GetProperty("source").GetString());
+        Assert.Equal("dotnet", attribution.GetProperty("sdk").GetString());
+    }
+
+    [Fact]
+    public async Task RegisterAsync_OmitsTheAttributionKeyWhenNothingWasCaptured()
+    {
+        // Absent, not "attribution": null — the same wire shape the JS SDK sends.
+        var (service, handler, _) = CreateService();
+        handler.WhenOk("auth/register", LoginOk);
+
+        await service.RegisterAsync(new RegisterRequest
+        {
+            Email = "a@b.test",
+            Password = "password-1",
+            ConfirmPassword = "password-1"
+        });
+
+        var request = Assert.Single(handler.Requests);
+        using var body = JsonDocument.Parse(request.Body!);
+        Assert.False(body.RootElement.TryGetProperty("attribution", out _));
+    }
+
     // ── The forced-reset flag is session state, because the API only sends it once ──
 
     [Fact]

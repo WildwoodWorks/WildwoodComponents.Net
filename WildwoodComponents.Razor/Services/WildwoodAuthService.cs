@@ -98,7 +98,8 @@ public class WildwoodAuthService : IWildwoodAuthService
                 ConfirmPassword = request.ConfirmPassword,
                 FirstName = request.FirstName ?? string.Empty,
                 LastName = request.LastName ?? string.Empty,
-                AppId = _appId
+                AppId = _appId,
+                Attribution = request.Attribution
             };
 
             using var response = await _httpClient.PostAsJsonAsync("auth/register", apiRequest);

@@ -336,7 +336,9 @@
                         confirmPassword: confirm,
                         firstName: firstName,
                         lastName: lastName,
-                        appId: appId
+                        appId: appId,
+                        // Campaign Attribution payload, when the page loads attribution.js.
+                        attribution: window.wildwoodAttribution ? window.wildwoodAttribution.getForRegistration() : null
                     })
                 })
                     .then(function (r) {
@@ -351,6 +353,8 @@
                         setLoading(false);
                         if (result.jwtToken || result.success) {
                             registeredUser = result;
+                            // The signup carried the campaign tags; drop them so a later signup cannot reuse them.
+                            if (window.wildwoodAttribution) window.wildwoodAttribution.clear();
 
                             if (selectedTier && selectedTier.isFree !== 'true' && selectedPricing) {
                                 goToStep(3); // Payment needed

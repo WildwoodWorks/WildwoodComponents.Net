@@ -34,6 +34,12 @@ public class WildwoodRegisterRequest
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public string AppId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Campaign Attribution payload captured in the browser, when there is one. Null omits the key, as the JS SDK does.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AttributionPayloadModel? Attribution { get; set; }
 }
 
 /// <summary>

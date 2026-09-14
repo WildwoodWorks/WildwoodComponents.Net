@@ -70,6 +70,12 @@ public class RegisterRequest
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public string? RegistrationToken { get; set; }
+
+    /// <summary>
+    /// Campaign Attribution payload from attribution.js (<c>window.wildwoodAttribution.getForRegistration()</c>),
+    /// forwarded to WildwoodAPI with the registration. Null when nothing was captured.
+    /// </summary>
+    public WildwoodComponents.Shared.Models.AttributionPayloadModel? Attribution { get; set; }
 }
 
 /// <summary>

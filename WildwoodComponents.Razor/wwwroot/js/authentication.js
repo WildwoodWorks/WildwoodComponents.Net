@@ -228,10 +228,14 @@
                     lastName: document.getElementById('ww-reg-lastname').value,
                     password: password,
                     confirmPassword: confirm,
-                    returnUrl: returnUrl
+                    returnUrl: returnUrl,
+                    // Campaign Attribution payload, when the page loads attribution.js.
+                    attribution: window.wildwoodAttribution ? window.wildwoodAttribution.getForRegistration() : null
                 });
 
                 if (result.success) {
+                    // The signup carried the campaign tags; drop them before leaving the page.
+                    if (window.wildwoodAttribution) window.wildwoodAttribution.clear();
                     window.location.href = result.redirectUrl || returnUrl;
                 } else {
                     showMessage(result.message || 'Registration failed', 'danger');
