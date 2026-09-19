@@ -37,6 +37,11 @@ public class PaymentViewComponent : ViewComponent
     /// <param name="subscriptionId">Optional subscription ID for recurring payments</param>
     /// <param name="pricingModelId">Optional pricing model ID</param>
     /// <param name="isSubscription">Whether this is a subscription payment</param>
+    /// <param name="trialDays">
+    /// Free-trial days the subscription starts with. The button offers the trial instead of a
+    /// charge and, with Stripe, the card is saved as a SetupIntent rather than charged today — a
+    /// trial that collects nothing leaves the processor with nothing to bill at trial end.
+    /// </param>
     /// <param name="showAmount">Whether to display the amount (default: true)</param>
     /// <param name="requireBillingAddress">Whether billing address is required</param>
     /// <param name="returnUrl">Return URL for redirect-based providers (BNPL)</param>
@@ -56,6 +61,7 @@ public class PaymentViewComponent : ViewComponent
         string? subscriptionId = null,
         string? pricingModelId = null,
         bool isSubscription = false,
+        int? trialDays = null,
         bool showAmount = true,
         bool requireBillingAddress = false,
         string? returnUrl = null,
@@ -115,6 +121,7 @@ public class PaymentViewComponent : ViewComponent
             SubscriptionId = subscriptionId,
             PricingModelId = pricingModelId,
             IsSubscription = isSubscription,
+            TrialDays = trialDays,
             ShowAmount = showAmount,
             RequireBillingAddress = requireBillingAddress,
             ReturnUrl = returnUrl,

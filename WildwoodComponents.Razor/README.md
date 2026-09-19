@@ -218,6 +218,90 @@ filter or middleware across all three proxies rather than singling one out.
 
 ---
 
+## Payment component: trials, events and the billing address
+
+`<vc:payment />` renders the provider picker, the Stripe card element and the submit button;
+`wwwroot/js/payment.js` drives them and posts to the **host-supplied** payment proxy
+(`proxy-base-url`, default `/api/wildwood-payment`) at `POST {proxy}/initiate` and
+`POST {proxy}/confirm`. Bind those two bodies to the shared `InitiatePaymentRequest` and forward
+them to `IWildwoodPaymentService.InitiatePaymentAsync` / `ConfirmPaymentAsync`.
+
+### New parameter
+
+| Parameter | Type | What it does |
+|---|---|---|
+| `trial-days` | `int?` | The subscription starts with this many free-trial days. The button reads "Start N-day free trial", a note says nothing is taken today, and the initiate request carries `supportsSetupIntent: true` so Stripe answers with a **SetupIntent**. The card is then confirmed with `confirmCardSetup` and saved — a trial that collects nothing leaves the processor with nothing to bill at trial end. |
+
+Two request fields follow from it, and a host proxy that re-serialises a bound
+`InitiatePaymentRequest` carries both without changes:
+
+- **`supportsSetupIntent`** — sent only for a Stripe payment that is actually offering a trial.
+- **`BillingAddress`** — PascalCase, matching the JS SDK and the `[JsonPropertyName]` on the shared
+  model. Sent only when `require-billing-address` is set, and only once all six fields plus the
+  country are filled in: an address the app requires is validated **before** anything is charged,
+  because an incomplete one fails at the provider after the intent already exists.
+
+Card data never leaves Stripe Elements. The component has no card-number input on the Stripe path
+and none should be added.
+
+### Events
+
+| Event | When | Detail |
+|---|---|---|
+| `ww-payment-success` | **exactly once per payment**, when it completes | `transactionId`, `paymentIntentId`, `subscriptionId`, `amount`, `currency`, `providerType`, `receiptUrl`, `trialEnd` |
+| `ww-payment-continue` | the success panel's **Continue** button | the same payload |
+| `ww-payment-failure` | a refusal or a transport failure | `errorMessage`, `errorCode`, `providerType`, `isRetryable` |
+| `ww-payment-cancel` | the Cancel button | — |
+
+> **Behaviour change.** Continue used to re-dispatch `ww-payment-success`, so a host that subscribed
+> a plan or completed an upgrade on that event did it **twice**. Continue now dispatches
+> `ww-payment-continue` and nothing else. A host that relied on the second `ww-payment-success` must
+> listen for `ww-payment-continue` instead. The library's own listeners
+> (`signup-subscription.js`, `token-registration.js`) always treated the second event as a duplicate,
+> so they are unaffected.
+
+Three further rules the script now follows, all of them about not taking money twice:
+
+1. **A retry confirms the same intent.** A declined card keeps the intent the server created, keyed
+   by provider, pricing model, amount and one-off/subscription. Initiating again would leave a
+   second subscription behind.
+2. **The confirm uses the id the server recorded** (`paymentIntentId`, else `subscriptionId`) — a
+   subscription's first invoice is not the id the browser holds. With neither, nothing is confirmed
+   and the form says so rather than asking the server to verify an empty id.
+3. **A trial that is not available asks first.** When the view advertised a trial and the server
+   answers with a charge secret instead, the form shows "The free trial isn't available on your
+   account, so {amount} will be charged today. Select Pay to continue.", switches the button to
+   "Pay {amount}" and confirms the SAME intent on the next click. Re-rendering the component for
+   another plan and calling `wwPayment.init(componentId)` (or `wwPayment.update(componentId)`)
+   re-reads the plan and offers the new plan's trial again.
+
+### Token plans in registration
+
+`<vc:token-registration />` reads `appGrants` from `validate-detailed`. When the token grants a plan
+for this app (app ids compared case-insensitively) it renders a **"Your registration token
+includes"** summary — tier, pricing name, packs and features by display name, never a price — and
+dispatches a bubbling **`ww-token-grant`** (`detail: { appId, grant }`, `grant: null` when the token
+is cleared), plus `data-token-grant="true"` on the component root.
+`signup-subscription.js` listens for it, skips plan payment and does **not** self-subscribe: the
+second subscribe replaces the token's plan, cancelling what the token had just created.
+
+Every dispatch wins, clears included. Clearing the token (or swapping it for one that grants nothing
+here) sends `grant: null`, and the wizard drops its copy: the payment step comes back and the
+`/subscribe` call is made again. Both decisions — *collect payment?* and *self-subscribe?* — are
+re-derived from current state at the moment they are acted on, never latched when the token was
+applied, so a token applied and then cleared leaves the plain plan-and-pay flow exactly as it was.
+A dispatch carrying a different `appId` than the wizard's is ignored, so it neither sets a grant
+nor clears one.
+
+A self-subscribe that is refused is likewise **not** a failed signup. The account exists and is
+signed in, so the wizard finishes and says "Your account is ready! Plan activation is pending — you
+can select a plan from your dashboard." rather than leaving a spinner or an error on screen.
+
+The subscription admin's tier change collects no payment by standing decision, so it emits no
+payment-required event and there is nothing there to carry a pricing model, trial or price.
+
+---
+
 ## Authentication proxy
 
 `<vc:authentication />` works the same way: its JavaScript posts to a **thin server-side proxy in

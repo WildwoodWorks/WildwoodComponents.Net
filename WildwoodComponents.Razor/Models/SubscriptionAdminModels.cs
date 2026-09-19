@@ -1,4 +1,5 @@
 using WildwoodComponents.Shared.Models;
+using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Razor.Models;
 
@@ -78,6 +79,20 @@ public class SubscriptionStatusPanelViewModel
     /// set one, otherwise the subscription's end date.
     /// </summary>
     public DateTime? CancellationAccessEndDate => Subscription?.PendingChangeDate ?? Subscription?.EndDate;
+
+    /// <summary>
+    /// "Now" for the trial-end rule. Settable so a test can pin the clock; the view never sets it.
+    /// </summary>
+    public DateTime AsOf { get; set; } = DateTime.Now;
+
+    /// <summary>
+    /// Whether to show the trial end date. The server keeps a finished trial's end date on the row,
+    /// so it shows only while that trial is still running — never on a plan already being paid for.
+    /// The rule lives in <see cref="SubscriptionAccess.IsTrialRunning"/> so Blazor's panel applies
+    /// the same one.
+    /// </summary>
+    public bool ShowTrialEnd =>
+        SubscriptionAccess.IsTrialRunning(Subscription?.Status, Subscription?.TrialEndDate, AsOf);
 }
 
 /// <summary>

@@ -9,6 +9,47 @@
 
     var instances = {};
 
+    /**
+     * The plan a token grants for THIS app, or null when it grants none. App ids are compared
+     * case-insensitively: the server's casing for a GUID is not the host's.
+     * Ported from the Blazor SignupPlanDecisions.FindGrantForApp (JS f8b095f).
+     */
+    function findGrantForApp(details, appId) {
+        if (!details || !appId) return null;
+        var grants = details.appGrants;
+        if (!grants || !grants.length) return null;
+
+        for (var i = 0; i < grants.length; i++) {
+            var grant = grants[i];
+            if (grant && grant.appId && String(grant.appId).toLowerCase() === String(appId).toLowerCase()) {
+                return grant;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * One entry per granted id, named the way the server named it — or by its id when it did not.
+     * Nothing is priced: the registrant is not paying for any of it, and a price beside a granted
+     * plan would say they were.
+     */
+    function displayNames(ids, names) {
+        var entries = [];
+        if (!ids) return entries;
+
+        for (var i = 0; i < ids.length; i++) {
+            var name = (names && i < names.length && names[i]) ? names[i] : ids[i];
+            entries.push(name);
+        }
+        return entries;
+    }
+
+    /** The plan's name as the server named it, never an empty string in the copy. */
+    function grantPlanName(grant) {
+        if (!grant) return 'plan';
+        return grant.appTierName || grant.appTierId || 'plan';
+    }
+
     function RegistrationInstance(root) {
         this.root = root;
         this.cid = root.dataset.componentId;
@@ -31,6 +72,9 @@
         this.tokenValidated = false;
         this.tokenValue = '';
         this.tokenInfo = null;
+        // The plan this token grants for THIS app, or null. Read from validate-detailed's appGrants
+        // and published as ww-token-grant so a signup flow on the page never subscribes over it.
+        this.tokenGrant = null;
         this.useToken = false;
         this.requiresPayment = false;
         this.paymentComplete = false;
@@ -355,6 +399,7 @@
                     self.tokenValidated = true;
                     self.useToken = true;
                     self.requiresPayment = !!data.requiresPaymentSetup;
+                    self._setTokenGrant(findGrantForApp(data, self.appId));
 
                     if (self.requiresPayment) {
                         self.pricingDetails = {
@@ -404,6 +449,7 @@
                     self.tokenInfo = data;
                     self.tokenValue = value;
                     self.useToken = true;
+                    self._setTokenGrant(findGrantForApp(data, self.appId));
                     self.els.optTokenSuccess.style.display = '';
                     self.els.optTokenInput.classList.add('is-valid');
                     self.els.optTokenInput.classList.remove('is-invalid');
@@ -445,6 +491,7 @@
         this.tokenValue = '';
         this.tokenInfo = null;
         this.useToken = false;
+        this._setTokenGrant(null);
         this.els.tokenInfoBox.style.display = 'none';
 
         if (this.defaultPricingId && this.pricingDetails) {
@@ -463,6 +510,88 @@
 
         this._updateFormUI();
         this._updateStepIndicator();
+    };
+
+    // ── Token Plan Grant ─────────────────────────────────────────────
+
+    /**
+     * Records the token's plan for this app, renders the summary and publishes it. The event
+     * bubbles so a signup flow elsewhere on the page can skip plan payment and, above all, not
+     * subscribe over the grant — the second subscribe REPLACES the token's plan, cancelling it.
+     */
+    RegistrationInstance.prototype._setTokenGrant = function (grant) {
+        this.tokenGrant = grant || null;
+
+        if (this.tokenGrant) {
+            this.root.dataset.tokenGrant = 'true';
+            this.root.dataset.tokenGrantTier = grantPlanName(this.tokenGrant);
+        } else {
+            delete this.root.dataset.tokenGrant;
+            delete this.root.dataset.tokenGrantTier;
+        }
+
+        this._renderTokenGrant();
+
+        this.root.dispatchEvent(new CustomEvent('ww-token-grant', {
+            bubbles: true,
+            detail: { appId: this.appId, grant: this.tokenGrant }
+        }));
+    };
+
+    /**
+     * Fills every token-plan summary on the component. Built node by node with textContent: every
+     * string here comes from the server, and none of it is markup.
+     */
+    RegistrationInstance.prototype._renderTokenGrant = function () {
+        var panels = this.root.querySelectorAll('.ww-token-plan-summary');
+        var grant = this.tokenGrant;
+
+        for (var p = 0; p < panels.length; p++) {
+            var panel = panels[p];
+
+            if (!grant) {
+                panel.style.display = 'none';
+                continue;
+            }
+
+            var tierEl = panel.querySelector('.ww-token-plan-tier');
+            if (tierEl) {
+                tierEl.textContent = '';
+                var strong = document.createElement('strong');
+                strong.textContent = grantPlanName(grant);
+                tierEl.appendChild(strong);
+
+                if (grant.pricingName) {
+                    var pricing = document.createElement('span');
+                    pricing.className = 'ww-token-plan-pricing';
+                    pricing.textContent = ' (' + grant.pricingName + ')';
+                    tierEl.appendChild(pricing);
+                }
+            }
+
+            this._fillGrantGroup(panel.querySelector('.ww-token-plan-packs'),
+                displayNames(grant.addOnIds, grant.addOnNames));
+            this._fillGrantGroup(panel.querySelector('.ww-token-plan-features'),
+                displayNames(grant.featureCodes, grant.featureNames));
+
+            panel.style.display = '';
+        }
+    };
+
+    RegistrationInstance.prototype._fillGrantGroup = function (group, entries) {
+        if (!group) return;
+
+        var list = group.querySelector('.ww-token-plan-list');
+        if (list) {
+            list.textContent = '';
+            for (var i = 0; i < entries.length; i++) {
+                var item = document.createElement('li');
+                item.textContent = entries[i];
+                list.appendChild(item);
+            }
+        }
+
+        group.style.display = entries.length > 0 ? '' : 'none';
     };
 
     RegistrationInstance.prototype._showTokenInfo = function () {
@@ -1075,6 +1204,7 @@
         this.disclaimerAcceptances = null;
         this.pendingPaymentTransactionId = null;
         this.pendingPaymentIntentId = null;
+        this._setTokenGrant(null);
 
         if (this.els.tokenInput) this.els.tokenInput.value = '';
         if (this.els.regForm) {
