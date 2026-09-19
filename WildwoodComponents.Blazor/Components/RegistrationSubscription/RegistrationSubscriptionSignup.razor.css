@@ -1,0 +1,433 @@
+/* RegistrationSubscriptionSignup - scoped CSS.
+
+   Ported from the ww-regsub- / ww-token-plan- / ww-pack-outcome- families in the JS SDK
+   (packages/wildwood-react/src/styles/components.css). The class names are the cross-stack hook
+   every stack's end-to-end suite locates by, so they are identical here.
+
+   ::deep throughout: the classes sit on this component's own markup and on the Parts rendered
+   inside it (ClosedNotice, TokenPlanSummary, PlanSummaryCard, PlanGrid, PackGrid, OrderSummary,
+   CardSetupForm, PackCheckout, PackOutcomeList), all of which are descendants of the scoped root.
+
+   Every colour is a --ww-* custom property WITH a fallback, so the component looks right in a host
+   that has not imported wildwood-themes.css, and follows the host's theme in one that has. */
+
+/* ── The view itself ── */
+
+::deep .ww-regsub {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+::deep .ww-regsub-signup {
+    width: 100%;
+}
+
+/* One step at a time, each a column of its own parts. */
+::deep .ww-regsub-step,
+::deep .ww-signup-step {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+::deep .ww-regsub-step-title {
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-regsub-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    border: 1px solid var(--ww-border-light, rgba(0, 0, 0, 0.125));
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+/* Said to a visitor who already has a session. No step, no form: just the sentence. */
+::deep .ww-regsub-notice {
+    margin: 0;
+    color: var(--ww-text-secondary, #495057);
+}
+
+/* Back / cancel / skip, under a step. */
+::deep .ww-signup-step-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+/* ── Registration is closed ── */
+
+::deep .ww-regsub-closed {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--ww-border-light, rgba(0, 0, 0, 0.125));
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+::deep .ww-regsub-closed-message {
+    margin: 0;
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ── What a registration token set up. Never priced: the visitor is not paying for it. ── */
+
+::deep .ww-token-plan-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--ww-success, #28a745);
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    background: var(--ww-success-bg, #d4edda);
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-token-plan-summary-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+::deep .ww-token-plan-summary-title {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-token-plan-tier {
+    margin: 0;
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-token-plan-pricing {
+    color: var(--ww-text-secondary, #495057);
+}
+
+::deep .ww-token-plan-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+::deep .ww-token-plan-group-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--ww-text-secondary, #495057);
+}
+
+::deep .ww-token-plan-list {
+    margin: 0;
+    padding-left: 1.25rem;
+    color: var(--ww-text-secondary, #495057);
+    font-size: 0.875rem;
+}
+
+/* ── The plan a signup link already chose, above the form ── */
+
+::deep .ww-plan-summary-card {
+    background: var(--ww-bg-secondary, #f8f9fa);
+    border: 1px solid var(--ww-primary, #0d6efd);
+    border-radius: 1rem;
+    padding: 1.25rem 1.5rem;
+}
+
+::deep .ww-plan-summary-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+::deep .ww-plan-info {
+    flex: 1;
+    min-width: 0;
+}
+
+::deep .ww-plan-info .ww-plan-name {
+    font-weight: 600;
+    font-size: 1.125rem;
+    color: var(--ww-text-primary, #212529);
+    margin: 0 0 0.25rem;
+}
+
+::deep .ww-plan-info .ww-plan-desc {
+    color: var(--ww-text-muted, #6c757d);
+    font-size: 0.875rem;
+    margin: 0;
+    line-height: 1.4;
+}
+
+::deep .ww-plan-price {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+::deep .ww-plan-price .ww-price-amount {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--ww-primary, #0d6efd);
+}
+
+::deep .ww-plan-price .ww-price-period {
+    color: var(--ww-text-muted, #6c757d);
+    font-size: 0.875rem;
+}
+
+::deep .ww-plan-trial {
+    color: var(--ww-info, #17a2b8);
+    font-size: 0.8125rem;
+}
+
+::deep .ww-plan-change-link {
+    display: inline-block;
+    align-self: flex-start;
+    background: none;
+    border: none;
+    color: var(--ww-primary, #0d6efd);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: none;
+}
+
+::deep .ww-plan-change-link:hover {
+    text-decoration: underline;
+    color: var(--ww-primary-dark, #0b5ed7);
+}
+
+/* ── The plan's card, before the account exists ── */
+
+::deep .ww-payment-summary {
+    background: var(--ww-bg-secondary, #f8f9fa);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius, 0.5rem);
+    padding: 1.25rem 1.5rem;
+}
+
+::deep .ww-payment-summary-header {
+    margin-bottom: 0.75rem;
+}
+
+::deep .ww-payment-summary-header h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-payment-summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-payment-summary-price {
+    font-weight: 700;
+    font-size: 1.125rem;
+    color: var(--ww-primary, #0d6efd);
+}
+
+::deep .ww-payment-summary-period {
+    font-weight: 400;
+    font-size: 0.8125rem;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+/* ── The pack checkout: one quote, one card, one purchase ── */
+
+::deep .ww-regsub-pack-checkout {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+::deep .ww-regsub-pack-checkout-failed {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+::deep .ww-order-summary-card {
+    background: var(--ww-bg-secondary, #f8f9fa);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius, 0.5rem);
+    padding: 1.25rem;
+}
+
+::deep .ww-regsub-order-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+::deep .ww-regsub-order-summary-title {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-order-summary-plan {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+::deep .ww-order-summary-name {
+    font-weight: 600;
+}
+
+::deep .ww-order-summary-price {
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-order-summary-trial {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--ww-info, #17a2b8);
+    font-size: 0.85rem;
+}
+
+::deep .ww-order-summary-total {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    font-size: 1.1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--ww-border-color, #dee2e6);
+}
+
+::deep .ww-regsub-saved-card {
+    margin: 0;
+    color: var(--ww-text-secondary, #495057);
+    font-size: 0.875rem;
+}
+
+::deep .ww-regsub-card-setup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* Progress of the purchase running behind the step. */
+::deep .ww-signup-step-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+}
+
+/* ── One line per pack, including the ones that failed: a basket is not a transaction ── */
+
+::deep .ww-pack-outcome-list {
+    list-style: none;
+    margin: 1rem 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: left;
+}
+
+::deep .ww-pack-outcome {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--ww-border-light, rgba(0, 0, 0, 0.125));
+    border-radius: var(--ww-border-radius, 0.5rem);
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+::deep .ww-pack-outcome--failed {
+    border-color: var(--ww-danger, #dc3545);
+}
+
+::deep .ww-pack-outcome--granted,
+::deep .ww-pack-outcome--trialing,
+::deep .ww-pack-outcome--active {
+    border-color: var(--ww-success, #28a745);
+}
+
+::deep .ww-pack-outcome-name {
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-pack-outcome-status {
+    color: var(--ww-text-secondary, #495057);
+    font-size: 0.875rem;
+}
+
+::deep .ww-pack-outcome-trial {
+    color: var(--ww-text-muted, #6c757d);
+    font-size: 0.8125rem;
+}
+
+::deep .ww-pack-outcome-error {
+    width: 100%;
+    color: var(--ww-danger-text, #842029);
+    font-size: 0.8125rem;
+}
+
+/* ── Working, failed and finished ── */
+
+::deep .ww-signup-processing {
+    text-align: center;
+    padding: 2rem 1.5rem;
+}
+
+::deep .ww-signup-processing h3 {
+    margin: 1rem 0 0.5rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-signup-processing-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+::deep .ww-signup-success {
+    text-align: center;
+    padding: 2rem 1.5rem;
+}
+
+::deep .ww-signup-success h3 {
+    margin: 1rem 0 0.5rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-signup-disclaimers-title {
+    margin: 0;
+    color: var(--ww-text-primary, #212529);
+}
+
+@media (max-width: 480px) {
+    ::deep .ww-plan-summary-content {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    ::deep .ww-plan-price {
+        text-align: left;
+    }
+}

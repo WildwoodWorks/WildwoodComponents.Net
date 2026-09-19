@@ -566,6 +566,30 @@ namespace WildwoodComponents.Blazor.Extensions
                 // Service may not exist, ignore
             }
 
+            // Register the shared account creator: register, sign in, link the payment, start the
+            // plan. Both the signup wizard and the registration + subscription signup view create
+            // accounts through it, so there is one implementation of that order rather than two.
+            // Built by hand because Campaign Attribution is optional — a host that registers
+            // services itself may not have it, and the creator simply attaches nothing then.
+            try
+            {
+                services.AddScoped<WildwoodComponents.Blazor.Services.ISignupAccountCreator>(serviceProvider =>
+                    new WildwoodComponents.Blazor.Services.SignupAccountCreator(
+                        serviceProvider.GetRequiredService<IHttpClientFactory>(),
+                        serviceProvider.GetRequiredService<
+                            Microsoft.Extensions.Options.IOptions<WildwoodComponentsOptions>>(),
+                        serviceProvider.GetRequiredService<WildwoodComponents.Blazor.Services.IAuthenticationService>(),
+                        serviceProvider.GetRequiredService<WildwoodComponents.Blazor.Services.IAppTierComponentService>(),
+                        serviceProvider.GetRequiredService<WildwoodComponents.Blazor.Services.IPaymentProviderService>(),
+                        serviceProvider.GetRequiredService<WildwoodComponents.Blazor.Services.IWildwoodSessionManager>(),
+                        serviceProvider.GetService<ILogger<WildwoodComponents.Blazor.Services.SignupAccountCreator>>(),
+                        serviceProvider.GetService<WildwoodComponents.Blazor.Services.IAttributionService>()));
+            }
+            catch
+            {
+                // Service may not exist, ignore
+            }
+
             // Register Feedback service if available
             try
             {

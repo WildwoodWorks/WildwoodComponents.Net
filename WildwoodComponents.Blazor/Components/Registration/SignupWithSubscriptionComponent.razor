@@ -288,7 +288,7 @@
 
             <WildwoodComponents.Blazor.Components.Disclaimer.DisclaimerComponent
                 AppId="@AppId"
-                UserId="@_authResponse?.Id"
+                UserId="@AuthResponse?.Id"
                 Mode="registration"
                 PendingDisclaimers="@_pendingDisclaimers"
                 ShowCancelButton="false"
@@ -316,7 +316,7 @@
                 {
                     <text>Your account has been created successfully.</text>
                 }
-                else if (_subscriptionFailed)
+                else if (SubscriptionFailed)
                 {
                     <text>Your account is ready! Plan activation is pending — you can select a plan from your dashboard.</text>
                 }

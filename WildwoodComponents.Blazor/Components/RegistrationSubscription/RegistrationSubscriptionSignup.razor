@@ -1,0 +1,272 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Disclaimer
+@using WildwoodComponents.Blazor.Components.Payment
+@using WildwoodComponents.Blazor.Components.Registration
+@using WildwoodComponents.Blazor.Components.RegistrationSubscription.Parts
+@using WildwoodComponents.Shared.RegistrationSubscription
+@using WildwoodComponents.Shared.Utilities
+@inherits BaseWildwoodComponent
+
+@* The signup view: an account, a plan, packs and a card, in the order that keeps them consistent.
+
+   The card is taken BEFORE the account exists - a declined card then leaves nothing behind, rather
+   than an account sitting on a plan nobody paid for - and the packs are bought AFTER the login,
+   because they are bought as the user. SignupFlowDriver owns the order and the server calls; this
+   file renders whichever step the flow is on.
+
+   Every locator the live sites' end-to-end suites use is deliberate: the register form's
+   "Continue" / "Create Account", .ww-tier-grid, PaymentComponent's own pay button and success
+   panel, .ww-signup-processing with "Something Went Wrong" / "Try Again" / "Start Over",
+   .ww-signup-disclaimers, and the "All Set" success panel with "Get Started". A data-ww-step
+   attribute on the step container names the step for anything that would rather not rely on copy. *@
+<div class="ww-regsub ww-regsub-signup @CssClass" data-ww-view="signup" @attributes="AdditionalAttributes">
+    @if (Flow is null)
+    {
+        <div class="ww-signup-step ww-signup-processing" data-ww-step="loading">
+            <div class="ww-reg-success-icon">
+                <span class="ww-spinner ww-spinner-lg"></span>
+            </div>
+            <h3>@ResolvedLabels.LoadingSignup</h3>
+        </div>
+    }
+    else if (Flow.AlreadySignedIn)
+    {
+        @* A visitor who is already signed in is the host's problem, not this component's: it says
+           so through OnAlreadySignedIn and renders nothing rather than offering a second account. *@
+        <p class="ww-regsub-notice" role="status">@ResolvedLabels.AlreadySignedIn</p>
+    }
+    else
+    {
+        @* What the token set up, from the token check onwards: the visitor is not paying for it. *@
+        @if (Flow.TokenGrant is not null)
+        {
+            <TokenPlanSummary Grant="Flow.TokenGrant" Labels="ResolvedLabels" />
+        }
+
+        @if (Flow.State.Step == SignupStep.Closed)
+        {
+            <div class="ww-signup-step" data-ww-step="closed">
+                @if (RenderClosed is not null)
+                {
+                    @RenderClosed(ClosedContext)
+                }
+                else
+                {
+                    <ClosedNotice Message="@ResolvedLabels.RegistrationClosed"
+                                  ContactUrl="@ContactUrl"
+                                  ContactLabel="@ResolvedLabels.ContactUs" />
+                }
+            </div>
+        }
+        else if (Flow.State.Step == SignupStep.Loading)
+        {
+            <div class="ww-signup-step ww-signup-processing" data-ww-step="loading">
+                <div class="ww-reg-success-icon">
+                    <span class="ww-spinner ww-spinner-lg"></span>
+                </div>
+                <h3>@ResolvedLabels.LoadingSignup</h3>
+            </div>
+        }
+        else if (Flow.State.Step == SignupStep.Register)
+        {
+            <div class="ww-signup-step" data-ww-step="register">
+                @* Whatever plan the flow is carrying right now: the link's, the app's default, or
+                   the one the visitor just picked through "change plan". *@
+                @if (Flow.TokenGrant is null && Flow.Plan is not null)
+                {
+                    <PlanSummaryCard Tier="Flow.Plan.Tier"
+                                     Pricing="Flow.Plan.Pricing"
+                                     Currency="@Flow.Currency"
+                                     Labels="ResolvedLabels"
+                                     OnChangePlan="ChangePlanCallback" />
+                }
+
+                @if (!string.IsNullOrEmpty(Flow.TokenMessage))
+                {
+                    <div class="ww-alert ww-alert-danger" role="alert">@Flow.TokenMessage</div>
+                }
+
+                <TokenRegistrationComponent AppId="@AppId"
+                                            Token="@RegistrationToken"
+                                            RequireToken="@Flow.Mode.RequireToken"
+                                            AllowOpenRegistration="@Flow.Mode.AllowOpenRegistration"
+                                            ShowOptionalTokenEntry="@Flow.Mode.ShowOptionalTokenEntry"
+                                            DeferSubmission="true"
+                                            OnFormDataCollected="HandleFormDataCollectedAsync"
+                                            InitialFormData="@Flow.InitialFormData"
+                                            HideStepIndicator="true"
+                                            SubmitButtonText="@SubmitButtonText"
+                                            OnCancel="OnCancel" />
+            </div>
+        }
+        else if (Flow.State.Step == SignupStep.Token)
+        {
+            <div class="ww-signup-step ww-signup-processing" data-ww-step="token">
+                <div class="ww-reg-success-icon">
+                    <span class="ww-spinner ww-spinner-lg"></span>
+                </div>
+                <h3>@ResolvedLabels.CheckingToken</h3>
+            </div>
+        }
+        else if (Flow.State.Step == SignupStep.Plan)
+        {
+            <div class="ww-signup-step" data-ww-step="plan">
+                <h3 class="ww-regsub-step-title">@ResolvedLabels.ChoosePlan</h3>
+                <PlanGrid Tiers="PlanTiers"
+                          Currency="@Flow.Currency"
+                          Billing="Flow.Billing"
+                          OnBillingChange="HandleBillingChangeAsync"
+                          HighlightTierId="@HighlightedTierId"
+                          ContactUrl="@ContactUrl"
+                          Labels="ResolvedLabels"
+                          OnSelectTier="HandleSelectTierAsync" />
+                <div class="ww-signup-step-nav">
+                    <button type="button" class="ww-btn ww-btn-link" @onclick="BackToRegisterAsync">@ResolvedLabels.Back</button>
+                    @if (OnCancel.HasDelegate)
+                    {
+                        <button type="button" class="ww-btn ww-btn-link" @onclick="HandleCancelAsync">@ResolvedLabels.Cancel</button>
+                    }
+                </div>
+            </div>
+        }
+        else if (Flow.State.Step == SignupStep.Packs)
+        {
+            <div class="ww-signup-step" data-ww-step="packs">
+                <h3 class="ww-regsub-step-title">@ResolvedLabels.ChoosePacks</h3>
+                <PackGrid AddOns="Flow.AvailablePacks"
+                          Currency="@Flow.Currency"
+                          AddOnGroups="AddOnGroups"
+                          Describe="DescribeAddOn"
+                          Selection="PricingPackSelection.Multi"
+                          SelectedIds="Flow.SelectedPackIds"
+                          Labels="ResolvedLabels"
+                          OnToggle="HandleTogglePackAsync"
+                          OnChoose="HandleChoosePackAsync"
+                          OnContinue="HandleChoosePacksAsync" />
+                <div class="ww-signup-step-nav">
+                    <button type="button" class="ww-btn ww-btn-link" @onclick="BackToRegisterAsync">@ResolvedLabels.Back</button>
+                    <button type="button" class="ww-btn ww-btn-link" @onclick="HandleSkipPacksAsync">@ResolvedLabels.SkipForNow</button>
+                </div>
+            </div>
+        }
+        else if (Flow.State.Step == SignupStep.Payment && Flow.Plan is not null && Flow.State.FormSubmitted)
+        {
+            @* A card is only ever asked for once there is a plan to charge for AND a form behind
+               it: a payment taken without one would be a charge with no account to attach it to. *@
+            <div class="ww-signup-step" data-ww-step="payment">
+                <div class="ww-payment-summary">
+                    <div class="ww-payment-summary-header">
+                        <h4>@ResolvedLabels.OrderSummary</h4>
+                    </div>
+                    <div class="ww-payment-summary-row">
+                        <span>@Flow.Plan.Tier.Name</span>
+                        <span class="ww-payment-summary-price">
+                            @PlanPriceText
+                            <span class="ww-payment-summary-period">/@PlanFrequency</span>
+                        </span>
+                    </div>
+                    @if (Flow.TrialDays > 0)
+                    {
+                        <div class="ww-order-summary-trial">
+                            @CatalogHelpers.TrialLabel(Flow.TrialDays). @ResolvedLabels.DueToday: @FormatHelpers.FormatMoney(0, PaymentCurrency)
+                        </div>
+                    }
+                </div>
+
+                <PaymentComponent AppId="@AppId"
+                                  Amount="@PlanAmount"
+                                  Currency="@PaymentCurrency"
+                                  Description="@Flow.Plan.Tier.Name"
+                                  PricingModelId="@Flow.Plan.Pricing?.PricingModelId"
+                                  IsSubscription="true"
+                                  TrialDays="@PlanTrialDays"
+                                  ShowAmount="false"
+                                  CustomerEmail="@Flow.State.Email"
+                                  RequireBillingAddress="RequireBillingAddress"
+                                  OnPaymentSuccess="HandlePaymentSuccessAsync"
+                                  OnCancel="HandlePaymentCancelAsync" />
+            </div>
+        }
+        else if (Flow.State.Step == SignupStep.Creating)
+        {
+            <div class="ww-signup-step ww-signup-processing" data-ww-step="creating">
+                <div class="ww-reg-success-icon">
+                    <span class="ww-spinner ww-spinner-lg"></span>
+                </div>
+                <h3>@ProcessingHeading</h3>
+                <p class="ww-text-muted">@ResolvedLabels.ProcessingWait</p>
+            </div>
+        }
+        else if (Flow.State.Step == SignupStep.Disclaimers)
+        {
+            <div class="ww-signup-step ww-signup-disclaimers" data-ww-step="disclaimers">
+                <h3 class="ww-signup-disclaimers-title">@ResolvedLabels.DisclaimersTitle</h3>
+                <p class="ww-text-muted">@ResolvedLabels.DisclaimersIntro</p>
+                <DisclaimerComponent AppId="@AppId"
+                                     UserId="@Flow.UserId"
+                                     Mode="registration"
+                                     PendingDisclaimers="@Flow.PendingDisclaimers"
+                                     ShowCancelButton="false"
+                                     OnDisclaimersAccepted="HandleDisclaimersAcceptedAsync" />
+            </div>
+        }
+        else if (Flow.State.Step == SignupStep.PackCheckout)
+        {
+            <div class="ww-signup-step" data-ww-step="packCheckout">
+                <PackCheckout AppId="@AppId"
+                              Items="Flow.CheckoutItems"
+                              Names="Flow.PackNames"
+                              Labels="ResolvedLabels"
+                              OnFinished="HandlePacksBoughtAsync"
+                              OnError="HandleChildErrorAsync" />
+            </div>
+        }
+        else if (Flow.State.Step == SignupStep.Failed)
+        {
+            <div class="ww-signup-step ww-signup-processing" data-ww-step="failed">
+                <div class="ww-reg-success-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--ww-danger, #dc3545)" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="15" y1="9" x2="9" y2="15" />
+                        <line x1="9" y1="9" x2="15" y2="15" />
+                    </svg>
+                </div>
+                <h3>@ResolvedLabels.SignupFailed</h3>
+                <p class="ww-text-muted">@Flow.State.Error</p>
+                <div class="ww-signup-processing-actions">
+                    <button type="button" class="ww-btn ww-btn-primary" @onclick="HandleRetryAsync">@ResolvedLabels.TryAgain</button>
+                    <button type="button" class="ww-btn ww-btn-link" @onclick="HandleStartOverAsync">@ResolvedLabels.StartOver</button>
+                </div>
+            </div>
+        }
+        else if (Flow.State.Step == SignupStep.Done)
+        {
+            <div class="ww-signup-step ww-signup-success" data-ww-step="success">
+                <div class="ww-reg-success-icon">
+                    @* Integer coordinates on purpose: the dynamic-pricing guard reads a decimal as a price. *@
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="17 9 11 16 7 12" />
+                    </svg>
+                </div>
+                <h3>@ResolvedLabels.SignupCompleteTitle</h3>
+                <p class="ww-text-muted">@SuccessMessage</p>
+                <PackOutcomeList Packs="OutcomePacks" Labels="ResolvedLabels" />
+                <button type="button" class="ww-btn ww-btn-primary ww-btn-lg" @onclick="HandleCompleteAsync">@ResolvedLabels.GetStarted</button>
+            </div>
+        }
+        else
+        {
+            @* A payment step with nothing to charge for: no plan left in the catalog, or a form
+               that was never submitted. There is no card form to show, and the driver has already
+               dispatched the way back to the form - this is the frame in between, not a resting
+               state. *@
+            <div class="ww-signup-step ww-signup-processing" data-ww-step="@Flow.StepName">
+                <div class="ww-reg-success-icon">
+                    <span class="ww-spinner ww-spinner-lg"></span>
+                </div>
+                <h3>@ResolvedLabels.LoadingSignup</h3>
+            </div>
+        }
+    }
+</div>

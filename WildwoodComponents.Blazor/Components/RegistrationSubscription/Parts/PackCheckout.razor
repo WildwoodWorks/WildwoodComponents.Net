@@ -1,0 +1,49 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Shared.RegistrationSubscription
+@inherits BaseWildwoodComponent
+
+@* Buying the packs a new account asked for, on screen.
+
+   The driving - quote, card intent, purchase, then any pack the bank wants authenticated, one at a
+   time, each claimed by the machine's step token - is PackCheckoutDriver, so the manage view's pack
+   picker buys packs the same way rather than a second way. What stays here is the part that is
+   genuinely web: the Stripe card field, and the 3-D Secure a bought pack may still need. *@
+<div class="ww-regsub-pack-checkout @CssClass" @attributes="AdditionalAttributes">
+    @if (Driver is not null)
+    {
+        @if (Driver.State.Quote is not null && Driver.State.Quote.Success)
+        {
+            <OrderSummary Quote="Driver.State.Quote" Labels="Labels" />
+        }
+
+        @if (Driver.Step == PackCheckoutStep.CollectingCard)
+        {
+            <CardSetupForm PublishableKey="@Driver.PublishableKey"
+                           ClientSecret="@Driver.CardClientSecret"
+                           Labels="Labels"
+                           OnConfirmed="HandleCardConfirmedAsync"
+                           OnFailed="HandleCardFailedAsync" />
+        }
+
+        @if (ShowStatus)
+        {
+            <div class="ww-signup-step-status" role="status">
+                <span class="ww-spinner ww-spinner-sm"></span>
+                <span class="ww-text-muted">@StatusText</span>
+            </div>
+        }
+
+        @if (Driver.Step == PackCheckoutStep.Failed)
+        {
+            <div class="ww-regsub-pack-checkout-failed">
+                <div class="ww-alert ww-alert-danger" role="alert">
+                    @(string.IsNullOrEmpty(Driver.State.Error) ? Labels.PacksUnavailable : Driver.State.Error)
+                </div>
+                <div class="ww-signup-processing-actions">
+                    <button type="button" class="ww-btn ww-btn-primary" @onclick="RetryAsync">@Labels.TryAgain</button>
+                    <button type="button" class="ww-btn ww-btn-link" @onclick="SkipAsync">@Labels.SkipForNow</button>
+                </div>
+            </div>
+        }
+    }
+</div>

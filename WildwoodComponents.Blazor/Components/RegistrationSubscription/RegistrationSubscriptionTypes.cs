@@ -66,6 +66,25 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
         public List<string> Categories { get; set; } = new List<string>();
     }
 
+    /// <summary>
+    /// What a host's own "registration is closed" markup is given. The Blazor analog of React's
+    /// <c>renderClosed({ message, contactUrl })</c>.
+    /// </summary>
+    public class RegistrationClosedContext
+    {
+        public RegistrationClosedContext(string message, string? contactUrl)
+        {
+            Message = message;
+            ContactUrl = contactUrl;
+        }
+
+        /// <summary>The sentence the component would have shown.</summary>
+        public string Message { get; }
+
+        /// <summary>Where a visitor who still wants in should go, when the host named one.</summary>
+        public string? ContactUrl { get; }
+    }
+
     /// <summary>One rendered heading and the packs filed under it.</summary>
     public class PackGroupView
     {
