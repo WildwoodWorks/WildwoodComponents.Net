@@ -193,6 +193,38 @@ builder.Services.AddControllers()
 | `GET  /catalog?currency=` | anonymous | `GetPublicCatalogAsync` — public data the pricing page already renders |
 | `GET  /token-details?token=` | anonymous | `GetRegistrationTokenDetailsAsync` |
 | `POST /token-details` | anonymous | the same lookup with the token in the body (`{ "Token" }`), so it never lands in an access log |
+| `GET  /registration-mode?tokenMode=` | anonymous | the app's live auth configuration, **reduced** to the resolved mode |
+| `POST /register` | anonymous | `RegisterWithTokenAsync` when the body has a `Token`, else `RegisterAsync` |
+| `POST /login` | anonymous | `IWildwoodRegistrationService.LoginAsync` — puts the tokens in the **server session** |
+| `POST /link-transaction` | session | `LinkTransactionToUserAsync` — attaches the plan's payment to the new account |
+| `POST /subscribe` | session | `SubscribeToTierAsync` — body `{ "TierId", "PricingId", "PaymentTransactionId" }` |
+| `GET  /disclaimers/pending` | session | `GetPendingDisclaimersAsync(appId, null, "registration")` |
+| `POST /disclaimers/accept` | session | `AcceptDisclaimersAsync` — body `{ "Acceptances": [{ "CompanyDisclaimerId", "CompanyDisclaimerVersionId" }] }` |
+| `POST /payment/initiate` | anonymous | `InitiatePaymentAsync` — the shape `payment.js` posts to `{proxy}/initiate` |
+| `POST /payment/confirm` | anonymous | `ConfirmPaymentAsync` — `{ "paymentIntentId", "providerType" }` |
+
+**The signup routes (the last nine) replace routes hosts used to write.** Before this, the Razor
+signup reached registration through **your** `/api/wildwood-auth/register`, the plan through **your**
+`/api/wildwood-subscription/subscribe`, and the card through **your** `/api/wildwood-payment`; the
+token check, the disclaimers and the login went to origin-relative `api/...` paths that only work
+when WildwoodAPI happens to sit behind the same origin. `<vc:registration-subscription-signup />`
+needs none of that — **you write no routes for it**. Three notes:
+
+- **`/register`, `/login` and `/payment/*` are anonymous, and that is pay-first, not an oversight.**
+  The plan's card is taken BEFORE the account exists, so there is no session to require at that
+  point. WildwoodAPI applies its own rules; the proxy adds no authority the browser did not have,
+  and forwards the bound request rather than the raw body.
+- **No token ever reaches the browser.** `/login` puts the JWT and the refresh token in the server
+  session through the same service the rest of the package uses, and answers a user id and whether
+  disclaimers are pending. Nothing else.
+- **`/registration-mode` is reduced.** WildwoodAPI's auth-configuration route also carries the
+  password policy, the rate limits and the default pricing model; only `allowOpenRegistration` and
+  `allowTokenRegistration` are read, and only the resolved mode is relayed. It is deliberately
+  **uncached**, so an operator who closes sign-up is obeyed by the next visitor.
+
+`<vc:payment />` is unchanged for everyone else: its `proxy-base-url` still defaults to
+`/api/wildwood-payment`, your own proxy. The signup view simply points it at
+`/api/wildwood-regsub/payment` instead, and any other page may do the same.
 
 ### The three rules the client can rely on
 
@@ -382,6 +414,204 @@ plans by exactly those.
 | `errorFallback` node | `unavailable-text` string | Same reason; the Retry stays either way |
 | `initialCatalog` SSR snapshot | — | Razor gets it for free |
 | Pack prices follow nothing | Pack prices follow nothing | Unchanged on purpose: a pack quotes its DEFAULT option, so Razor and React never disagree about what the same pack costs. The toggle is a plan control |
+
+---
+
+## Registration & Subscription — signup
+
+`<vc:registration-subscription-signup />` is the Razor port of React's
+`RegistrationSubscriptionSignup` (and of the Blazor view of the same name): an account, a plan,
+packs and a card, in the order that keeps them consistent.
+
+```html
+@* Minimal: the app from AddWildwoodComponentsRazor, plan chosen on the page *@
+<vc:registration-subscription-signup />
+
+@* Arriving from the pricing page, which put tier/pricing/addons in the query *@
+<vc:registration-subscription-signup complete-url="/dashboard" contact-url="/contact" />
+
+@* Invite redemption: the token is the only way in, and its grant decides everything *@
+<vc:registration-subscription-signup token-mode="required" />
+
+@* Everything on *@
+<vc:registration-subscription-signup
+    app-id="my-app"
+    pre-selected-tier-id="@tierId"
+    pre-selected-pricing-id="@pricingId"
+    pre-selected-add-on-ids="radar,seats"
+    prefill-email="@invitedEmail"
+    plan-selection="choose"
+    pack-selection="choose"
+    require-billing-address="true"
+    return-url="/welcome"
+    complete-url="/dashboard"
+    already-signed-in-url="/dashboard"
+    contact-url="https://example.com/contact"
+    closed-text="We are invitation-only for now." />
+```
+
+Add the assets once, in your layout. **`regsub-machines.js` must come before `regsub-signup.js`**,
+and `payment.js` is what collects the plan's card:
+
+```html
+<link rel="stylesheet" href="~/_content/WildwoodComponents.Razor/css/wildwood-razor-themes.css" />
+<link rel="stylesheet" href="~/_content/WildwoodComponents.Razor/css/regsub.css" />
+<script src="~/_content/WildwoodComponents.Razor/js/regsub-machines.js"></script>
+<script src="~/_content/WildwoodComponents.Razor/js/payment.js"></script>
+<script src="~/_content/WildwoodComponents.Razor/js/regsub-signup.js"></script>
+```
+
+### Pay-first, and why
+
+```
+register form -> token check -> plan -> packs -> the plan's card
+  -> register, log in, link the payment, subscribe
+  -> disclaimers -> pack checkout -> success
+```
+
+The card is taken **before the account exists**. A declined card then leaves nothing behind,
+instead of an account sitting on a plan nobody paid for — and a card already on file is what lets
+the pack checkout ask for **one card for a basket of any size**. Packs are bought **after** the
+sign-in, because they are bought as the user.
+
+This is the order React and Blazor ship, and it is a change from the old
+`<vc:signup-with-subscription />`, which went plan → register → pay and whose paid step was a
+hand-rolled card form with a permanently disabled button. **There are no card-number, expiry or
+CVC fields anywhere in the new view** — cards are Stripe Elements inside `<vc:payment />` and the
+pack checkout's SetupIntent — and a source guard fails the build if one appears.
+
+The account creation is **one resumable attempt**: "Try Again" resumes at whichever of register /
+sign in / link / subscribe is still outstanding, so it never registers the same person twice and
+never charges a second card. Linking the payment and starting the plan are **never fatal** — the
+account exists and the money is taken, and a refused subscribe turns the success copy into
+"Plan activation is pending".
+
+### Everything is decided before the first byte
+
+The registration mode, the catalog and its prices, the plan a link preselected, the packs, the
+password policy, the payment provider's publishable key, the registration disclaimers and **every
+visible string** are read and rendered on the server. So:
+
+- A **closed** sign-up renders the notice, never a form that flashes and disappears.
+- No amount is ever formatted in the browser.
+- A disclaimer whose content format is HTML is rendered **as HTML by the view**, which is how this
+  package avoids writing a server-supplied string through `innerHTML` (it never does; a guard
+  greps the scripts for it).
+- The registration mode is read on **every** render and never cached: an operator who closes
+  sign-up is obeyed by the next visitor.
+
+### Parameters
+
+| Tag-helper attribute | Type | Default | Meaning |
+|---|---|---|---|
+| `app-id` | string | the configured `AppId` | Which app to sign up for |
+| `pre-selected-tier-id` | string | `?tier=` | Matched case-insensitively; a plan the app does not sell is **ignored** |
+| `pre-selected-pricing-id` | string | `?pricing=` | Dropped with the plan when the plan is not sold |
+| `pre-selected-add-on-ids` | string (comma-separated) | `?addons=` | Vetted against the catalog, de-duplicated, capped at 25 |
+| `registration-token` | string | `?token=`, then `?invite=` | A token to redeem |
+| `prefill-email` | string | `?email=` | Fills BOTH the email and the username |
+| `plan-selection` | `"choose"` \| `"skip"` | `"choose"` | `skip` takes the app's default plan and removes the step |
+| `pack-selection` | `"choose"` \| `"none"` | `"none"` | `none` removes the **step only** — a link's packs are still bought |
+| `token-mode` | `"auto"` \| `"required"` | `"auto"` | `required` is invite redemption: token first, no plan, no packs, **overrides a closed config** |
+| `require-billing-address` | bool | `false` | Collect a billing address with the plan's card |
+| `return-url` | string | — | Carried and handed to the completion listener; never navigated to |
+| `complete-url` | string | — | Where "Get Started" goes — the analog of React's `onSignupComplete` navigating |
+| `already-signed-in-url` | string | — | Where an already-signed-in visitor goes; omit for the notice |
+| `contact-url` | string | — | Where the closed notice's "Contact us" points |
+| `currency` | string | the catalog's own | Display override |
+| `labels` | `RegistrationSubscriptionLabels` | shipped copy | Copy overrides; unset strings keep the shipped word |
+| `closed-text` | string | — | Replaces "Registration is closed" (React's `renderClosed`) |
+| `reg-sub-proxy-url` | string | `/api/wildwood-regsub` | Where the shipped proxy is mounted |
+| `show-feature-comparison` / `show-limits` | bool | `true` | Passed to the plan grid |
+| `component-id` | string | generated | A stable id, for two instances on one page |
+
+**Precedence: an explicit attribute always wins over the query string**, key by key. A host that
+wrote `pre-selected-tier-id` meant it, and an address bar must not override the page's own
+decision — but a page may hard-code the plan and still read the packs and the email out of the
+link. `plan-selection`, `pack-selection` and `token-mode` are **strings** in the JS union's own
+spelling, for the same reason the pricing view's are: an enum would force every host to write
+`plan-selection="@SignupPlanSelection.Skip"`. `pack-selection="multi"` is accepted as a synonym of
+`choose`, because that is what React calls it.
+
+### Events
+
+Razor has no callbacks, so every `on*` prop is a **bubbling `CustomEvent`** on the component root:
+
+| Event | `detail` | Notes |
+|---|---|---|
+| `ww-regsub-signup-complete` | the `SignupOutcome` | **Cancelable.** `preventDefault()` stops the `complete-url` navigation |
+| `ww-regsub-already-signed-in` | `{ appId }` | **Cancelable.** `preventDefault()` stops the `already-signed-in-url` navigation |
+| `ww-regsub-cancel` | `{}` | The visitor backed out |
+| `ww-regsub-error` | `{ code, message }` | `signup_failed`, `registration_token_rejected`, `catalog_unavailable`, `pack_quote_failed`, `pack_card_failed`, `pack_checkout_failed` |
+| `ww-entitlements-changed` | `{ appId, reason: "signup" }` | Once, when the signup finishes |
+| `ww-regsub-step` | `{ step }` | Every step change, for analytics |
+| `ww-regsub-select` | `{ tierId, pricingId, billing, addOnIds }` | **Cancelable.** Raised when a plan choice is about to navigate (see below) |
+
+```js
+document.addEventListener('ww-regsub-signup-complete', function (e) {
+    // e.detail = { userId, tier, packs: [{ addOnId, name, status, trialEnd, errorMessage }],
+    //              tokenGrant, planActivationPending }
+    e.preventDefault();   // stop the complete-url navigation and handle it yourself
+});
+```
+
+`status` is one of `trialing` / `active` / `failed` / `granted`. **`granted`** is a pack the
+registration token set up: there is a subscription row but no payment transaction behind it, so
+nothing was charged. Granted packs are listed **first**.
+
+### Token plans and invites
+
+When the registration token grants a plan for this app, a summary panel appears above every later
+step listing the plan, the packs and the features it includes — **names only, no prices**: a grant
+is not a quote. The grant then **skips the plan and the payment steps entirely**, removes granted
+packs from what is bought, and **suppresses the self-subscribe**, because subscribing over the
+token's plan would replace the subscription the token just created.
+
+`token-mode="required"` is invite redemption: the token step is the only way in, the plan and the
+pack steps are skipped, and it overrides a **closed** configuration — the server validates the
+invite itself. The app's settings are not even read in that mode.
+
+A token the server **rejects** is a form-level message above the register form, not a failed flow.
+A token whose details could not be **read** (an older server, a transport failure) is not the same
+thing: the signup carries on as an ordinary one and the server has the last word at registration.
+
+### Test hooks
+
+Root `data-ww-view="signup"`, classes `ww-regsub ww-regsub-signup`. Every step's markup is
+rendered and the script only flips which container is visible; the visible one carries
+`data-ww-step`, spelled exactly as React spells it:
+`loading | closed | register | token | plan | packs | payment | creating | disclaimers |
+packCheckout | success | failed` — note the machine's `done` is **`success`** in the DOM. An
+already-signed-in visitor gets a `.ww-regsub-notice` and no step. The legacy locators are
+preserved: `.ww-tier-grid` / `.ww-tier-card`, `.ww-signup-processing`, `.ww-signup-disclaimers`,
+`.ww-signup-success`, `.ww-plan-summary-card`, the register form's "Continue" / "Create Account",
+and `<vc:payment />`'s own button and success panel.
+
+### What differs from React, and why
+
+| React | Razor | Why |
+|---|---|---|
+| `onSignupComplete`, `onCancel`, `onError`, `onAlreadySignedIn`, `onEntitlementsChanged` | bubbling `CustomEvent`s + `complete-url` / `already-signed-in-url` | A server-rendered stack cannot take a delegate |
+| `renderClosed` node | `closed-text` string | Markup callbacks are impossible here |
+| `initialCatalog` SSR snapshot | — | Razor gets it for free |
+| Choosing a different **paid** plan re-renders the card form in place | it **navigates** to the same page with `tier`/`pricing`/`addons` in the query (raising `ww-regsub-select` first) | Every amount around the card form — the button, the trial note, the "not available" notice — was formatted by the server for one plan. Re-pricing them in the browser is the one thing this package does not do. Choosing the plan the server already priced, or a free one, does **not** navigate |
+| The pack order summary shows a money total | it lists the packs and the card on file | Same reason: the quote's due-today amount is only known after the quote returns, and the browser states no price |
+| `TokenRegistrationComponent` reused in `deferSubmission` mode | the same fields, rendered by this view | Razor's `<vc:token-registration />` owns its own submit and posts registrations itself; this flow has to hold the details until the card is taken. The password policy is read from the **same** route `token-registration.js` reads, never re-stated |
+| Disclaimer list built by the component | rendered by the **view** | A disclaimer whose content format is HTML has to be rendered as HTML, and no script here writes `innerHTML` |
+
+### Where the logic lives, and how it is tested
+
+The two state machines (`signupTransition` / `packCheckoutTransition`, with their step tokens) are
+ported **table-identical** from `@wildwood/react-shared` into
+`wwwroot/js/regsub-machines.js` — pure functions, no DOM, no fetch. `wwwroot/js/regsub-signup.js`
+is the driver: pure decisions at the top, DOM and I/O at the bottom. The server-side decisions are
+`RegistrationSubscriptionSignupDecisions`.
+
+This repo has no JavaScript test harness, so the machines carry a dependency-free Node self-test
+at `WildwoodComponents.Tests/Razor/js/regsub-machines.selftest.mjs`, which replays a
+representative subset of the TypeScript suite. `RegSubMachineSelfTestRunnerTests` shells out to
+`node` to run it as part of `dotnet test`, and **skips** (rather than fails) when `node` is not on
+PATH.
 
 ---
 

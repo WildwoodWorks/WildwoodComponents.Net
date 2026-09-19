@@ -354,6 +354,7 @@ public class RegistrationSubscriptionPricingViewModel
 {
     private List<AppTierModel>? _visibleTiers;
     private List<PricingPlanCardViewModel>? _planCards;
+    private RegSubPlanGridViewModel? _planGrid;
     private List<PricingPackGroup>? _packGroups;
     private string? _jsonLd;
 
@@ -436,6 +437,27 @@ public class RegistrationSubscriptionPricingViewModel
     public List<PricingPlanCardViewModel> PlanCards
     {
         get { return _planCards ??= BuildPlanCards(); }
+    }
+
+    /// <summary>
+    /// The plan grid as the shared <c>_RegSubPlanGrid</c> partial renders it — the same markup the
+    /// signup view's plan step uses, so the two surfaces cannot drift apart.
+    /// </summary>
+    public RegSubPlanGridViewModel PlanGrid
+    {
+        get
+        {
+            return _planGrid ??= new RegSubPlanGridViewModel
+            {
+                Cards = PlanCards,
+                Labels = Labels,
+                Billing = Billing,
+                ShowToggle = ShowToggle,
+                AnnualSavingsText = AnnualSavingsText,
+                ShowFeatureComparison = ShowFeatureComparison,
+                ShowLimits = ShowLimits
+            };
+        }
     }
 
     /// <summary>The pack headings and what is filed under each.</summary>

@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -33,10 +33,19 @@ public class WildwoodRegistrationSubscriptionProxyControllerTests
             handler.CreateClient("https://api.test/api/"), session,
             NullLogger<WildwoodRegistrationService>.Instance, configuredAppId ?? string.Empty);
 
+        var disclaimers = new WildwoodDisclaimerService(
+            handler.CreateClient("https://api.test/api/"), session,
+            NullLogger<WildwoodDisclaimerService>.Instance);
+        var payments = new WildwoodPaymentService(
+            handler.CreateClient("https://api.test/api/"), session,
+            NullLogger<WildwoodPaymentService>.Instance);
+
         var controller = new WildwoodRegistrationSubscriptionProxyController(
             appTiers,
             registration,
             session,
+            disclaimers,
+            payments,
             new WildwoodComponentsRazorOptions { BaseUrl = "https://api.test/", AppId = configuredAppId },
             NullLogger<WildwoodRegistrationSubscriptionProxyController>.Instance)
         {
@@ -366,5 +375,444 @@ public class WildwoodRegistrationSubscriptionProxyControllerTests
         Assert.IsType<BadRequestObjectResult>(await controller.TokenDetails("T", "some-other-app"));
         Assert.IsType<BadRequestObjectResult>(await controller.TokenDetails((RegistrationTokenDetailsProxyRequest?)null));
         Assert.Empty(handler.Requests);
+    }
+
+    // ── The signup routes ───────────────────────────────────────────────────────
+    //
+    // Register, log in, link the plan's payment, subscribe, the disclaimer gate and the payment
+    // intent used to be routes the HOST wrote (/api/wildwood-auth, /api/wildwood-subscription,
+    // /api/wildwood-payment) or origin-relative hits on api/userregistration/* that only work when
+    // WildwoodAPI happens to sit behind the same origin. They ship now, so these pin the contract
+    // the signup script relies on.
+
+    /// <summary>
+    /// Registration, sign-in and the plan's card all happen BEFORE there is a session - that is
+    /// what pay-first means - so requiring one on those routes would make the signup impossible.
+    /// </summary>
+    [Fact]
+    public async Task TheRoutesASignupNeedsBeforeItHasASession_AreAnonymous()
+    {
+        var (controller, handler) = CreateController(accessToken: null);
+        handler.WhenOk("auth-configuration", """{"allowOpenRegistration":true,"allowTokenRegistration":false}""");
+        handler.WhenOk("userregistration/register", """{"success":true,"userId":"user-1"}""");
+        handler.WhenOk("auth/login", """{"id":"user-1","jwtToken":"jwt","refreshToken":"rt"}""");
+        handler.WhenOk("payment/initiate", """{"success":true,"paymentIntentId":"pi_1"}""");
+        handler.WhenOk("payment/confirm", """{"success":true,"transactionId":"txn-1"}""");
+
+        Assert.IsType<OkObjectResult>(await controller.RegistrationMode(null, null));
+        Assert.IsType<OkObjectResult>(await controller.Register(new SignupRegisterProxyRequest { Email = "a@b.test" }, null));
+        Assert.IsType<OkObjectResult>(await controller.Login(new SignupLoginProxyRequest { Email = "a@b.test" }, null));
+        Assert.IsType<OkObjectResult>(await controller.InitiatePayment(new InitiatePaymentRequest { ProviderId = "prov-1" }, null));
+        Assert.IsType<OkObjectResult>(await controller.ConfirmPayment(
+            new SignupConfirmPaymentProxyRequest { PaymentIntentId = "pi_1", ProviderType = 1 }));
+    }
+
+    /// <summary>The routes that act AS the account do need one, and forward nothing without it.</summary>
+    [Fact]
+    public async Task TheRoutesThatActAsTheAccount_Answer401_AndForwardNothing_WithoutASession()
+    {
+        var (controller, handler) = CreateController(accessToken: null);
+
+        var results = new List<IActionResult>
+        {
+            await controller.LinkTransaction(new SignupLinkTransactionProxyRequest { ExternalTransactionId = "pi_1", UserId = "user-1" }),
+            await controller.Subscribe(new SignupSubscribeProxyRequest { TierId = "tier-1" }, null),
+            await controller.PendingDisclaimers(null),
+            await controller.AcceptDisclaimers(new SignupDisclaimerAcceptProxyRequest(), null)
+        };
+
+        foreach (var result in results) Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task EveryNewRoute_RefusesAMissingBody()
+    {
+        var (controller, handler) = CreateController();
+
+        Assert.IsType<BadRequestObjectResult>(await controller.Register(null, null));
+        Assert.IsType<BadRequestObjectResult>(await controller.Login(null, null));
+        Assert.IsType<BadRequestObjectResult>(await controller.LinkTransaction(null));
+        Assert.IsType<BadRequestObjectResult>(await controller.Subscribe(null, null));
+        Assert.IsType<BadRequestObjectResult>(await controller.AcceptDisclaimers(null, null));
+        Assert.IsType<BadRequestObjectResult>(await controller.InitiatePayment(null, null));
+        Assert.IsType<BadRequestObjectResult>(await controller.ConfirmPayment(null));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task EveryNewAppScopedRoute_RejectsAClientNamedAppThatIsNotThisApp()
+    {
+        var (controller, handler) = CreateController();
+
+        Assert.IsType<BadRequestObjectResult>(await controller.RegistrationMode("other-app", null));
+        Assert.IsType<BadRequestObjectResult>(await controller.Register(new SignupRegisterProxyRequest(), "other-app"));
+        Assert.IsType<BadRequestObjectResult>(await controller.Login(new SignupLoginProxyRequest(), "other-app"));
+        Assert.IsType<BadRequestObjectResult>(await controller.Subscribe(new SignupSubscribeProxyRequest(), "other-app"));
+        Assert.IsType<BadRequestObjectResult>(await controller.PendingDisclaimers("other-app"));
+        Assert.Empty(handler.Requests);
+    }
+
+    // ── Registration mode ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RegistrationMode_ResolvesTheLiveFlags_AndLeaksNothingElse()
+    {
+        var (controller, handler) = CreateController(accessToken: null);
+        handler.WhenOk("auth-configuration", """
+            {"allowOpenRegistration":false,"allowTokenRegistration":true,
+             "passwordMinimumLength":12,"registrationRateLimitPerHour":5,"defaultPricingModelId":"pm-1"}
+            """);
+
+        var mode = OkValue<SignupRegistrationModeModel>(await controller.RegistrationMode(null, null));
+
+        Assert.False(mode.Closed);
+        Assert.True(mode.RequireToken);
+        Assert.False(mode.AllowOpenRegistration);
+        Assert.False(mode.ShowOptionalTokenEntry);
+        Assert.Equal("Config", mode.Source);
+
+        // The password policy, the rate limits and the pricing model are on the upstream answer
+        // and must not travel to a browser through this route.
+        var relayed = JsonSerializer.Serialize(mode);
+        Assert.DoesNotContain("passwordMinimumLength", relayed, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("RateLimit", relayed, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("pm-1", relayed, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RegistrationMode_BothFlagsOff_IsClosed()
+    {
+        var (controller, handler) = CreateController(accessToken: null);
+        handler.WhenOk("auth-configuration", """{"allowOpenRegistration":false,"allowTokenRegistration":false}""");
+
+        var mode = OkValue<SignupRegistrationModeModel>(await controller.RegistrationMode(null, null));
+
+        Assert.True(mode.Closed);
+    }
+
+    /// <summary>
+    /// Unreadable settings are not a closed sign-up: the fallback offers open registration with
+    /// the optional token card, and the server refuses anything it does not allow.
+    /// </summary>
+    [Fact]
+    public async Task RegistrationMode_FallsBackToOpen_WhenTheSettingsCannotBeRead()
+    {
+        var (controller, handler) = CreateController(accessToken: null);
+        handler.When("auth-configuration", HttpStatusCode.ServiceUnavailable, "");
+
+        var mode = OkValue<SignupRegistrationModeModel>(await controller.RegistrationMode(null, null));
+
+        Assert.False(mode.Closed);
+        Assert.True(mode.AllowOpenRegistration);
+        Assert.True(mode.ShowOptionalTokenEntry);
+        Assert.Equal("Fallback", mode.Source);
+    }
+
+    /// <summary>
+    /// Invite redemption overrides even a CLOSED configuration, and does not read it at all: the
+    /// server validates the invite token itself.
+    /// </summary>
+    [Fact]
+    public async Task RegistrationMode_TokenModeRequired_OverridesTheConfiguration_WithoutReadingIt()
+    {
+        var (controller, handler) = CreateController(accessToken: null);
+        handler.WhenOk("auth-configuration", """{"allowOpenRegistration":false,"allowTokenRegistration":false}""");
+
+        var mode = OkValue<SignupRegistrationModeModel>(await controller.RegistrationMode(null, "required"));
+
+        Assert.False(mode.Closed);
+        Assert.True(mode.RequireToken);
+        Assert.Equal("TokenMode", mode.Source);
+        Assert.Empty(handler.Requests);
+    }
+
+    // ── Register ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Register_TakesTheTokenPath_WhenTheBodyCarriesOne()
+    {
+        var (controller, handler) = CreateController(accessToken: null);
+        handler.WhenOk("register-with-token", """{"success":true,"userId":"user-1"}""");
+
+        var result = OkValue<SignupRegisterResultModel>(await controller.Register(
+            new SignupRegisterProxyRequest { Email = "a@b.test", Password = "pw", Token = "TOK" }, null));
+
+        Assert.True(result.Success);
+        Assert.Equal("user-1", result.UserId);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Contains("userregistration/register-with-token", request.Url);
+
+        var body = Body(request);
+        Assert.Equal("TOK", body.GetProperty("token").GetString());
+        // The app id is the configured one, never the body's.
+        Assert.Equal(ConfiguredAppId, body.GetProperty("appId").GetString());
+    }
+
+    [Fact]
+    public async Task Register_TakesTheOpenPath_AndCarriesTheAttributionPayload()
+    {
+        var (controller, handler) = CreateController(accessToken: null);
+        handler.WhenOk("userregistration/register", """{"success":true,"userId":"user-2"}""");
+
+        await controller.Register(new SignupRegisterProxyRequest
+        {
+            Email = "a@b.test",
+            Password = "pw",
+            PricingModelId = "pm-1",
+            Attribution = new AttributionPayloadModel { VisitorKey = "visitor-9" }
+        }, null);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Contains("userregistration/register", request.Url);
+        Assert.DoesNotContain("register-with-token", request.Url);
+
+        var body = Body(request);
+        Assert.Equal("pm-1", body.GetProperty("pricingModelId").GetString());
+        Assert.Equal("visitor-9", body.GetProperty("attribution").GetProperty("visitorKey").GetString());
+    }
+
+    /// <summary>A refusal is 200 with the server's own words, never an HTTP error.</summary>
+    [Fact]
+    public async Task Register_RelaysARefusal_AsData()
+    {
+        var (controller, handler) = CreateController(accessToken: null);
+        handler.WhenOk("userregistration/register", """{"success":false,"message":"That email is already registered."}""");
+
+        var result = OkValue<SignupRegisterResultModel>(await controller.Register(
+            new SignupRegisterProxyRequest { Email = "a@b.test" }, null));
+
+        Assert.False(result.Success);
+        Assert.Equal("That email is already registered.", result.Message);
+        Assert.Equal("registration_refused", result.ErrorCode);
+    }
+
+    /// <summary>
+    /// The register answer carries provider keys and a granted-app list upstream. None of that is
+    /// of use to a signup page, so none of it is relayed.
+    /// </summary>
+    [Fact]
+    public async Task Register_RelaysNeitherProviderKeysNorGrantedApps()
+    {
+        var (controller, handler) = CreateController(accessToken: null);
+        handler.WhenOk("userregistration/register", """
+            {"success":true,"userId":"user-3","paymentPublishableKey":"pk_live_secretish",
+             "grantedApps":["app-1","app-2"],"paymentProviderId":"prov-1"}
+            """);
+
+        var result = OkValue<SignupRegisterResultModel>(await controller.Register(
+            new SignupRegisterProxyRequest { Email = "a@b.test" }, null));
+
+        var relayed = JsonSerializer.Serialize(result);
+        Assert.DoesNotContain("pk_live_secretish", relayed, StringComparison.Ordinal);
+        Assert.DoesNotContain("grantedApps", relayed, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("prov-1", relayed, StringComparison.Ordinal);
+    }
+
+    // ── Login ───────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The login route establishes the SERVER session through the existing registration service,
+    /// which is the one session mechanism this package has. The browser gets a user id, never a
+    /// token.
+    /// </summary>
+    [Fact]
+    public async Task Login_PutsTheTokensInTheSession_AndReturnsNoneOfThem()
+    {
+        var handler = new FakeHttpMessageHandler();
+        handler.WhenOk("auth/login", """
+            {"id":"user-7","email":"a@b.test","jwtToken":"jwt-value","refreshToken":"refresh-value",
+             "requiresDisclaimerAcceptance":true}
+            """);
+
+        var session = new FakeSessionManager(accessToken: null);
+        var registration = new WildwoodRegistrationService(
+            handler.CreateClient("https://api.test/api/"), session,
+            NullLogger<WildwoodRegistrationService>.Instance, ConfiguredAppId);
+
+        var controller = new WildwoodRegistrationSubscriptionProxyController(
+            new WildwoodAppTierService(handler.CreateClient("https://api.test/api/"), session,
+                NullLogger<WildwoodAppTierService>.Instance),
+            registration,
+            session,
+            new WildwoodDisclaimerService(handler.CreateClient("https://api.test/api/"), session,
+                NullLogger<WildwoodDisclaimerService>.Instance),
+            new WildwoodPaymentService(handler.CreateClient("https://api.test/api/"), session,
+                NullLogger<WildwoodPaymentService>.Instance),
+            new WildwoodComponentsRazorOptions { BaseUrl = "https://api.test/", AppId = ConfiguredAppId },
+            NullLogger<WildwoodRegistrationSubscriptionProxyController>.Instance)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+
+        var result = OkValue<SignupLoginResultModel>(await controller.Login(
+            new SignupLoginProxyRequest { Username = "a@b.test", Email = "a@b.test", Password = "pw" }, null));
+
+        Assert.True(result.Success);
+        Assert.Equal("user-7", result.UserId);
+        Assert.True(result.RequiresDisclaimerAcceptance);
+
+        // The session now holds the tokens...
+        Assert.True(session.IsAuthenticated);
+        Assert.Equal("jwt-value", session.GetAccessToken());
+
+        // ...and the browser does not.
+        var relayed = JsonSerializer.Serialize(result);
+        Assert.DoesNotContain("jwt-value", relayed, StringComparison.Ordinal);
+        Assert.DoesNotContain("refresh-value", relayed, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Login_RelaysARefusal_AsData()
+    {
+        var (controller, handler) = CreateController(accessToken: null);
+        handler.When("auth/login", HttpStatusCode.Unauthorized, """{"message":"no"}""");
+
+        var result = OkValue<SignupLoginResultModel>(await controller.Login(
+            new SignupLoginProxyRequest { Email = "a@b.test", Password = "pw" }, null));
+
+        Assert.False(result.Success);
+        Assert.Equal("login_failed", result.ErrorCode);
+    }
+
+    // ── Link, subscribe, disclaimers ────────────────────────────────────────────
+
+    [Fact]
+    public async Task LinkTransaction_ForwardsTheExternalIdAndTheUser()
+    {
+        var (controller, handler) = CreateController();
+        handler.WhenOk("link-by-external-id", "{}");
+
+        var result = OkValue<SignupLinkTransactionResultModel>(await controller.LinkTransaction(
+            new SignupLinkTransactionProxyRequest { ExternalTransactionId = "pi_1", UserId = "user-1" }));
+
+        Assert.True(result.Success);
+
+        var body = Body(Assert.Single(handler.Requests));
+        Assert.Equal("pi_1", body.GetProperty("externalTransactionId").GetString());
+        Assert.Equal("user-1", body.GetProperty("userId").GetString());
+    }
+
+    /// <summary>A failed link is answered as data: the money is taken and the account exists.</summary>
+    [Fact]
+    public async Task LinkTransaction_AnswersAFailureAsData()
+    {
+        var (controller, handler) = CreateController();
+        handler.When("link-by-external-id", HttpStatusCode.NotFound, "");
+
+        var result = OkValue<SignupLinkTransactionResultModel>(await controller.LinkTransaction(
+            new SignupLinkTransactionProxyRequest { ExternalTransactionId = "pi_1", UserId = "user-1" }));
+
+        Assert.False(result.Success);
+    }
+
+    [Fact]
+    public async Task Subscribe_SendsThePricingOptionAndTheTransaction_ToTheConfiguredApp()
+    {
+        var (controller, handler) = CreateController();
+        handler.WhenOk("my-subscription", """{"success":true}""");
+
+        var result = OkValue<AppTierChangeResultModel>(await controller.Subscribe(
+            new SignupSubscribeProxyRequest
+            {
+                TierId = "tier-pro",
+                PricingId = "price-m",
+                PaymentTransactionId = "txn-1"
+            }, null));
+
+        Assert.True(result.Success);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Contains("/api/app-tiers/app-1/my-subscription", request.Url);
+
+        var body = Body(request);
+        Assert.Equal("tier-pro", body.GetProperty("AppTierId").GetString());
+        Assert.Equal("price-m", body.GetProperty("AppTierPricingId").GetString());
+        Assert.Equal("txn-1", body.GetProperty("PaymentTransactionId").GetString());
+    }
+
+    [Fact]
+    public async Task PendingDisclaimers_AsksForTheRegistrationOnes_AndAnswersEmptyWhenUnreadable()
+    {
+        var (controller, handler) = CreateController();
+        handler.WhenOk("disclaimeracceptance/pending", """
+            {"hasPendingDisclaimers":true,"disclaimers":[{"disclaimerId":"d1","versionId":"v1","title":"Terms"}]}
+            """);
+
+        var pending = OkValue<PendingDisclaimersResponse>(await controller.PendingDisclaimers(null));
+        Assert.True(pending.HasPendingDisclaimers);
+        Assert.Equal("d1", Assert.Single(pending.Disclaimers).DisclaimerId);
+        Assert.Contains("showOn=registration", Assert.Single(handler.Requests).Url);
+
+        // Fails OPEN: a signup that has already created an account and taken a card must not
+        // dead-end because a disclaimer list did not load.
+        var (blind, blindHandler) = CreateController();
+        blindHandler.When("disclaimeracceptance/pending", HttpStatusCode.ServiceUnavailable, "");
+
+        var none = OkValue<PendingDisclaimersResponse>(await blind.PendingDisclaimers(null));
+        Assert.False(none.HasPendingDisclaimers);
+        Assert.Empty(none.Disclaimers);
+    }
+
+    [Fact]
+    public async Task AcceptDisclaimers_PostsTheAcceptancesInOneCall()
+    {
+        var (controller, handler) = CreateController();
+        handler.WhenOk("accept-bulk", "{}");
+
+        var result = await controller.AcceptDisclaimers(new SignupDisclaimerAcceptProxyRequest
+        {
+            Acceptances =
+            [
+                new DisclaimerAcceptanceResult { CompanyDisclaimerId = "d1", CompanyDisclaimerVersionId = "v1" }
+            ]
+        }, null);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Contains("accept-bulk", Assert.Single(handler.Requests).Url);
+    }
+
+    // ── Payment ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The app id is the configured one even when the body names another: a client-named app would
+    /// let a page initiate a payment against any app in the company.
+    /// </summary>
+    [Fact]
+    public async Task InitiatePayment_PinsTheAppId_AndForwardsTheBoundRequest()
+    {
+        var (controller, handler) = CreateController(accessToken: null);
+        handler.WhenOk("payment/initiate", """{"success":true,"paymentIntentId":"pi_1","clientSecret":"cs_1"}""");
+
+        var result = OkValue<InitiatePaymentResponse>(await controller.InitiatePayment(new InitiatePaymentRequest
+        {
+            ProviderId = "prov-1",
+            AppId = "app-1",
+            Amount = 10m,
+            Currency = "USD",
+            CustomerEmail = "a@b.test",
+            IsSubscription = true
+        }, null));
+
+        Assert.True(result.Success);
+
+        var body = Body(Assert.Single(handler.Requests));
+        Assert.Equal(ConfiguredAppId, body.GetProperty("AppId").GetString());
+        Assert.Equal("a@b.test", body.GetProperty("CustomerEmail").GetString());
+    }
+
+    [Fact]
+    public async Task ConfirmPayment_RelaysTheProvidersAnswer()
+    {
+        var (controller, handler) = CreateController(accessToken: null);
+        handler.WhenOk("payment/confirm", """{"success":true,"transactionId":"txn-9","paymentIntentId":"pi_1"}""");
+
+        var result = OkValue<PaymentCompletionResult>(await controller.ConfirmPayment(
+            new SignupConfirmPaymentProxyRequest { PaymentIntentId = "pi_1", ProviderType = 1 }));
+
+        Assert.True(result.Success);
+        Assert.Equal("txn-9", result.TransactionId);
+        Assert.Contains("payment/confirm", Assert.Single(handler.Requests).Url);
     }
 }

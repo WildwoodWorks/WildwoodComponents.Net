@@ -57,10 +57,40 @@ public class RegistrationSubscriptionRazorSourceGuardTests
         [
             Path.Combine("Components", "RegistrationSubscription", "RegistrationSubscriptionPricingViewComponent.cs"),
             Path.Combine("Components", "RegistrationSubscription", "RegistrationSubscriptionPricingDecisions.cs"),
+            Path.Combine("Components", "RegistrationSubscription", "RegistrationSubscriptionSignupViewComponent.cs"),
+            Path.Combine("Components", "RegistrationSubscription", "RegistrationSubscriptionSignupDecisions.cs"),
             Path.Combine("Models", "RegistrationSubscriptionPricingModels.cs"),
+            Path.Combine("Models", "RegistrationSubscriptionSignupModels.cs"),
             Path.Combine("Views", "Shared", "Components", "RegistrationSubscriptionPricing", "Default.cshtml"),
+            Path.Combine("Views", "Shared", "Components", "RegistrationSubscriptionSignup", "Default.cshtml"),
             Path.Combine("Views", "Shared", "_RegSubPackCardBody.cshtml"),
-            Path.Combine("wwwroot", "js", "regsub-pricing.js")
+            Path.Combine("Views", "Shared", "_RegSubPlanGrid.cshtml"),
+            Path.Combine("wwwroot", "js", "regsub-pricing.js"),
+            Path.Combine("wwwroot", "js", "regsub-machines.js"),
+            Path.Combine("wwwroot", "js", "regsub-signup.js")
+        ];
+    }
+
+    /// <summary>The browser half of the surface: the two scripts, and nothing else.</summary>
+    private static List<string> GuardedScripts()
+    {
+        return
+        [
+            Path.Combine("wwwroot", "js", "regsub-pricing.js"),
+            Path.Combine("wwwroot", "js", "regsub-machines.js"),
+            Path.Combine("wwwroot", "js", "regsub-signup.js")
+        ];
+    }
+
+    /// <summary>The markup of the surface.</summary>
+    private static List<string> GuardedViews()
+    {
+        return
+        [
+            Path.Combine("Views", "Shared", "Components", "RegistrationSubscriptionPricing", "Default.cshtml"),
+            Path.Combine("Views", "Shared", "Components", "RegistrationSubscriptionSignup", "Default.cshtml"),
+            Path.Combine("Views", "Shared", "_RegSubPackCardBody.cshtml"),
+            Path.Combine("Views", "Shared", "_RegSubPlanGrid.cshtml")
         ];
     }
 
@@ -111,5 +141,79 @@ public class RegistrationSubscriptionRazorSourceGuardTests
         Assert.True(
             !bare.Success,
             $"regsub.css uses '{bare.Value}' with no fallback value.");
+    }
+
+    /// <summary>
+    /// No script in this surface writes through <c>innerHTML</c>.
+    /// </summary>
+    /// <remarks>
+    /// Everything these scripts paint is either a server-rendered string (a label, a plan name, a
+    /// refusal in the server's own words) or a value a person typed. <c>innerHTML</c> with either
+    /// of those is a cross-site-scripting hole that reads as ordinary code, so the rule is simply
+    /// that it is never used: text goes in with <c>textContent</c> and elements are created with
+    /// <c>createElement</c>. The one place server-supplied HTML genuinely has to be rendered as
+    /// HTML - a disclaimer whose content format says so - is rendered by the Razor VIEW instead.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(GuardedScriptSources))]
+    public void No_script_writes_through_innerHTML(string relativePath)
+    {
+        var source = File.ReadAllText(Path.Combine(PackageRoot(), relativePath));
+
+        foreach (var forbidden in new[] { "innerHTML", "outerHTML", "insertAdjacentHTML", "document.write" })
+        {
+            Assert.True(
+                !source.Contains(forbidden, StringComparison.Ordinal),
+                $"{relativePath} uses {forbidden}: paint text with textContent and build nodes with createElement.");
+        }
+    }
+
+    /// <summary>
+    /// There is no card-number, expiry or CVC field anywhere in this surface.
+    /// </summary>
+    /// <remarks>
+    /// The Razor signup this replaces had exactly that: a hand-rolled card form whose "Complete
+    /// Payment" button shipped disabled and had no handler, so a paid plan dead-ended AND the page
+    /// asked for a PAN a Stripe integration must never see. Cards are collected by Stripe Elements
+    /// inside the payment component and the pack checkout's SetupIntent, both of which mount an
+    /// iframe this package cannot read. This guard is what stops the old shape coming back.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(GuardedViewSources))]
+    public void No_view_asks_for_a_card_number(string relativePath)
+    {
+        var source = File.ReadAllText(Path.Combine(PackageRoot(), relativePath));
+
+        // Every <input ...> in the view, with whatever attributes it carries.
+        foreach (Match input in new Regex(@"<input\b[^>]*>", RegexOptions.IgnoreCase).Matches(source))
+        {
+            var tag = input.Value;
+
+            foreach (var smell in new[]
+                     {
+                         "cc-number", "cc-exp", "cc-csc", "cc-name",
+                         "cardnumber", "card-number", "card_number",
+                         "cardexpiry", "card-expiry", "cvc", "cvv", "securitycode", "security-code"
+                     })
+            {
+                Assert.True(
+                    !tag.Contains(smell, StringComparison.OrdinalIgnoreCase),
+                    $"{relativePath} has an <input> naming '{smell}': cards are Stripe Elements, never fields of ours.\n{tag}");
+            }
+        }
+    }
+
+    public static TheoryData<string> GuardedScriptSources()
+    {
+        var data = new TheoryData<string>();
+        foreach (var file in GuardedScripts()) data.Add(file);
+        return data;
+    }
+
+    public static TheoryData<string> GuardedViewSources()
+    {
+        var data = new TheoryData<string>();
+        foreach (var file in GuardedViews()) data.Add(file);
+        return data;
     }
 }

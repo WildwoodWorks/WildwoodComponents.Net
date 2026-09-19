@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Razor.Models;
 using WildwoodComponents.Razor.Services;
@@ -49,6 +49,11 @@ public class PaymentViewComponent : ViewComponent
     /// <param name="metadata">Optional metadata dictionary to attach to the payment</param>
     /// <param name="preloadedProviders">Pre-loaded providers to skip API discovery call</param>
     /// <param name="preselectedProviderId">Provider ID to pre-select as default</param>
+    /// <param name="componentId">
+    /// A stable id for the root element, so a host script can address this instance through
+    /// <c>wwPayment.init</c>/<c>update</c>/<c>getInstance</c>. Generated when omitted, which is
+    /// what every existing usage gets.
+    /// </param>
     public async Task<IViewComponentResult> InvokeAsync(
         string appId,
         decimal amount,
@@ -68,7 +73,8 @@ public class PaymentViewComponent : ViewComponent
         string? cancelUrl = null,
         Dictionary<string, string>? metadata = null,
         List<PaymentProviderDto>? preloadedProviders = null,
-        string? preselectedProviderId = null)
+        string? preselectedProviderId = null,
+        string? componentId = null)
     {
         List<PaymentProviderDto> providers;
         PaymentProviderDto? defaultProvider = null;
@@ -130,6 +136,10 @@ public class PaymentViewComponent : ViewComponent
             PreloadedProviders = providers,
             PreselectedProviderId = defaultProvider?.Id
         };
+
+        // A host that has to address this instance from its own script needs its id to be
+        // predictable; the signup view drives one this way. Omitted, the id stays generated.
+        if (componentId is { Length: > 0 }) model.ComponentId = componentId;
 
         return View(model);
     }

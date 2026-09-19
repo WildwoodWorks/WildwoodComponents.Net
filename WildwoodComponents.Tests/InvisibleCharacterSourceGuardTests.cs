@@ -52,7 +52,8 @@ public class InvisibleCharacterSourceGuardTests
     [
         "WildwoodComponents.Blazor/Components/RegistrationSubscription",
         "WildwoodComponents.Razor/Components/RegistrationSubscription",
-        "WildwoodComponents.Razor/Views/Shared/Components/RegistrationSubscriptionPricing"
+        "WildwoodComponents.Razor/Views/Shared/Components/RegistrationSubscriptionPricing",
+        "WildwoodComponents.Razor/Views/Shared/Components/RegistrationSubscriptionSignup"
     ];
 
     /// <summary>
@@ -66,8 +67,14 @@ public class InvisibleCharacterSourceGuardTests
         "WildwoodComponents.Razor/Services/WildwoodPublicCatalogService.cs",
         "WildwoodComponents.Razor/Services/IWildwoodPublicCatalogService.cs",
         "WildwoodComponents.Razor/Models/RegistrationSubscriptionPricingModels.cs",
+        "WildwoodComponents.Razor/Models/RegistrationSubscriptionSignupModels.cs",
+        "WildwoodComponents.Razor/Models/RegistrationSubscriptionProxyModels.cs",
+        "WildwoodComponents.Razor/Controllers/WildwoodRegistrationSubscriptionProxyController.cs",
         "WildwoodComponents.Razor/Views/Shared/_RegSubPackCardBody.cshtml",
+        "WildwoodComponents.Razor/Views/Shared/_RegSubPlanGrid.cshtml",
         "WildwoodComponents.Razor/wwwroot/js/regsub-pricing.js",
+        "WildwoodComponents.Razor/wwwroot/js/regsub-machines.js",
+        "WildwoodComponents.Razor/wwwroot/js/regsub-signup.js",
         "WildwoodComponents.Razor/wwwroot/css/regsub.css",
         "WildwoodComponents.Shared/Utilities/RegistrationSubscriptionLabels.cs",
         "WildwoodComponents.Shared/Utilities/FormatHelpers.cs",

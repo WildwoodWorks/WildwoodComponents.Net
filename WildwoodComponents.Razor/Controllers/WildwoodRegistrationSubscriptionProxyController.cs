@@ -5,6 +5,7 @@ using WildwoodComponents.Razor.Extensions;
 using WildwoodComponents.Razor.Models;
 using WildwoodComponents.Razor.Services;
 using WildwoodComponents.Shared.Models;
+using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Razor.Controllers;
 
@@ -54,6 +55,8 @@ public class WildwoodRegistrationSubscriptionProxyController : ControllerBase
     private readonly IWildwoodAppTierService _appTiers;
     private readonly IWildwoodRegistrationService _registration;
     private readonly IWildwoodSessionManager _sessionManager;
+    private readonly IWildwoodDisclaimerService _disclaimers;
+    private readonly IWildwoodPaymentService _payments;
     private readonly WildwoodComponentsRazorOptions _options;
     private readonly ILogger<WildwoodRegistrationSubscriptionProxyController> _logger;
 
@@ -61,12 +64,16 @@ public class WildwoodRegistrationSubscriptionProxyController : ControllerBase
         IWildwoodAppTierService appTiers,
         IWildwoodRegistrationService registration,
         IWildwoodSessionManager sessionManager,
+        IWildwoodDisclaimerService disclaimers,
+        IWildwoodPaymentService payments,
         WildwoodComponentsRazorOptions options,
         ILogger<WildwoodRegistrationSubscriptionProxyController> logger)
     {
         _appTiers = appTiers;
         _registration = registration;
         _sessionManager = sessionManager;
+        _disclaimers = disclaimers;
+        _payments = payments;
         _options = options;
         _logger = logger;
     }
@@ -359,6 +366,294 @@ public class WildwoodRegistrationSubscriptionProxyController : ControllerBase
             ? StatusCode(StatusCodes.Status502BadGateway,
                 new { error = "token_details_unavailable", message = "The registration token could not be checked." })
             : Ok(details);
+    }
+
+    #endregion
+
+    #region Signup: registration mode, account creation, sign-in
+
+    /// <summary>
+    /// GET /api/wildwood-regsub/registration-mode?tokenMode= — how the signup screen may offer
+    /// registration right now. Anonymous, because a signup screen has no session.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The answer is the RESOLVED mode plus nothing else: the app's auth configuration is read
+    /// server-side and reduced to <c>AllowOpenRegistration</c>/<c>AllowTokenRegistration</c>
+    /// before <see cref="SignupRegistrationMode.Resolve"/> turns those into the four flags a
+    /// screen renders from. Password policy, rate limits and provider settings are on that same
+    /// upstream route and never leave the server.
+    /// </para>
+    /// <para>
+    /// Never 502: settings that cannot be read resolve to open sign-up with the optional token
+    /// card (<c>source: "Fallback"</c>), because the server enforces its own rules anyway — the
+    /// fallback can only offer a path that is refused with a clear message, never grant one.
+    /// Pass <c>tokenMode=required</c> for invite redemption, which overrides even a closed
+    /// configuration.
+    /// </para>
+    /// </remarks>
+    [HttpGet("registration-mode")]
+    public async Task<IActionResult> RegistrationMode([FromQuery] string? appId, [FromQuery] string? tokenMode)
+    {
+        if (!TryResolveAppId(appId, out var resolvedAppId, out var failure)) return failure!;
+
+        var settings = string.Equals(tokenMode, "required", StringComparison.OrdinalIgnoreCase)
+            ? null // Not even read: the invite's token decides, and the server validates it.
+            : await _registration.GetSignupRegistrationSettingsAsync(resolvedAppId);
+
+        var mode = SignupRegistrationMode.Resolve(
+            settings,
+            string.Equals(tokenMode, "required", StringComparison.OrdinalIgnoreCase)
+                ? SignupTokenMode.Required
+                : SignupTokenMode.Auto);
+
+        return Ok(new SignupRegistrationModeModel
+        {
+            Closed = mode.Closed,
+            RequireToken = mode.RequireToken,
+            AllowOpenRegistration = mode.AllowOpenRegistration,
+            ShowOptionalTokenEntry = mode.ShowOptionalTokenEntry,
+            Source = mode.Source.ToString()
+        });
+    }
+
+    /// <summary>
+    /// POST /api/wildwood-regsub/register — create the account. Anonymous, necessarily: this is
+    /// what makes the session that every other route needs.
+    /// </summary>
+    /// <remarks>
+    /// A non-empty <c>Token</c> takes the token path, which is also the path that applies whatever
+    /// plan the token grants; otherwise open registration, carrying the app's default pricing
+    /// model when the page was given one. The browser's attribution payload rides along exactly as
+    /// it does on the existing Razor registration, so a signup through this view is attributed the
+    /// same way. A refusal is 200 with <c>success:false</c> and the server's own words.
+    /// </remarks>
+    [HttpPost("register")]
+    public async Task<IActionResult> Register([FromBody] SignupRegisterProxyRequest? request, [FromQuery] string? appId)
+    {
+        if (!TryResolveAppId(appId, out var resolvedAppId, out var failure)) return failure!;
+        if (request is null) return MissingBody();
+
+        RegistrationSuccessResponse? response;
+
+        if (request.Token is { Length: > 0 })
+        {
+            response = await _registration.RegisterWithTokenAsync(new TokenRegistrationRequest
+            {
+                Token = request.Token,
+                FirstName = request.FirstName ?? string.Empty,
+                LastName = request.LastName ?? string.Empty,
+                Username = request.Username ?? string.Empty,
+                Email = request.Email ?? string.Empty,
+                Password = request.Password ?? string.Empty,
+                AppId = resolvedAppId,
+                Platform = "Web",
+                DeviceInfo = "Browser",
+                Attribution = request.Attribution
+            });
+        }
+        else
+        {
+            response = await _registration.RegisterAsync(new OpenRegistrationRequest
+            {
+                FirstName = request.FirstName ?? string.Empty,
+                LastName = request.LastName ?? string.Empty,
+                Username = request.Username ?? string.Empty,
+                Email = request.Email ?? string.Empty,
+                Password = request.Password ?? string.Empty,
+                AppId = resolvedAppId,
+                Platform = "Web",
+                DeviceInfo = "Browser",
+                PricingModelId = request.PricingModelId,
+                Attribution = request.Attribution
+            });
+        }
+
+        if (response is null || !response.Success)
+        {
+            return Ok(new SignupRegisterResultModel
+            {
+                Success = false,
+                Message = response?.Message is { Length: > 0 } m ? m : "Registration failed. Please try again.",
+                ErrorCode = "registration_refused"
+            });
+        }
+
+        // Only the id and the message: the provider keys and granted-app list on the upstream
+        // answer are of no use to a signup page and are not the browser's business.
+        return Ok(new SignupRegisterResultModel
+        {
+            Success = true,
+            UserId = response.UserId,
+            Message = response.Message
+        });
+    }
+
+    /// <summary>
+    /// POST /api/wildwood-regsub/login — sign the new account in and put its tokens in the SERVER
+    /// session, through the same <see cref="IWildwoodRegistrationService.LoginAsync"/> the existing
+    /// Razor registration uses. Anonymous, for the same reason register is.
+    /// </summary>
+    /// <remarks>
+    /// The answer carries the user id and whether disclaimers are pending, and nothing else. There
+    /// is exactly one session mechanism in this package — <see cref="IWildwoodSessionManager"/>,
+    /// written by that service — and handing the browser a JWT here would throw away the reason it
+    /// exists.
+    /// </remarks>
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] SignupLoginProxyRequest? request, [FromQuery] string? appId)
+    {
+        if (!TryResolveAppId(appId, out var resolvedAppId, out var failure)) return failure!;
+        if (request is null) return MissingBody();
+
+        var result = await _registration.LoginAsync(
+            request.Username ?? string.Empty,
+            request.Email ?? string.Empty,
+            request.Password ?? string.Empty,
+            resolvedAppId);
+
+        if (!result.Succeeded || result.Response is null)
+        {
+            return Ok(new SignupLoginResultModel
+            {
+                Success = false,
+                Message = result.ErrorMessage is { Length: > 0 } m
+                    ? m
+                    : "Login failed after registration. Please try logging in manually.",
+                ErrorCode = "login_failed"
+            });
+        }
+
+        return Ok(new SignupLoginResultModel
+        {
+            Success = true,
+            UserId = result.Response.UserId,
+            RequiresDisclaimerAcceptance = result.Response.RequiresDisclaimerAcceptance
+        });
+    }
+
+    /// <summary>
+    /// POST /api/wildwood-regsub/link-transaction — attach the plan's payment to the account that
+    /// now exists. The card was taken before there was an account (pay-first), so the transaction
+    /// belongs to nobody until this runs.
+    /// </summary>
+    [HttpPost("link-transaction")]
+    public async Task<IActionResult> LinkTransaction([FromBody] SignupLinkTransactionProxyRequest? request)
+    {
+        if (!TryRequireSession(out var failure)) return failure!;
+        if (request is null) return MissingBody();
+
+        var linked = await _registration.LinkTransactionToUserAsync(
+            request.ExternalTransactionId, request.UserId);
+
+        // Never an error status: the money is already taken and the account already exists, so a
+        // failed link is something to repair, not something to fail a signup over.
+        return Ok(new SignupLinkTransactionResultModel { Success = linked });
+    }
+
+    /// <summary>
+    /// POST /api/wildwood-regsub/subscribe — start the plan the signup chose, as the signed-in
+    /// user. A refusal is 200 with the structured result, as everywhere else here.
+    /// </summary>
+    /// <remarks>
+    /// A registration token that carried a plan has ALREADY subscribed the account; subscribing
+    /// over it replaces that subscription. The caller is the one that knows, so this route
+    /// subscribes whatever it is asked to and the signup driver simply does not ask when a grant
+    /// is in play.
+    /// </remarks>
+    [HttpPost("subscribe")]
+    public async Task<IActionResult> Subscribe([FromBody] SignupSubscribeProxyRequest? request, [FromQuery] string? appId)
+    {
+        if (!TryBegin(appId, out var resolvedAppId, out var failure)) return failure!;
+        if (request is null) return MissingBody();
+
+        return Ok(await _appTiers.SubscribeToTierAsync(
+            resolvedAppId, request.TierId, request.PricingId, request.PaymentTransactionId));
+    }
+
+    #endregion
+
+    #region Signup: the disclaimer gate
+
+    /// <summary>
+    /// GET /api/wildwood-regsub/disclaimers/pending — what the freshly signed-in account still has
+    /// to accept. Session-scoped: these are the CALLER's pending disclaimers.
+    /// </summary>
+    [HttpGet("disclaimers/pending")]
+    public async Task<IActionResult> PendingDisclaimers([FromQuery] string? appId)
+    {
+        if (!TryBegin(appId, out var resolvedAppId, out var failure)) return failure!;
+
+        var pending = await _disclaimers.GetPendingDisclaimersAsync(resolvedAppId, null, "registration");
+
+        // An unreadable list is answered as "nothing pending", matching the gate's shipped
+        // fail-open behaviour: a signup that has already created an account and taken a card must
+        // not dead-end because a disclaimer list did not load.
+        return Ok(pending ?? new PendingDisclaimersResponse());
+    }
+
+    /// <summary>
+    /// POST /api/wildwood-regsub/disclaimers/accept — record the acceptances in one call.
+    /// </summary>
+    [HttpPost("disclaimers/accept")]
+    public async Task<IActionResult> AcceptDisclaimers(
+        [FromBody] SignupDisclaimerAcceptProxyRequest? request, [FromQuery] string? appId)
+    {
+        if (!TryBegin(appId, out var resolvedAppId, out var failure)) return failure!;
+        if (request is null) return MissingBody();
+
+        var result = await _disclaimers.AcceptDisclaimersAsync(resolvedAppId, request.Acceptances);
+        return Ok(new { success = result.Succeeded, errorMessage = result.Message });
+    }
+
+    #endregion
+
+    #region Payment
+
+    /// <summary>
+    /// POST /api/wildwood-regsub/payment/initiate — the payment intent, for a
+    /// <c>&lt;vc:payment proxy-base-url="/api/wildwood-regsub/payment" /&gt;</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Anonymous, and that is the pay-first order, not an oversight.</b> The plan's card is
+    /// taken BEFORE the account exists — that is what stops a declined card leaving a half-made
+    /// account on a plan nobody paid for — so there is no session to require at this point, and
+    /// the payment is tied to the visitor by <c>customerEmail</c> until
+    /// <c>link-transaction</c> attaches it to the new user. WildwoodAPI applies its own rules to
+    /// the call; this route adds no authority the browser did not already have, and forwards the
+    /// bound request rather than the raw body.
+    /// </para>
+    /// <para>
+    /// Existing hosts are untouched: <c>PaymentViewComponent</c> still defaults to
+    /// <c>/api/wildwood-payment</c>, the host-supplied proxy. Pointing its
+    /// <c>proxy-base-url</c> here is what the signup view does, and what any other page may do.
+    /// </para>
+    /// </remarks>
+    [HttpPost("payment/initiate")]
+    public async Task<IActionResult> InitiatePayment([FromBody] InitiatePaymentRequest? request, [FromQuery] string? appId)
+    {
+        if (!TryResolveAppId(appId ?? request?.AppId, out var resolvedAppId, out var failure)) return failure!;
+        if (request is null) return MissingBody();
+
+        // The app is the configured one, never the body's: a client-named app would let this page
+        // initiate a payment against any app in the company.
+        request.AppId = resolvedAppId;
+
+        return Ok(await _payments.InitiatePaymentAsync(request));
+    }
+
+    /// <summary>
+    /// POST /api/wildwood-regsub/payment/confirm — verify with the provider what the browser just
+    /// confirmed. Anonymous for the same reason <c>payment/initiate</c> is.
+    /// </summary>
+    [HttpPost("payment/confirm")]
+    public async Task<IActionResult> ConfirmPayment([FromBody] SignupConfirmPaymentProxyRequest? request)
+    {
+        if (request is null || !(request.PaymentIntentId is { Length: > 0 })) return MissingBody();
+
+        return Ok(await _payments.ConfirmPaymentAsync(
+            request.PaymentIntentId!, (PaymentProviderType)request.ProviderType));
     }
 
     #endregion

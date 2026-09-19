@@ -1,4 +1,4 @@
-# WildwoodComponents.Razor Claude Instructions
+﻿# WildwoodComponents.Razor Claude Instructions
 
 ## Project Overview
 
@@ -39,6 +39,7 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 | App Tier | AppTierComponent | AppTierViewComponent | appTierService | AppTierComponent | -- | -- |
 | Pricing Display | PricingDisplayComponent | PricingDisplayViewComponent | (via appTierService) | -- | -- | -- |
 | Reg & Sub: pricing | RegistrationSubscriptionPricing | RegistrationSubscriptionPricingViewComponent | (via appTierService + catalog helpers) | RegistrationSubscriptionPricing | RegistrationSubscriptionPricing | -- |
+| Reg & Sub: signup | RegistrationSubscriptionSignup | RegistrationSubscriptionSignupViewComponent | (via authService + appTierService) | RegistrationSubscriptionSignup | RegistrationSubscriptionSignup | -- |
 | Usage Dashboard | UsageDashboardComponent | UsageDashboardViewComponent | (via appTierService) | -- | -- | -- |
 | Overage Summary | OverageSummaryComponent | OverageSummaryViewComponent | (via appTierService) | -- | -- | -- |
 | Disclaimer | DisclaimerComponent | DisclaimerViewComponent | disclaimerService | DisclaimerComponent | -- | -- |
@@ -164,8 +165,9 @@ WildwoodComponents.Razor/
         Notification/               # Notification + Toast ViewComponents
         Payment/                    # Payment + PaymentForm ViewComponents
         Registration/               # Token Registration + Signup ViewComponents
-        RegistrationSubscription/   # Registration & Subscription pricing ViewComponent
+        RegistrationSubscription/   # Registration & Subscription pricing + signup ViewComponents
                                     #   + RegistrationSubscriptionPricingDecisions (pure, testable)
+                                    #   + RegistrationSubscriptionSignupDecisions (pure, testable)
         Security/                   # Two-Factor Settings ViewComponent
         Subscription/Admin/         # Subscription Admin ViewComponents (status, tiers, features, add-ons, limits, overrides)
         Usage/                      # Usage Dashboard + Overage Summary ViewComponents
@@ -201,7 +203,12 @@ WildwoodComponents.Razor/
         UsageModels.cs
     wwwroot/
         css/wildwood-razor-themes.css
-        css/regsub.css              # Registration & Subscription (pricing today; signup/manage extend it)
+        css/regsub.css              # Registration & Subscription (pricing + signup; manage extends it)
         js/regsub-pricing.js        # billing toggle, pack basket, ww-regsub-select
+        js/regsub-machines.js       # signup + pack-checkout reducers, ported table-identical from
+                                    #   @wildwood/react-shared. Pure; load BEFORE regsub-signup.js.
+                                    #   Covered by WildwoodComponents.Tests/Razor/js/regsub-machines.selftest.mjs,
+                                    #   which RegSubMachineSelfTestRunnerTests runs through node.
+        js/regsub-signup.js         # the signup driver: pay-first, card-once pack checkout
     WildwoodComponents.Razor.csproj
 ```

@@ -1,4 +1,4 @@
-@using WildwoodComponents.Razor.Models
+﻿@using WildwoodComponents.Razor.Models
 @model RegistrationSubscriptionPricingViewModel
 
 @*
@@ -17,9 +17,6 @@
 @{
     var cid = Model.ComponentId;
     var labels = Model.Labels;
-    var annual = PricingBilling.Annual;
-    var monthly = PricingBilling.Monthly;
-    var isAnnual = Model.Billing == annual;
     var hasSelectUrl = Model.SelectUrl.HasValue;
 }
 
@@ -51,165 +48,10 @@
     {
         @if (Model.HasPlans)
         {
-            <div class="ww-regsub-plans">
-                @if (Model.ShowToggle)
-                {
-                    <div class="ww-apptier-billing-toggle">
-                        <span data-ww-billing-label="monthly" class="@(isAnnual ? "" : "ww-billing-active")">@labels.BillingMonthly</span>
-                        <button type="button"
-                                class="ww-toggle @(isAnnual ? "ww-toggle-on" : "")"
-                                aria-label="@labels.BillingToggleAriaLabel"
-                                aria-pressed="@(isAnnual ? "true" : "false")"
-                                data-ww-action="toggle-billing">
-                            <span class="ww-toggle-slider"></span>
-                        </button>
-                        <span data-ww-billing-label="annual" class="@(isAnnual ? "ww-billing-active" : "")">
-                            @labels.BillingAnnual
-                            @if (Model.AnnualSavingsText.Length > 0)
-                            {
-                                <span class="ww-badge ww-badge-success ww-badge-sm">@Model.AnnualSavingsText</span>
-                            }
-                        </span>
-                    </div>
-                }
-
-                <div class="ww-tier-grid">
-                    @foreach (var card in Model.PlanCards)
-                    {
-                        var tier = card.Tier;
-
-                        <div class="ww-tier-card @(card.IsHighlighted ? "ww-tier-preselected" : "") @(tier.IsDefault && !card.IsHighlighted ? "ww-tier-default" : "")"
-                             data-ww-tier="@tier.Id"
-                             data-ww-tier-name="@tier.Name"
-                             data-ww-pricing-monthly="@card.PricingIdFor(monthly)"
-                             data-ww-pricing-annual="@card.PricingIdFor(annual)">
-
-                            @if (!string.IsNullOrEmpty(tier.CustomBadgeText))
-                            {
-                                <div class="ww-tier-default-badge">@tier.CustomBadgeText</div>
-                            }
-                            else if (card.IsHighlighted)
-                            {
-                                <div class="ww-tier-preselected-badge">Your Selection</div>
-                            }
-
-                            <div class="ww-tier-header">
-                                @if (!string.IsNullOrEmpty(tier.IconClass))
-                                {
-                                    <span class="ww-tier-icon @tier.IconClass"></span>
-                                }
-                                <h3>@tier.Name</h3>
-                                @await Html.PartialAsync("_TierStatusBadge", tier)
-
-                                @if (tier.ShowPrice)
-                                {
-                                    @* Both cycles, server-formatted; the script only swaps which is hidden. *@
-                                    <div class="ww-tier-price" data-ww-billing="monthly" hidden="@(isAnnual ? "hidden" : null)">
-                                        <span class="ww-tier-price-amount">@card.MonthlyPriceText</span>
-                                        @if (card.MonthlyPricing is not null && !card.IsEnterprise)
-                                        {
-                                            <span class="ww-tier-price-interval">/@card.MonthlyIntervalText</span>
-                                        }
-                                    </div>
-                                    <div class="ww-tier-price" data-ww-billing="annual" hidden="@(isAnnual ? null : "hidden")">
-                                        <span class="ww-tier-price-amount">@card.AnnualPriceText</span>
-                                        @if (card.AnnualPricing is not null && !card.IsEnterprise)
-                                        {
-                                            <span class="ww-tier-price-interval">/@card.AnnualIntervalText</span>
-                                        }
-                                    </div>
-                                }
-
-                                @if (card.AnnualDiscountText.Length > 0)
-                                {
-                                    <div class="ww-tier-discount" data-ww-billing="annual" hidden="@(isAnnual ? null : "hidden")">@card.AnnualDiscountText</div>
-                                }
-
-                                @if (card.MonthlyTrialText.Length > 0)
-                                {
-                                    <div class="ww-plan-trial" data-ww-billing="monthly" hidden="@(isAnnual ? "hidden" : null)">@card.MonthlyTrialText</div>
-                                }
-                                @if (card.AnnualTrialText.Length > 0)
-                                {
-                                    <div class="ww-plan-trial" data-ww-billing="annual" hidden="@(isAnnual ? null : "hidden")">@card.AnnualTrialText</div>
-                                }
-                            </div>
-
-                            @if (!string.IsNullOrEmpty(tier.Description))
-                            {
-                                <p class="ww-tier-description">@tier.Description</p>
-                            }
-
-                            @if (Model.ShowFeatureComparison && tier.Features.Count > 0)
-                            {
-                                <ul class="ww-tier-features">
-                                    @foreach (var feature in tier.Features)
-                                    {
-                                        <li class="ww-tier-feature-item @(!feature.IsEnabled ? "ww-tier-feature-disabled" : "")">
-                                            @if (feature.IsEnabled)
-                                            {
-                                                <svg class="ww-tier-feature-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <polyline points="20 6 9 17 4 12" />
-                                                </svg>
-                                            }
-                                            else
-                                            {
-                                                <svg class="ww-tier-feature-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <line x1="18" y1="6" x2="6" y2="18" />
-                                                    <line x1="6" y1="6" x2="18" y2="18" />
-                                                </svg>
-                                            }
-                                            <span>@(string.IsNullOrEmpty(feature.DisplayName) ? feature.FeatureCode : feature.DisplayName)</span>
-                                        </li>
-                                    }
-                                </ul>
-                            }
-
-                            @if (Model.ShowLimits && tier.Limits.Count > 0)
-                            {
-                                <div class="ww-tier-limits">
-                                    @foreach (var limit in tier.Limits)
-                                    {
-                                        <div class="ww-tier-limit-item">
-                                            <span class="ww-tier-limit-value">@limit.MaxValueDisplay</span>
-                                            <span class="ww-tier-limit-name">@(string.IsNullOrEmpty(limit.DisplayName) ? limit.LimitCode : limit.DisplayName)</span>
-                                        </div>
-                                    }
-                                </div>
-                            }
-
-                            <div class="ww-tier-footer">
-                                @switch (card.Footer)
-                                {
-                                    case PricingFooterKind.ContactLink:
-                                        <a href="@card.FooterUrl"
-                                           class="ww-btn @(tier.IsDefault ? "ww-btn-primary" : "ww-btn-outline") ww-btn-block"
-                                           target="@card.FooterTarget"
-                                           rel="@card.FooterRel">@card.FooterText</a>
-                                        break;
-
-                                    case PricingFooterKind.ContactSalesLink:
-                                        <a href="@card.FooterUrl"
-                                           class="ww-btn ww-btn-outline ww-btn-block"
-                                           target="@card.FooterTarget"
-                                           rel="@card.FooterRel">@card.FooterText</a>
-                                        break;
-
-                                    case PricingFooterKind.ContactSalesButton:
-                                        <button type="button" class="ww-btn ww-btn-outline ww-btn-block" data-ww-action="select-tier">@card.FooterText</button>
-                                        break;
-
-                                    case PricingFooterKind.Select:
-                                        <button type="button"
-                                                class="ww-btn @(card.IsHighlighted || tier.IsDefault ? "ww-btn-primary" : "ww-btn-outline") ww-btn-block"
-                                                data-ww-action="select-tier">@card.FooterText</button>
-                                        break;
-                                }
-                            </div>
-                        </div>
-                    }
-                </div>
-            </div>
+            @* One plan grid, shared with the signup view's plan step: the toggle, both cycles'
+               server-formatted prices and the .ww-tier-grid / .ww-tier-card markup live in
+               _RegSubPlanGrid so the two surfaces cannot drift apart. *@
+            @await Html.PartialAsync("_RegSubPlanGrid", Model.PlanGrid)
         }
 
         @if (Model.HasPacks)
