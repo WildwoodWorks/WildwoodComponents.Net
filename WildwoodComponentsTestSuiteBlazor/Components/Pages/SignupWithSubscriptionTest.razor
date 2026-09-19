@@ -5,6 +5,11 @@
 @using WildwoodComponents.Blazor.Models
 @inject ComponentLifecycleTracker LifecycleTracker
 @inject IConfiguration Configuration
+@* SignupWithSubscriptionComponent is deprecated in favour of the signup view
+   (/test/registration-subscription), and this page exists to keep exercising it. Marking the PAGE
+   obsolete is the narrowest suppression there is for Razor-generated code - see AppTierTest.razor
+   for the reasoning. *@
+@attribute [System.Obsolete("Test page for the deprecated SignupWithSubscriptionComponent. Use /test/registration-subscription for the replacement.")]
 
 <ComponentTestPage PageTitle="SignupWithSubscriptionComponent Test" ComponentName="SignupWithSubscriptionComponent" IconClass="fas fa-user-plus"
                    OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">

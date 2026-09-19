@@ -8,6 +8,26 @@ using WildwoodComponents.Blazor.Services;
 
 namespace WildwoodComponents.Blazor.Components.AppTier
 {
+    /// <summary>
+    /// The original self-service plan surface. Superseded by
+    /// <see cref="RegistrationSubscription.RegistrationSubscriptionManage"/>.
+    /// </summary>
+    /// <remarks>
+    /// Deprecated in step with the JS package (commit 541e446), so the same component is called
+    /// legacy on every stack. Nothing has been removed and nothing behaves differently — including
+    /// the known one-time-charge bug named in the <c>[Obsolete]</c> message, which is left exactly
+    /// as it is because fixing it would change what existing hosts charge.
+    /// </remarks>
+    [Obsolete(
+        "Use RegistrationAndSubscriptionComponent with View=\"RegistrationSubscriptionView.Manage\" " +
+        "(or RegistrationSubscriptionManage directly), which runs a plan change through preview, " +
+        "confirmation, its own card modal, 3-D Secure and completion. Known bug, and the reason this " +
+        "should not be used for anything priced: the payment step here passes no PricingModelId (and " +
+        "no IsSubscription) to PaymentComponent, so a paid plan is charged once instead of starting " +
+        "the plan's recurring subscription and its free trial. The manage view sends the plan's " +
+        "pricing model. Left as it is deliberately - fixing it would change what existing hosts " +
+        "charge - so this component stays supported and behaves exactly as before.",
+        error: false)]
     public partial class AppTierComponent : BaseWildwoodComponent
     {
         [Inject] private IAppTierComponentService AppTierService { get; set; } = default!;

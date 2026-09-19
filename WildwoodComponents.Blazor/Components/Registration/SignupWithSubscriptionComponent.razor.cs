@@ -11,6 +11,32 @@ using static WildwoodComponents.Blazor.Components.Registration.TokenRegistration
 
 namespace WildwoodComponents.Blazor.Components.Registration
 {
+    /// <summary>
+    /// The original signup-and-subscribe wizard. Superseded by
+    /// <see cref="RegistrationSubscription.RegistrationSubscriptionSignup"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Deprecated in step with the JS package (commit 541e446), so the same component is called
+    /// legacy on every stack. Nothing has been removed and nothing behaves differently: the
+    /// <c>[Obsolete]</c> below is a WARNING, and this component still compiles, renders and ships.
+    /// </para>
+    /// <para>
+    /// It mounts <c>PricingDisplayComponent</c>, which is deprecated too. That raises no warning:
+    /// C# does not report an obsolete member used from inside an obsolete type, which is exactly
+    /// the right answer here — one legacy surface built out of another is not a new call site.
+    /// </para>
+    /// </remarks>
+    [Obsolete(
+        "Use RegistrationAndSubscriptionComponent with View=\"RegistrationSubscriptionView.Signup\" " +
+        "(or RegistrationSubscriptionSignup directly). The view keeps this wizard's step copy and " +
+        "locators but reads the app's registration settings itself (no RequireToken / " +
+        "AllowOpenRegistration / ShowOptionalTokenEntry to resolve), validates a registration token's " +
+        "plan before anything is charged, takes the card before the account exists, buys packs after " +
+        "the login on the card already taken, reports a structured SignupOutcome, and handles invite " +
+        "redemption (TokenMode.Required). This component stays supported and behaves exactly as " +
+        "before; nothing has been removed.",
+        error: false)]
     public partial class SignupWithSubscriptionComponent : BaseWildwoodComponent
     {
         #region Injected Services

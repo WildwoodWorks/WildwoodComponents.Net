@@ -8,6 +8,23 @@ using WildwoodComponents.Blazor.Services;
 
 namespace WildwoodComponents.Blazor.Components.Pricing
 {
+    /// <summary>
+    /// The original price list. Superseded by
+    /// <see cref="RegistrationSubscription.RegistrationSubscriptionPricing"/>.
+    /// </summary>
+    /// <remarks>
+    /// Deprecated in step with the JS package (commit 541e446), so the same component is called
+    /// legacy on every stack. Nothing has been removed and nothing behaves differently: the
+    /// <c>[Obsolete]</c> below is a WARNING, and this component still compiles, renders and ships.
+    /// </remarks>
+    [Obsolete(
+        "Use RegistrationAndSubscriptionComponent with View=\"RegistrationSubscriptionView.Pricing\" " +
+        "(or RegistrationSubscriptionPricing directly), which renders the same tier-card grid - same " +
+        "markup, same calls to action - off the live public catalog, adds packs, JSON-LD offers, a " +
+        "PreloadedCatalog for first-paint prices, and a loading/unavailable state that never shows a " +
+        "price the server did not just quote. This component stays supported and behaves exactly as " +
+        "before; nothing has been removed.",
+        error: false)]
     public partial class PricingDisplayComponent : BaseWildwoodComponent
     {
         [Inject] private IAppTierComponentService AppTierService { get; set; } = default!;

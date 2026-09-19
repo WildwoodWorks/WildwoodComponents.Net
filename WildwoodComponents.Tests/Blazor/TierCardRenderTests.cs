@@ -8,6 +8,11 @@ using WildwoodComponents.Shared.Models;
 
 namespace WildwoodComponents.Tests.Blazor;
 
+// CS0618: PricingDisplayComponent is deprecated in favour of RegistrationSubscriptionPricing, and
+// it still ships - so its card markup still has to be pinned. Scoped to this file, so a NEW call
+// site anywhere else still warns.
+#pragma warning disable CS0618
+
 /// <summary>
 /// What a tier card renders: the price, and the free-trial line React's <c>TierCardHeader</c>
 /// shows (JS f8b095f + 541e446). The two grids had no trial line at all and each formatted money
@@ -181,3 +186,5 @@ public class TierCardRenderTests
 
     #endregion
 }
+
+#pragma warning restore CS0618

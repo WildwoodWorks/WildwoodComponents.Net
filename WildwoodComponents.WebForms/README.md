@@ -9,7 +9,8 @@ register and drop onto a page, an `IHttpModule` in `web.config`, and `.ashx` han
 
 **This release ships Authentication and Two-Factor Settings**, together with the
 infrastructure the rest of the library will sit on. The Blazor and Razor packages
-currently implement 27 components; the remainder — legal and feedback, tiers and
+currently implement 28 components (the newest, Registration & Subscription, is in
+Blazor today and lands in Razor next); the remainder — legal and feedback, tiers and
 payments, AI, messaging, notifications and the rest — follow in later phases and are
 not present yet. See [Components](#components) for exactly what is here today.
 

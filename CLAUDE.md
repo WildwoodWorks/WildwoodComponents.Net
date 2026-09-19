@@ -19,6 +19,12 @@ Solution file: `WildwoodComponents.Net.slnx`
 | **WildwoodComponents.WebForms.Tests** | xUnit tests for the WebForms package, **net48** (Windows-only run) |
 | **WildwoodComponentsTestSuiteBlazor** | Blazor test harness app with test pages for each component |
 
+Counts, with the rule that produces them so they stay reproducible (2026-09-19): **Blazor = 53**
+(`.razor` files under `WildwoodComponents.Blazor/Components/`, 56, minus the three `*Demo.razor`
+host samples — the Registration & Subscription shell, its three views and their `Parts/` are
+included). **Razor = 30** (`*ViewComponent.cs` under `WildwoodComponents.Razor/Components/`).
+**Test suite = 26** unique `@page` routes.
+
 ### Dependency Graph
 
 ```
@@ -77,15 +83,16 @@ Internal shared library — not intended for direct consumption by end users.
 WildwoodComponents.Blazor/
     Components/
         AI/                  # AIChatComponent, AIFlowComponent, AIProxyComponent
-        AppTier/             # AppTierComponent
+        AppTier/             # AppTierComponent ([Obsolete] -> RegistrationSubscriptionManage)
         Authentication/      # AuthenticationComponent
         Base/                # BaseWildwoodComponent (all components inherit from this)
         Disclaimer/          # DisclaimerComponent
         Messaging/           # SecureMessagingComponent
         Notifications/       # NotificationComponent, NotificationToastComponent
         Payment/             # PaymentComponent, PaymentFormComponent
-        Pricing/             # PricingDisplayComponent
-        Registration/        # TokenRegistrationComponent, SignupWithSubscriptionComponent
+        Pricing/             # PricingDisplayComponent ([Obsolete] -> RegistrationSubscriptionPricing)
+        Registration/        # TokenRegistrationComponent, SignupWithSubscriptionComponent ([Obsolete] -> RegistrationSubscriptionSignup)
+        RegistrationSubscription/  # RegistrationAndSubscriptionComponent (View switch) + Pricing/Signup/Manage views + Parts/
         Security/            # TwoFactorSettingsComponent
         Subscription/        # SubscriptionAdminComponent + admin panels (tier-based; legacy Subscription/Manager removed June 2026)
         Usage/               # UsageDashboardComponent, OverageSummaryComponent

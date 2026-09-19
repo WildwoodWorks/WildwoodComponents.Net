@@ -4,6 +4,23 @@ using WildwoodComponents.Shared.Models;
 namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
 {
     /// <summary>
+    /// Which surface <see cref="RegistrationAndSubscriptionComponent"/> shows. The .NET spelling of
+    /// React's <c>view</c> prop, whose three members are the strings <c>pricing</c>,
+    /// <c>signup</c> and <c>manage</c>.
+    /// </summary>
+    public enum RegistrationSubscriptionView
+    {
+        /// <summary>The price list. The default, as in JS.</summary>
+        Pricing = 0,
+
+        /// <summary>Creating an account and paying for it.</summary>
+        Signup = 1,
+
+        /// <summary>Changing what an existing account already pays for.</summary>
+        Manage = 2
+    }
+
+    /// <summary>
     /// Which billing cycle a pricing surface is quoting. Ported from the JS
     /// <c>PricingBilling</c> union, whose two members are the strings <c>monthly</c> and
     /// <c>annual</c> — <see cref="PricingViewDecisions.BillingCode"/> spells them for the wire.
