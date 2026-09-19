@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Net.Http;
 using WildwoodComponents.Shared.Http;
+using WildwoodComponents.WebForms.Attribution;
 using WildwoodComponents.WebForms.Configuration;
 using WildwoodComponents.WebForms.Logging;
 using WildwoodComponents.WebForms.Services;
@@ -149,7 +150,11 @@ namespace WildwoodComponents.WebForms
                     Session,
                     Logger,
                     configured.Options.AppId,
-                    configured.Options.AppVersion);
+                    configured.Options.AppVersion,
+                    // Campaign Attribution captured server-side for this visit, attached to a
+                    // registration that carries none. Empty unless the host calls
+                    // WildwoodAttribution.Capture; reading it then costs one session lookup.
+                    WildwoodAttribution.Store);
             }
         }
 

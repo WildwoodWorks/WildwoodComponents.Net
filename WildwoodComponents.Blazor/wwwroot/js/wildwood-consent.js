@@ -23,7 +23,19 @@ class ConsentEngine {
     this.injectedIds = new Set();
   }
 
+  /**
+   * Initializes consent and then announces the state, restored or defaulted, exactly once. Without that
+   * announcement a returning visitor with a valid cookie never produces a change event, so a consumer
+   * gated on consent (Campaign Attribution's persistence) would wait forever. Mirrors @wildwood/core
+   * ConsentService.initialize(); later changes emit from _applyCategories and withdraw.
+   */
   async initialize(baseUrl, appId, options) {
+    const result = await this._initializeState(baseUrl, appId, options);
+    this._emitChange();
+    return result;
+  }
+
+  async _initializeState(baseUrl, appId, options) {
     this.baseUrl = (baseUrl || '').replace(/\/$/, '');
     this.appId = appId;
     if (options && options.cookieName) this.cookieName = options.cookieName;
@@ -141,7 +153,7 @@ class ConsentEngine {
     this.state.decided = true;
     this._injectConsented();
     await this._persist(gpcPresent ? 'Gpc' : 'NonTargetDefault');
-    this._emitChange();
+    // No _emitChange here: this runs only inside initialize(), which emits once for every path.
   }
 
   async _applyCategories(cats, method) {

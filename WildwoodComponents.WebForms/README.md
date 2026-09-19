@@ -53,6 +53,57 @@ Both come from the app's Details page in [WildwoodAdmin](https://admin.wildwoodw
 <ww:Authentication runat="server" ReturnUrl="~/Default.aspx" Title="Welcome back" />
 ```
 
+## Campaign Attribution
+
+A registration carries the campaign the visitor arrived on — UTM tags, an ad-platform click
+id, the external referrer — so a signup can be credited to the campaign that produced it.
+There are two ways to capture that, and they meet at the same registration field.
+
+**In the browser** (the same engine the other stacks run). Load `attribution.js` once, as
+early as the master page allows, so it reads the landing URL before anything navigates:
+
+```aspx
+<script src='<%= ResolveUrl("~/Scripts/wildwood/attribution.js") %>'
+        data-app-id="YOUR-APP-ID"
+        data-base-url="https://api.wildwoodworks.io"></script>
+```
+
+`authentication.js` then posts `window.wildwoodAttribution.getForRegistration()` with the
+signup and clears the touches once it succeeds. Nothing else is needed.
+
+**On the server**, for a site that renders its own sign-up page, or one that would rather not
+add a script. Capture every request in `Global.asax` — campaigns land on a marketing page, not
+on the sign-up page, so capturing only where the form lives misses them:
+
+```csharp
+void Application_AcquireRequestState(object sender, EventArgs e)
+{
+    WildwoodAttribution.Capture(new HttpContextWrapper(HttpContext.Current));
+}
+```
+
+`WildwoodWebForms.Auth.RegisterAsync` then attaches what was captured to any registration that
+does not already carry a payload, and drops the touches once the signup is recorded. A failed
+registration keeps them. The capture lives in ASP.NET session state under the SDK's
+`ww_attribution` key, and the normalization rules are the shared
+`WildwoodComponents.Shared.Utilities.AttributionRules` — the C# port of the same rules the
+browser engines and `@wildwood/core` apply, because WildwoodAPI re-applies them and drops
+whatever does not fit.
+
+**Consent.** This package ships no consent component, so the host reports the decision:
+
+```csharp
+WildwoodAttribution.ConsentDecision = () => MyConsentCookie.AnalyticsGranted
+    ? WildwoodAttributionConsent.Granted
+    : WildwoodAttributionConsent.Denied;
+```
+
+Unset, the decision is `Undecided`, which is the JS SDK's default: the touches are held for the
+visit and nothing new is written to the visitor's device — session state rides the site's
+existing session cookie. `Denied` drops anything held and captures nothing further, matching the
+SDK rule that stored touches are removed once consent no longer grants them. The browser engine
+applies its own gate from the app's consent configuration and needs no wiring here.
+
 ## How it is put together
 
 **The browser never talks to the WildwoodAPI.** A control renders a shell carrying

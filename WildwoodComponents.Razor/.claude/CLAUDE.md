@@ -43,7 +43,7 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 | Disclaimer | DisclaimerComponent | DisclaimerViewComponent | disclaimerService | DisclaimerComponent | -- | -- |
 | Feedback | FeedbackWidgetComponent | FeedbackWidgetViewComponent | feedbackService | FeedbackComponent | FeedbackComponent | -- |
 | Signup + Sub | SignupWithSubscriptionComponent | SignupWithSubscriptionViewComponent | -- | -- | -- | -- |
-| Campaign Attribution | AttributionBootstrap + IAttributionService (wildwood-attribution.js); AuthenticationComponent claims after a provider sign-in (IAttributionService.ClaimAsync) | AttributionViewComponent (attribution.js) + WildwoodAttributionProxyController claim for signed-in sessions | AttributionService (attribution engine) | useAttribution (WildwoodProvider starts capture) | useAttribution (provider captures deep links) | -- |
+| Campaign Attribution | AttributionBootstrap + IAttributionService (wildwood-attribution.js); AuthenticationService auto-attaches the payload to every registration path and claims after a provider-token sign-in (15-minute queue); AuthenticationComponent claims after a popup provider sign-in (IAttributionService.ClaimAsync) | AttributionViewComponent (attribution.js) + WildwoodAttributionProxyController claim for signed-in sessions | AttributionService (attribution engine) | useAttribution (WildwoodProvider starts capture) | useAttribution (provider captures deep links) | -- |
 
 *`--` = not yet implemented on that platform*
 

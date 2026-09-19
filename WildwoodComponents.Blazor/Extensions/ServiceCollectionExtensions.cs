@@ -276,8 +276,13 @@ namespace WildwoodComponents.Blazor.Extensions
                     var logger = loggerFactory?.CreateLogger<WildwoodComponents.Blazor.Services.AuthenticationService>() 
                                 ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.AuthenticationService>.Instance;
 
+                    // Optional: registered further down by RegisterAttributionService, and absent when a
+                    // host wires services by hand. With it, every registration path attaches the captured
+                    // campaign touches and a provider sign-in claims them once a session exists.
+                    var attribution = serviceProvider.GetService<WildwoodComponents.Blazor.Services.IAttributionService>();
+
                     // Create the service instance directly
-                    return new WildwoodComponents.Blazor.Services.AuthenticationService(httpClient, localStorage, logger);
+                    return new WildwoodComponents.Blazor.Services.AuthenticationService(httpClient, localStorage, logger, attribution);
                 }
                 catch (Exception ex)
                 {

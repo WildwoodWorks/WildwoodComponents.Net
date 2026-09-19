@@ -61,6 +61,10 @@
   <ItemGroup>
     <None Include="$(WildwoodSharedAssets)\js\wildwood-forms.js" Pack="true" PackagePath="content\Scripts\wildwood\" Visible="false" />
     <None Include="$(WildwoodSharedAssets)\js\authentication.js" Pack="true" PackagePath="content\Scripts\wildwood\" Visible="false" />
+    <!-- Campaign Attribution has no UI: authentication.js posts window.wildwoodAttribution's payload
+         with a signup when the page loads this engine. Optional — a host can capture server-side with
+         WildwoodAttribution.Capture instead. -->
+    <None Include="$(WildwoodSharedAssets)\js\attribution.js" Pack="true" PackagePath="content\Scripts\wildwood\" Visible="false" />
     <None Include="$(WildwoodSharedAssets)\js\twofactor-settings.js" Pack="true" PackagePath="content\Scripts\wildwood\" Visible="false" />
     <None Include="$(WildwoodSharedAssets)\css\wildwood-razor-themes.css" Pack="true" PackagePath="content\Content\wildwood\" Visible="false" />
     <None Include="$(WildwoodSharedAssets)\css\authentication.css" Pack="true" PackagePath="content\Content\wildwood\" Visible="false" />

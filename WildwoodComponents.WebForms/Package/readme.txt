@@ -7,7 +7,8 @@ WHAT THE INSTALL JUST ADDED
 ---------------------------
   Controls\Wildwood\*.ascx        the components you drop onto a page
   Handlers\Wildwood\*.ashx        working proxy endpoints (no code to write)
-  Scripts\wildwood\*.js           component behaviour
+  Scripts\wildwood\*.js           component behaviour (attribution.js is optional:
+                                  see step 4)
   Content\wildwood\*.css          component styling
   web.config                      Wildwood appSettings + the token module
 
@@ -76,6 +77,30 @@ Add it ONLY if the pool really is in Classic mode. That element in a site runnin
 an Integrated pool makes ASP.NET refuse to start the application at all — every
 request returns "HTTP Error 500.22 - An ASP.NET setting has been detected that does
 not apply in Integrated managed pipeline mode".
+
+4. OPTIONAL: CREDIT SIGNUPS TO THE CAMPAIGN THEY CAME FROM
+----------------------------------------------------------
+Campaign Attribution carries the UTM tags, ad click id and referrer of the landing
+page into the registration. Either capture it in the browser, by loading the engine
+once in your master page (early, so it sees the landing URL):
+
+  <script src='<%= ResolveUrl("~/Scripts/wildwood/attribution.js") %>'
+          data-app-id="YOUR-APP-ID"
+          data-base-url="https://api.wildwoodworks.io"></script>
+
+or capture it server-side, which also covers a sign-up page of your own:
+
+  void Application_AcquireRequestState(object sender, EventArgs e)
+  {
+      WildwoodComponents.WebForms.Attribution.WildwoodAttribution.Capture(
+          new HttpContextWrapper(HttpContext.Current));
+  }
+
+Either way the registration carries the payload and the touches are dropped once the
+signup is recorded. Consent: this package has no consent banner, so tell it what the
+visitor decided with WildwoodAttribution.ConsentDecision. Unset means "not answered",
+which holds the touches for the visit in session state and writes nothing new to the
+visitor's device.
 
 RECOMMENDED, NOT REQUIRED
 -------------------------
