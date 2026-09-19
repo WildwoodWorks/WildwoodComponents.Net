@@ -154,18 +154,160 @@ public class OverridesPanelViewModel
 }
 
 /// <summary>
-/// View model for the AddOnsPanel
+/// View model for the AddOnsPanel.
 /// </summary>
+/// <remarks>
+/// The rows are decided server-side through <see cref="AddOnRowRules"/> — the same rules the Blazor
+/// panel applies — and travel to the browser as data attributes, so the JS acts on a row instead of
+/// re-deriving who owns what.
+/// </remarks>
 public class AddOnsPanelViewModel
 {
+    private List<AddOnOwnedRowViewModel>? _ownedRows;
+    private List<AddOnOfferViewModel>? _offers;
+
     public string ComponentId { get; set; } = string.Empty;
     public string AppId { get; set; } = string.Empty;
     public string ProxyBaseUrl { get; set; } = string.Empty;
     public bool IsAdmin { get; set; }
     public string Currency { get; set; } = "USD";
     public string? CurrentTierId { get; set; }
+
+    /// <summary>
+    /// Every pack subscription the server returned, cancelled and expired ones included. Filtered
+    /// into <see cref="OwnedRows"/> by the access-granting rule.
+    /// </summary>
     public List<UserAddOnSubscriptionModel> ActiveAddOns { get; set; } = new();
+
     public List<AppTierAddOnModel> AvailableAddOns { get; set; } = new();
+
+    /// <summary>
+    /// Where the shipped same-origin proxy lives. The pack lifecycle no longer needs a host-written
+    /// route: <c>WildwoodRegistrationSubscriptionProxyController</c> serves subscribe, cancel and
+    /// reactivate, all answering HTTP 200 with the structured result so a refusal keeps its words.
+    /// </summary>
+    public string RegSubProxyUrl { get; set; } = "/api/wildwood-regsub";
+
+    /// <summary>Copy the host may replace; the shipped words otherwise.</summary>
+    public AddOnsPanelLabels Labels { get; set; } = new();
+
+    /// <summary>Whether this surface offers cancelling at all.</summary>
+    public bool AllowCancel { get; set; } = true;
+
+    /// <summary>Whether this surface offers taking a scheduled cancellation back.</summary>
+    public bool AllowReactivate { get; set; } = true;
+
+    /// <summary>
+    /// The packs the account still holds — the "Active Add-Ons" list. A Cancelled or Expired row
+    /// grants nothing, so it is not listed and its pack goes back on offer.
+    /// </summary>
+    public List<AddOnOwnedRowViewModel> OwnedRows
+    {
+        get { return _ownedRows ??= BuildOwnedRows(); }
+    }
+
+    /// <summary>The packs still on offer: everything the account does not currently own.</summary>
+    public List<AddOnOfferViewModel> Offers
+    {
+        get { return _offers ??= BuildOffers(); }
+    }
+
+    private List<AddOnOwnedRowViewModel> BuildOwnedRows()
+    {
+        var rows = new List<AddOnOwnedRowViewModel>();
+
+        foreach (var subscription in AddOnRowRules.OwnedRows(ActiveAddOns))
+        {
+            rows.Add(new AddOnOwnedRowViewModel(
+                subscription,
+                AddOnRowRules.Describe(subscription, AllowCancel, AllowReactivate, Labels)));
+        }
+
+        return rows;
+    }
+
+    private List<AddOnOfferViewModel> BuildOffers()
+    {
+        var offers = new List<AddOnOfferViewModel>();
+
+        foreach (var addOn in AddOnRowRules.AvailableRows(AvailableAddOns, ActiveAddOns))
+        {
+            var pricing = AddOnRowRules.DefaultPricing(addOn);
+            offers.Add(new AddOnOfferViewModel(
+                addOn,
+                pricing,
+                AddOnRowRules.IsBundledInTier(addOn, CurrentTierId),
+                AddOnRowRules.FormatPrice(addOn, pricing, Currency),
+                AddOnRowRules.BillingSuffix(pricing),
+                AddOnRowRules.TrialLabel(addOn, pricing)));
+        }
+
+        return offers;
+    }
+}
+
+/// <summary>
+/// One pack the account holds, with everything its row decided about itself.
+/// </summary>
+public class AddOnOwnedRowViewModel
+{
+    public AddOnOwnedRowViewModel(UserAddOnSubscriptionModel subscription, AddOnRowDecision decision)
+    {
+        Subscription = subscription;
+        Decision = decision;
+    }
+
+    public UserAddOnSubscriptionModel Subscription { get; }
+    public AddOnRowDecision Decision { get; }
+
+    /// <summary>The row's allowed actions, for the <c>data-ww-addon-actions</c> attribute.</summary>
+    public string ActionsAttribute
+    {
+        get { return Decision.ActionsAttribute; }
+    }
+}
+
+/// <summary>
+/// One pack still on offer, priced in its own currency with the trial the processor will start.
+/// </summary>
+public class AddOnOfferViewModel
+{
+    public AddOnOfferViewModel(
+        AppTierAddOnModel addOn,
+        AppTierAddOnPricingModel? pricing,
+        bool isBundled,
+        string priceText,
+        string billingSuffix,
+        string trialText)
+    {
+        AddOn = addOn;
+        Pricing = pricing;
+        IsBundled = isBundled;
+        PriceText = priceText;
+        BillingSuffix = billingSuffix;
+        TrialText = trialText;
+    }
+
+    public AppTierAddOnModel AddOn { get; }
+
+    /// <summary>The option a one-click subscribe buys; null when the pack sells none.</summary>
+    public AppTierAddOnPricingModel? Pricing { get; }
+
+    public bool IsBundled { get; }
+
+    /// <summary>The price in the pack's own currency — never a hard-coded symbol.</summary>
+    public string PriceText { get; }
+
+    public string BillingSuffix { get; }
+
+    /// <summary>"14-day free trial", or empty when nothing starts one.</summary>
+    public string TrialText { get; }
+
+    /// <summary>A bundled pack is already included, so it is shown rather than sold.</summary>
+    public bool CanSubscribe
+    {
+        get { return !IsBundled; }
+    }
 }
 
 /// <summary>

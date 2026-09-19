@@ -216,6 +216,39 @@ builder.Services.AddControllers()
 JSON-bodied and session-authorised. A host that wants CSRF tokens should apply its own
 filter or middleware across all three proxies rather than singling one out.
 
+### The add-ons panel now uses these routes (hosts: three fewer to write)
+
+`<vc:add-ons-panel />` — and the add-ons tab of `<vc:subscription-admin />` — used to post pack
+subscribe and cancel to the **host-supplied** app-tier proxy (`proxy-base-url`, default
+`/api/wildwood-app-tiers`) at `{proxy}/{appId}/addons/subscribe` and
+`{proxy}/{appId}/addons/subscriptions/{id}/cancel`. For the **signed-in user's own packs**,
+`wwwroot/js/subscription-admin.js` now posts them to the shipped proxy above instead, and gains
+**Reactivate**:
+
+| Action | Now posts to |
+|---|---|
+| Subscribe | `POST /api/wildwood-regsub/addons/subscribe` — body `{ "AddOnId", "PricingId" }` |
+| Cancel | `POST /api/wildwood-regsub/addons/{subscriptionId}/cancel?immediate=false` |
+| Reactivate | `POST /api/wildwood-regsub/addons/{subscriptionId}/reactivate` |
+
+You no longer implement those routes on your own proxy — delete them if you did. Three things
+follow:
+
+- **The pricing option travels with the subscribe.** It decides both the price and the trial the
+  processor starts, so it is sent rather than guessed server-side.
+- **A refusal keeps the server's words.** The proxy answers 200 with the structured result, so
+  "you already own that pack" is shown as written, inline in the panel (`.ww-addons-error`),
+  instead of the purchase silently appearing to have worked.
+- **401 says the session is gone.** No signed-in session means nothing is forwarded, and the panel
+  says "Your session has expired. Please sign in again."
+
+Override the base with `reg-sub-proxy-url` if your host mounts the controller elsewhere. The
+**company- and admin-scoped** add-on routes on your app-tier proxy (`addons/subscribe/company`,
+`addons/admin/subscribe-user/{userId}`, `addons/admin/cancel-user-addon/{id}`,
+`addons/subscriptions/{id}/cancel?immediate=true`) are unchanged and still yours — the shipped
+proxy acts as the signed-in user, so it has no company or admin scope. Reactivate is therefore
+offered only on a user's own packs.
+
 ---
 
 ## Payment component: trials, events and the billing address

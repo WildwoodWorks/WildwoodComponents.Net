@@ -7,6 +7,65 @@
 (function () {
     'use strict';
 
+    // ===== ADD-ON ROW RULES =====
+    //
+    // Named by hand after WildwoodComponents.Shared/Utilities/AddOnRowRules.cs, which decides the
+    // rows server-side. Nothing here re-derives ownership or what a row offers - these only turn an
+    // already-decided row into a request and an outcome into words. Pure, so they can be read and
+    // reasoned about on their own; this package has no JS test harness.
+
+    /** Where the shipped same-origin proxy lives when a panel names none. */
+    var WW_REGSUB_DEFAULT_URL = '/api/wildwood-regsub';
+
+    /** What the panel says when the session is gone (the proxy answers 401 and forwards nothing). */
+    var WW_SIGNED_OUT_MESSAGE = 'Your session has expired. Please sign in again.';
+
+    /**
+     * Mirrors AddOnRowRules.FailureMessage: the server's own refusal when it sent words, else the
+     * action's wording. Never empty.
+     */
+    function addOnFailureMessage(action, name, serverMessage) {
+        if (typeof serverMessage === 'string' && serverMessage.trim().length > 0) return serverMessage.trim();
+
+        var verb = action === 'subscribe' ? 'subscribe to' : (action === 'reactivate' ? 'reactivate' : 'cancel');
+        var packName = typeof name === 'string' && name.trim().length > 0 ? name.trim() : 'this pack';
+        return 'Could not ' + verb + ' ' + packName + '. Please try again.';
+    }
+
+    /**
+     * The refusal's message wherever the structured result carries it: subscribe nests it under
+     * `error`, cancel and reactivate put it flat on `errorMessage`.
+     */
+    function addOnRefusalMessage(payload) {
+        if (!payload) return '';
+        if (payload.error && payload.error.message) return payload.error.message;
+        return payload.errorMessage || '';
+    }
+
+    /**
+     * Mirrors AddOnRowDecision.ActionsAttribute: whether the server said this row offers the action.
+     * A row that offers nothing (a bundled pack) carries an empty attribute.
+     */
+    function addOnRowAllows(actionsAttribute, action) {
+        if (typeof actionsAttribute !== 'string' || actionsAttribute.length === 0) return false;
+
+        var allowed = actionsAttribute.split(/\s+/);
+        for (var i = 0; i < allowed.length; i++) {
+            if (allowed[i] === action) return true;
+        }
+        return false;
+    }
+
+    /** Proxy path for cancelling a pack at the end of the period already paid for. */
+    function addOnCancelPath(subscriptionId) {
+        return 'addons/' + encodeURIComponent(subscriptionId) + '/cancel?immediate=false';
+    }
+
+    /** Proxy path for taking a scheduled cancellation back. */
+    function addOnReactivatePath(subscriptionId) {
+        return 'addons/' + encodeURIComponent(subscriptionId) + '/reactivate';
+    }
+
     var roots = document.querySelectorAll('.ww-subscription-admin-component');
     for (var r = 0; r < roots.length; r++) {
         if (!roots[r]._wwSubAdminInit) {
@@ -750,82 +809,202 @@
                 });
         });
 
+        // ===== ADD-ONS =====
+        //
+        // The rows were decided server-side by AddOnRowRules and carry what they allow in
+        // data-ww-addon-actions, so nothing here re-derives who owns what. Every call goes to the
+        // SHIPPED same-origin proxy (/api/wildwood-regsub), which answers HTTP 200 with the
+        // structured result - refusals included - so a refusal keeps the server's own words.
+
+        var addOnsPanel = root.querySelector('.ww-addons-panel');
+        var addOnErrorEl = root.querySelector('.ww-addons-error');
+
+        function regsubUrl(path) {
+            var base = (addOnsPanel && addOnsPanel.dataset.regsubUrl) || WW_REGSUB_DEFAULT_URL;
+            return base.replace(/\/+$/, '') + '/' + path.replace(/^\//, '');
+        }
+
+        function regsubPost(path, body) {
+            return fetch(regsubUrl(path), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: body ? JSON.stringify(body) : null
+            }).then(function (r) {
+                if (r.status === 401) {
+                    var signedOut = new Error(WW_SIGNED_OUT_MESSAGE);
+                    signedOut.status = 401;
+                    throw signedOut;
+                }
+                if (!r.ok) {
+                    return r.text().catch(function () { return ''; }).then(function (text) {
+                        var failed = new Error(text || 'Request failed (HTTP ' + r.status + ')');
+                        failed.status = r.status;
+                        throw failed;
+                    });
+                }
+                return r.json().catch(function () { return { success: true }; });
+            });
+        }
+
+        // Server strings go in as text, never as markup.
+        function showAddOnError(text) {
+            if (!addOnErrorEl) {
+                showMessage(text, 'danger');
+                return;
+            }
+            addOnErrorEl.textContent = text;
+            addOnErrorEl.style.display = '';
+        }
+
+        // A retry never shows the last attempt's message.
+        function clearAddOnError() {
+            if (!addOnErrorEl) return;
+            addOnErrorEl.textContent = '';
+            addOnErrorEl.style.display = 'none';
+        }
+
+        function addOnCard(el) {
+            return el ? el.closest('.ww-addon-card') : null;
+        }
+
+        function setRowBusy(card, text) {
+            if (!card) return;
+            var busy = card.querySelector('.ww-addon-busy');
+            if (busy) {
+                busy.textContent = text || '';
+                busy.style.display = text ? '' : 'none';
+            }
+            var buttons = card.querySelectorAll('button');
+            for (var i = 0; i < buttons.length; i++) buttons[i].disabled = !!text;
+        }
+
+        function showCancelConfirm(card, showing) {
+            if (!card) return;
+            var confirmEl = card.querySelector('.ww-addon-confirm');
+            var cancelBtn = card.querySelector('.ww-cancel-addon-btn');
+            if (confirmEl) confirmEl.style.display = showing ? '' : 'none';
+            if (cancelBtn) cancelBtn.style.display = showing ? 'none' : '';
+        }
+
+        // One place that turns any outcome - refusal, 401, transport failure - into what the panel
+        // says, and reloads only when the mutation actually happened.
+        function runAddOnAction(card, action, name, busyText, successText, reason, request) {
+            clearAddOnError();
+            setRowBusy(card, busyText);
+
+            return request()
+                .then(function (payload) {
+                    if (payload && payload.success === false) {
+                        showAddOnError(addOnFailureMessage(action, name, addOnRefusalMessage(payload)));
+                        setRowBusy(card, '');
+                        return;
+                    }
+                    showMessage(successText, 'success');
+                    dispatchChanged(reason);
+                    setTimeout(function () { window.location.reload(); }, 1500);
+                })
+                .catch(function (err) {
+                    var message = err && err.status === 401
+                        ? WW_SIGNED_OUT_MESSAGE
+                        : addOnFailureMessage(action, name, err && err.message);
+                    showAddOnError(message);
+                    setRowBusy(card, '');
+                });
+        }
+
         // ===== ADD-ONS: SUBSCRIBE =====
 
         root.addEventListener('click', function (e) {
             var btn = e.target.closest('[data-action="subscribe-addon"]');
             if (!btn) return;
 
+            var card = addOnCard(btn);
+            var addOnName = btn.dataset.addonName || '';
             var addOnId = btn.dataset.addonId;
-            var addOnName = btn.dataset.addonName || 'this add-on';
-
-            if (!confirm('Subscribe to ' + addOnName + '?')) return;
-
-            setLoading(true, 'Subscribing to add-on...');
-
+            var pricingId = btn.dataset.pricingId || '';
             var scope = scopeParams();
-            var path, body;
 
-            if (scope.useCompany) {
-                path = appId + '/addons/subscribe/company';
-                body = { CompanyId: companyId, AppTierAddOnId: addOnId };
-            } else if (scope.useUser) {
-                path = appId + '/addons/admin/subscribe-user/' + userId;
-                body = { AppTierAddOnId: addOnId };
-            } else {
-                path = appId + '/addons/subscribe';
-                body = { AppId: appId, AppTierAddOnId: addOnId };
-            }
-
-            apiPost(path, body)
-                .then(function () {
-                    showMessage('Subscribed to ' + addOnName + '.', 'success');
-                    dispatchChanged('addon_subscribed');
-                    setTimeout(function () { window.location.reload(); }, 1500);
-                })
-                .catch(function (err) {
-                    showMessage('Failed to subscribe: ' + err.message, 'danger');
-                })
-                .finally(function () {
-                    setLoading(false);
+            runAddOnAction(card, 'subscribe', addOnName, 'Subscribing...',
+                'Subscribed to ' + (addOnName || 'the add-on') + '.', 'addon_subscribed', function () {
+                    // Buying for someone else stays on the host's app-tier proxy: the shipped proxy
+                    // acts as the signed-in user and has no company or admin scope.
+                    if (scope.useCompany) {
+                        return apiPost(appId + '/addons/subscribe/company',
+                            { CompanyId: companyId, AppTierAddOnId: addOnId });
+                    }
+                    if (scope.useUser) {
+                        return apiPost(appId + '/addons/admin/subscribe-user/' + userId,
+                            { AppTierAddOnId: addOnId });
+                    }
+                    // The pricing option that is bought decides the price and the trial, so its id
+                    // travels with the request instead of being guessed server-side.
+                    return regsubPost('addons/subscribe', { AddOnId: addOnId, PricingId: pricingId || null });
                 });
         });
 
-        // ===== ADD-ONS: CANCEL =====
+        // ===== ADD-ONS: CANCEL (two steps - the row asks first) =====
 
         root.addEventListener('click', function (e) {
             var btn = e.target.closest('[data-action="cancel-addon"]');
             if (!btn) return;
 
+            var card = addOnCard(btn);
+            if (!addOnRowAllows(card && card.dataset.wwAddonActions, 'cancel')) return;
+
+            clearAddOnError();
+            showCancelConfirm(card, true);
+        });
+
+        root.addEventListener('click', function (e) {
+            var btn = e.target.closest('[data-action="cancel-addon-keep"]');
+            if (!btn) return;
+
+            showCancelConfirm(addOnCard(btn), false);
+        });
+
+        root.addEventListener('click', function (e) {
+            var btn = e.target.closest('[data-action="cancel-addon-confirm"]');
+            if (!btn) return;
+
+            var card = addOnCard(btn);
+            if (!addOnRowAllows(card && card.dataset.wwAddonActions, 'cancel')) return;
+
             var subscriptionId = btn.dataset.subscriptionId;
-            var addonName = btn.dataset.addonName || 'this add-on';
-
-            if (!confirm('Cancel ' + addonName + '?')) return;
-
-            setLoading(true, 'Cancelling add-on...');
-
+            var addonName = (card && card.dataset.addonName) || '';
             var scope = scopeParams();
-            var path;
 
-            if (scope.useCompany) {
-                path = appId + '/addons/subscriptions/' + subscriptionId + '/cancel?immediate=true';
-            } else if (scope.useUser) {
-                path = appId + '/addons/admin/cancel-user-addon/' + subscriptionId;
-            } else {
-                path = appId + '/addons/subscriptions/' + subscriptionId + '/cancel';
-            }
+            showCancelConfirm(card, false);
 
-            apiPost(path)
-                .then(function () {
-                    showMessage(addonName + ' cancelled.', 'success');
-                    dispatchChanged('addon_cancelled');
-                    setTimeout(function () { window.location.reload(); }, 1500);
-                })
-                .catch(function (err) {
-                    showMessage('Failed to cancel: ' + err.message, 'danger');
-                })
-                .finally(function () {
-                    setLoading(false);
+            runAddOnAction(card, 'cancel', addonName, 'Cancelling...',
+                (addonName || 'The add-on') + ' cancelled.', 'addon_cancelled', function () {
+                    // Cancelling someone else's pack stays on the host's app-tier proxy.
+                    if (scope.useCompany) {
+                        return apiPost(appId + '/addons/subscriptions/' + subscriptionId + '/cancel?immediate=true');
+                    }
+                    if (scope.useUser) {
+                        return apiPost(appId + '/addons/admin/cancel-user-addon/' + subscriptionId);
+                    }
+                    // immediate=false - the user keeps what the current period was paid for, which
+                    // is what the confirmation just promised.
+                    return regsubPost(addOnCancelPath(subscriptionId));
+                });
+        });
+
+        // ===== ADD-ONS: REACTIVATE =====
+
+        root.addEventListener('click', function (e) {
+            var btn = e.target.closest('[data-action="reactivate-addon"]');
+            if (!btn) return;
+
+            var card = addOnCard(btn);
+            if (!addOnRowAllows(card && card.dataset.wwAddonActions, 'reactivate')) return;
+
+            var subscriptionId = btn.dataset.subscriptionId;
+            var addonName = (card && card.dataset.addonName) || '';
+
+            runAddOnAction(card, 'reactivate', addonName, 'Reactivating...',
+                (addonName || 'The add-on') + ' reactivated.', 'addon_reactivated', function () {
+                    return regsubPost(addOnReactivatePath(subscriptionId));
                 });
         });
 

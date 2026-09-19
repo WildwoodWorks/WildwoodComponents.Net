@@ -30,7 +30,10 @@ public class AddOnsPanelViewComponent : ViewComponent
         bool isCompanyMode = false,
         string? companyId = null,
         string? userId = null,
-        UserTierSubscriptionModel? subscription = null)
+        UserTierSubscriptionModel? subscription = null,
+        bool allowCancel = true,
+        bool allowReactivate = true,
+        string regSubProxyUrl = "/api/wildwood-regsub")
     {
         var activeAddOns = new List<UserAddOnSubscriptionModel>();
         var availableAddOns = new List<AppTierAddOnModel>();
@@ -61,11 +64,16 @@ public class AddOnsPanelViewComponent : ViewComponent
             ComponentId = componentId,
             AppId = appId,
             ProxyBaseUrl = proxyBaseUrl,
+            RegSubProxyUrl = regSubProxyUrl,
             IsAdmin = isAdmin,
             Currency = currency,
             CurrentTierId = subscription?.AppTierId,
             ActiveAddOns = activeAddOns,
-            AvailableAddOns = availableAddOns
+            AvailableAddOns = availableAddOns,
+            AllowCancel = allowCancel,
+            // Reactivate is the signed-in user's own action: the shipped proxy route acts as that
+            // user and there is no company- or admin-scoped equivalent to offer.
+            AllowReactivate = allowReactivate && !useCompanyScope && !useUserScope
         };
 
         return View(model);

@@ -1,5 +1,6 @@
 @using WildwoodComponents.Blazor.Components.Base
 @using WildwoodComponents.Shared.Models
+@using WildwoodComponents.Shared.Utilities
 @inherits BaseWildwoodComponent
 
 @if (IsLoading)
@@ -13,52 +14,117 @@
 else
 {
     <div class="ww-addons-panel">
-        @* Active Add-On Subscriptions *@
-        @if (_activeSubscriptions.Count > 0)
+        @* A refused subscribe, cancel or reactivate is said here — it used to reach the log and nothing else *@
+        @if (!string.IsNullOrEmpty(_actionError))
+        {
+            <div class="ww-alert ww-alert-danger ww-addons-error alert alert-danger" role="alert">
+                @_actionError
+            </div>
+        }
+
+        @if (OnAddPacks.HasDelegate)
+        {
+            <div class="ww-addons-header mb-3">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="RaiseAddPacksAsync">
+                    <i class="fas fa-plus me-1"></i>@Labels.AddPacks
+                </button>
+            </div>
+        }
+
+        @* Owned add-on subscriptions — only the statuses that still grant what they pay for *@
+        @if (_ownedSubscriptions.Count > 0)
         {
             <h6 class="text-uppercase text-muted fw-bold mb-3">
                 <i class="fas fa-puzzle-piece me-2"></i>Active Add-Ons
             </h6>
 
-            <div class="row g-3 mb-4">
-                @foreach (var sub in _activeSubscriptions)
+            <div class="row g-3 mb-4 ww-addons-grid">
+                @foreach (var sub in _ownedSubscriptions)
                 {
+                    var decision = DescribeRow(sub);
+
                     <div class="col-md-6 col-lg-4">
-                        <div class="card shadow-sm h-100">
+                        <div class="card shadow-sm h-100 ww-addon-card ww-addon-active">
                             <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <h6 class="card-title mb-0">@sub.AddOnName</h6>
-                                    @if (sub.IsBundled)
-                                    {
-                                        <span class="badge bg-info">Bundled</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-success">@sub.Status</span>
-                                    }
+                                <div class="d-flex justify-content-between align-items-start mb-2 ww-addon-header">
+                                    <h6 class="card-title mb-0 ww-addon-name">@sub.AddOnName</h6>
+                                    <span class="badge @StatusBadgeClass(sub, decision)">@decision.StatusLabel</span>
                                 </div>
+
+                                @if (decision.ShowIncludedBadge)
+                                {
+                                    <div class="mb-2">
+                                        <span class="badge bg-info ww-badge ww-badge-info ww-addon-included">@Labels.Included</span>
+                                    </div>
+                                }
 
                                 @if (!string.IsNullOrEmpty(sub.AddOnDescription))
                                 {
                                     <p class="text-muted small mb-2">@sub.AddOnDescription</p>
                                 }
 
-                                <div class="small text-muted mb-2">
+                                <div class="small text-muted mb-2 ww-addon-dates">
                                     <i class="fas fa-calendar me-1"></i>
-                                    Since @sub.StartDate.ToString("MMM d, yyyy")
-                                    @if (sub.CurrentPeriodEnd.HasValue)
+                                    Started: @sub.StartDate.ToString("MMM d, yyyy")
+                                    @switch (decision.DateLine)
                                     {
-                                        <span> &middot; Renews @sub.CurrentPeriodEnd.Value.ToString("MMM d, yyyy")</span>
+                                        case AddOnDateLine.Renews:
+                                            <span> &middot; Renews: @decision.EndDate!.Value.ToString("MMM d, yyyy")</span>
+                                            break;
+                                        case AddOnDateLine.Cancels:
+                                            <span> &middot; Cancels on: @decision.EndDate!.Value.ToString("MMM d, yyyy")</span>
+                                            break;
+                                        case AddOnDateLine.CancelsAtPeriodEnd:
+                                            <span> &middot; Cancels at the end of the billing period</span>
+                                            break;
                                     }
                                 </div>
 
-                                @if (!sub.IsBundled)
+                                @if (IsBusy(sub.Id))
                                 {
-                                    <button class="btn btn-outline-danger btn-sm"
-                                            disabled="@_isProcessing"
-                                            @onclick="@(() => CancelAddOn(sub.Id, false))">
-                                        <i class="fas fa-times me-1"></i>Cancel
-                                    </button>
+                                    <span class="small text-muted">
+                                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        @(_busyAction == AddOnAction.Reactivate ? "Reactivating..." : "Cancelling...")
+                                    </span>
+                                }
+                                else
+                                {
+                                    @* A scheduled cancellation on a billed pack can be taken back; a granted
+                                       pack has nothing at a provider to take back *@
+                                    @if (decision.OffersReactivate)
+                                    {
+                                        <button type="button" class="btn btn-outline-primary btn-sm ww-addon-reactivate"
+                                                @onclick="@(() => ReactivateAddOn(sub))">
+                                            <i class="fas fa-rotate-left me-1"></i>@Labels.Reactivate
+                                        </button>
+                                    }
+
+                                    @if (decision.OffersCancel)
+                                    {
+                                        @if (IsConfirming(sub.Id))
+                                        {
+                                            <div class="ww-addon-confirm">
+                                                <p class="ww-addon-confirm-message small mb-2">@decision.CancelMessage</p>
+                                                <div class="ww-addon-confirm-actions d-flex gap-2">
+                                                    <button type="button" class="btn btn-danger btn-sm"
+                                                            @onclick="@(() => CancelAddOn(sub))">
+                                                        @Labels.CancelConfirm
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                                                            @onclick="KeepPack">
+                                                        @Labels.CancelKeep
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                                    @onclick="@(() => BeginCancelConfirmation(sub.Id))">
+                                                <i class="fas fa-times me-1"></i>Cancel
+                                            </button>
+                                        }
+                                    }
                                 }
                             </div>
                         </div>
@@ -74,23 +140,23 @@ else
                 <i class="fas fa-plus-circle me-2"></i>Available Add-Ons
             </h6>
 
-            <div class="row g-3">
+            <div class="row g-3 ww-addons-grid">
                 @foreach (var addOn in _availableAddOns)
                 {
-                    var isSubscribed = IsAddOnSubscribed(addOn);
-                    var isBundled = IsAddOnBundled(addOn);
-                    var pricing = GetDefaultPricing(addOn);
+                    var isBundled = AddOnRowRules.IsBundledInTier(addOn, CurrentTierId);
+                    var pricing = AddOnRowRules.DefaultPricing(addOn);
+                    var trial = AddOnRowRules.TrialLabel(addOn, pricing);
 
                     <div class="col-md-6 col-lg-4">
-                        <div class="card shadow-sm h-100 @(isSubscribed || isBundled ? "border-success" : "")">
+                        <div class="card shadow-sm h-100 ww-addon-card @(isBundled ? "border-success" : "")">
                             <div class="card-body d-flex flex-column">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div class="d-flex justify-content-between align-items-start mb-2 ww-addon-header">
                                     <div>
                                         @if (!string.IsNullOrEmpty(addOn.IconClass))
                                         {
-                                            <i class="@addOn.IconClass me-2" style="color: var(--ww-primary, #0d6efd);"></i>
+                                            <i class="@addOn.IconClass me-2 ww-addon-icon" style="color: var(--ww-primary, #0d6efd);"></i>
                                         }
-                                        <strong>@addOn.Name</strong>
+                                        <strong class="ww-addon-name">@addOn.Name</strong>
                                     </div>
                                     @if (!string.IsNullOrEmpty(addOn.BadgeColor))
                                     {
@@ -105,7 +171,7 @@ else
 
                                 @if (addOn.Features.Count > 0)
                                 {
-                                    <ul class="list-unstyled small mb-2">
+                                    <ul class="list-unstyled small mb-2 ww-addon-features">
                                         @foreach (var feature in addOn.Features)
                                         {
                                             <li><i class="fas fa-check text-success me-1"></i>@feature.DisplayName</li>
@@ -115,42 +181,43 @@ else
 
                                 @if (pricing != null)
                                 {
-                                    <div class="mb-2">
-                                        <strong>$@pricing.Price.ToString("N2")</strong>
-                                        <small class="text-muted">/@pricing.BillingFrequency.ToLower()</small>
+                                    <div class="mb-2 ww-addon-price">
+                                        <strong>@AddOnRowRules.FormatPrice(addOn, pricing, Currency)</strong>
+                                        <small class="text-muted">/@AddOnRowRules.BillingSuffix(pricing)</small>
                                     </div>
                                 }
 
-                                @if (addOn.TrialDays.HasValue && addOn.TrialDays.Value > 0)
+                                @* The processor's trial comes from the pricing option that is bought;
+                                   the pack-level value is only a fallback *@
+                                @if (!string.IsNullOrEmpty(trial))
                                 {
-                                    <small class="text-info mb-2">
-                                        <i class="fas fa-clock me-1"></i>@addOn.TrialDays-day free trial
+                                    <small class="text-info mb-2 ww-addon-trial">
+                                        <i class="fas fa-clock me-1"></i>@trial
                                     </small>
                                 }
 
-                                <div class="mt-auto">
+                                <div class="mt-auto ww-addon-footer">
                                     @if (isBundled)
                                     {
                                         <button class="btn btn-outline-success btn-sm w-100" disabled>
                                             <i class="fas fa-gift me-1"></i>Included in Plan
                                         </button>
                                     }
-                                    else if (isSubscribed)
-                                    {
-                                        <button class="btn btn-outline-secondary btn-sm w-100" disabled>
-                                            <i class="fas fa-check me-1"></i>Subscribed
-                                        </button>
-                                    }
                                     else
                                     {
-                                        <button class="btn btn-primary btn-sm w-100"
-                                                disabled="@(_isProcessing && _processingAddOnId == addOn.Id)"
-                                                @onclick="@(() => SubscribeToAddOn(addOn.Id))">
-                                            @if (_isProcessing && _processingAddOnId == addOn.Id)
+                                        <button type="button" class="btn btn-primary btn-sm w-100"
+                                                disabled="@IsBusy(addOn.Id)"
+                                                @onclick="@(() => SubscribeToAddOn(addOn))">
+                                            @if (IsBusy(addOn.Id))
                                             {
                                                 <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                <span>Subscribing...</span>
                                             }
-                                            <i class="fas fa-plus me-1"></i>Subscribe
+                                            else
+                                            {
+                                                <i class="fas fa-plus me-1"></i>
+                                                <span>Subscribe</span>
+                                            }
                                         </button>
                                     }
                                 </div>
@@ -160,7 +227,7 @@ else
                 }
             </div>
         }
-        else if (_activeSubscriptions.Count == 0)
+        else if (_ownedSubscriptions.Count == 0)
         {
             <div class="alert alert-info">
                 <i class="fas fa-info-circle me-2"></i>No add-ons are available for this application.

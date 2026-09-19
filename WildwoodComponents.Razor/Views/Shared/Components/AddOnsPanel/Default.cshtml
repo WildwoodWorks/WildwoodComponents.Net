@@ -1,51 +1,117 @@
+@using WildwoodComponents.Shared.Utilities
 @model WildwoodComponents.Razor.Models.AddOnsPanelViewModel
 
+@*
+    A pack row says how it is paid for, because that decides what cancelling it does. A row with no
+    payment behind it was GRANTED - a registration token's pack, or an admin's - so nothing bills it,
+    there is no renewal to show and there is nothing to reactivate at a provider. Every one of those
+    decisions is made server-side by AddOnRowRules (shared with the Blazor panel) and travels down as
+    data attributes; subscription-admin.js acts on a row, it does not re-derive the rules.
+*@
 @{
     var cid = Model.ComponentId;
-    string FormatPrice(decimal price) => price.ToString("C2", System.Globalization.CultureInfo.GetCultureInfo(Model.Currency == "EUR" ? "de-DE" : "en-US"));
+    var labels = Model.Labels;
 }
 
-<div class="ww-addons-panel" id="ww-addons-@cid" data-component-id="@cid">
-    @* Active Add-Ons *@
-    @if (Model.ActiveAddOns.Any())
+<div class="ww-addons-panel" id="ww-addons-@cid"
+     data-component-id="@cid"
+     data-regsub-url="@Model.RegSubProxyUrl">
+
+    @* Where a refused subscribe, cancel or reactivate is said. Filled by JS with textContent. *@
+    <div class="ww-alert ww-alert-danger ww-addons-error alert alert-danger" role="alert" style="display:none;"></div>
+
+    @* Active Add-Ons - only the statuses that still grant what they pay for *@
+    @if (Model.OwnedRows.Count > 0)
     {
         <h6 class="text-muted mb-3"><i class="bi bi-check-circle me-1"></i> Active Add-Ons</h6>
-        <div class="row g-3 mb-4">
-            @foreach (var addon in Model.ActiveAddOns)
+        <div class="row g-3 mb-4 ww-addons-grid">
+            @foreach (var row in Model.OwnedRows)
             {
+                var addon = row.Subscription;
+                var decision = row.Decision;
+
                 <div class="col-md-6 col-lg-4">
-                    <div class="card h-100 border-success ww-active-addon-card" data-subscription-id="@addon.Id" data-addon-id="@addon.AppTierAddOnId">
+                    <div class="card h-100 border-success ww-addon-card ww-active-addon-card"
+                         data-subscription-id="@addon.Id"
+                         data-addon-id="@addon.AppTierAddOnId"
+                         data-addon-name="@addon.AddOnName"
+                         data-ww-addon-actions="@row.ActionsAttribute">
                         <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <h6 class="card-title mb-1">@addon.AddOnName</h6>
+                            <div class="d-flex justify-content-between align-items-start ww-addon-header">
+                                <h6 class="card-title mb-1 ww-addon-name">@addon.AddOnName</h6>
                                 @if (addon.IsBundled)
                                 {
-                                    <span class="badge bg-info">Bundled</span>
+                                    <span class="badge bg-info">@decision.StatusLabel</span>
+                                }
+                                else if (decision.Cancelling)
+                                {
+                                    <span class="badge bg-warning text-dark ww-badge-warning">@decision.StatusLabel</span>
                                 }
                                 else
                                 {
-                                    <span class="badge bg-success">Active</span>
+                                    <span class="badge bg-success">@decision.StatusLabel</span>
                                 }
                             </div>
+
+                            @if (decision.ShowIncludedBadge)
+                            {
+                                <div class="mb-2">
+                                    <span class="badge bg-info ww-badge ww-badge-info ww-addon-included">@labels.Included</span>
+                                </div>
+                            }
+
                             @if (!string.IsNullOrEmpty(addon.AddOnDescription))
                             {
                                 <p class="text-muted small mb-2">@addon.AddOnDescription</p>
                             }
-                            <div class="small text-muted mb-2">
-                                Since @addon.StartDate.ToString("MMM d, yyyy")
-                                @if (addon.TrialEndDate.HasValue && addon.TrialEndDate > DateTime.UtcNow)
+
+                            <div class="small text-muted mb-2 ww-addon-dates">
+                                Started: @addon.StartDate.ToString("MMM d, yyyy")
+                                @switch (decision.DateLine)
                                 {
-                                    <span class="badge bg-info ms-1">Trial until @addon.TrialEndDate.Value.ToString("MMM d")</span>
+                                    case AddOnDateLine.Renews:
+                                        <span> &middot; Renews: @decision.EndDate!.Value.ToString("MMM d, yyyy")</span>
+                                        break;
+                                    case AddOnDateLine.Cancels:
+                                        <span> &middot; Cancels on: @decision.EndDate!.Value.ToString("MMM d, yyyy")</span>
+                                        break;
+                                    case AddOnDateLine.CancelsAtPeriodEnd:
+                                        <span> &middot; Cancels at the end of the billing period</span>
+                                        break;
                                 }
                             </div>
-                            @if (!addon.IsBundled)
+
+                            @* Busy line, shown by JS while a call is in flight *@
+                            <div class="small text-muted ww-addon-busy" style="display:none;"></div>
+
+                            @* A scheduled cancellation on a billed pack can be taken back *@
+                            @if (decision.OffersReactivate)
                             {
+                                <button type="button" class="btn btn-outline-primary btn-sm ww-addon-reactivate"
+                                        data-subscription-id="@addon.Id"
+                                        data-action="reactivate-addon">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i> @labels.Reactivate
+                                </button>
+                            }
+
+                            @if (decision.OffersCancel)
+                            {
+                                @* Two-step: nothing is cancelled on the first click *@
                                 <button type="button" class="btn btn-outline-danger btn-sm ww-cancel-addon-btn"
                                         data-subscription-id="@addon.Id"
-                                        data-addon-name="@addon.AddOnName"
                                         data-action="cancel-addon">
                                     <i class="bi bi-x-circle me-1"></i> Cancel
                                 </button>
+                                <div class="ww-addon-confirm" style="display:none;">
+                                    <p class="ww-addon-confirm-message small mb-2">@decision.CancelMessage</p>
+                                    <div class="ww-addon-confirm-actions d-flex gap-2">
+                                        <button type="button" class="btn btn-danger btn-sm"
+                                                data-subscription-id="@addon.Id"
+                                                data-action="cancel-addon-confirm">@labels.CancelConfirm</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                                data-action="cancel-addon-keep">@labels.CancelKeep</button>
+                                    </div>
+                                </div>
                             }
                         </div>
                     </div>
@@ -56,7 +122,7 @@
 
     @* Available Add-Ons *@
     <h6 class="text-muted mb-3"><i class="bi bi-puzzle me-1"></i> Available Add-Ons</h6>
-    @if (!Model.AvailableAddOns.Any())
+    @if (Model.Offers.Count == 0)
     {
         <div class="text-center text-muted p-3">
             No additional add-ons available.
@@ -64,21 +130,23 @@
     }
     else
     {
-        <div class="row g-3">
-            @foreach (var addon in Model.AvailableAddOns)
+        <div class="row g-3 ww-addons-grid">
+            @foreach (var offer in Model.Offers)
             {
-                var isSubscribed = Model.ActiveAddOns.Any(a => string.Equals(a.AppTierAddOnId, addon.Id, StringComparison.OrdinalIgnoreCase));
-                var isBundled = !string.IsNullOrEmpty(Model.CurrentTierId) && addon.BundledInTierIds.Any(id => string.Equals(id, Model.CurrentTierId, StringComparison.OrdinalIgnoreCase));
+                var addon = offer.AddOn;
 
                 <div class="col-md-6 col-lg-4">
-                    <div class="card h-100 ww-available-addon-card @(isSubscribed ? "border-success" : "")" data-addon-id="@addon.Id">
+                    <div class="card h-100 ww-addon-card ww-available-addon-card @(offer.IsBundled ? "border-success" : "")"
+                         data-addon-id="@addon.Id"
+                         data-addon-name="@addon.Name"
+                         data-pricing-id="@(offer.Pricing?.Id ?? string.Empty)">
                         <div class="card-body d-flex flex-column">
-                            <div class="d-flex align-items-center mb-2">
+                            <div class="d-flex align-items-center mb-2 ww-addon-header">
                                 @if (!string.IsNullOrEmpty(addon.IconClass))
                                 {
-                                    <i class="@addon.IconClass me-2 fs-5"></i>
+                                    <i class="@addon.IconClass me-2 fs-5 ww-addon-icon"></i>
                                 }
-                                <h6 class="card-title mb-0">@addon.Name</h6>
+                                <h6 class="card-title mb-0 ww-addon-name">@addon.Name</h6>
                             </div>
 
                             @if (!string.IsNullOrEmpty(addon.Description))
@@ -87,9 +155,9 @@
                             }
 
                             @* Features *@
-                            @if (addon.Features.Any())
+                            @if (addon.Features.Count > 0)
                             {
-                                <ul class="list-unstyled small mb-2">
+                                <ul class="list-unstyled small mb-2 ww-addon-features">
                                     @foreach (var feature in addon.Features)
                                     {
                                         <li><i class="bi bi-check text-success me-1"></i> @feature.DisplayName</li>
@@ -97,31 +165,25 @@
                                 </ul>
                             }
 
-                            @* Pricing *@
-                            @if (addon.PricingOptions.Any())
+                            @* Price in the pack's own currency *@
+                            @if (offer.Pricing != null)
                             {
-                                <div class="mb-2">
-                                    @foreach (var pricing in addon.PricingOptions.Take(1))
-                                    {
-                                        <span class="fw-bold">@FormatPrice(pricing.Price)</span>
-                                        <span class="text-muted small">/@pricing.BillingFrequency</span>
-                                    }
+                                <div class="mb-2 ww-addon-price">
+                                    <span class="fw-bold">@offer.PriceText</span>
+                                    <span class="text-muted small">/@offer.BillingSuffix</span>
                                 </div>
                             }
 
-                            @if (addon.TrialDays.HasValue && addon.TrialDays > 0)
+                            @* The trial the processor will actually start: the pricing option's, then the pack's *@
+                            @if (!string.IsNullOrEmpty(offer.TrialText))
                             {
-                                <div class="small text-info mb-2">
-                                    <i class="bi bi-clock me-1"></i> @(addon.TrialDays)-day free trial
+                                <div class="small text-info mb-2 ww-addon-trial">
+                                    <i class="bi bi-clock me-1"></i> @offer.TrialText
                                 </div>
                             }
 
-                            <div class="mt-auto">
-                                @if (isSubscribed)
-                                {
-                                    <span class="text-success small"><i class="bi bi-check-circle me-1"></i> Subscribed</span>
-                                }
-                                else if (isBundled)
+                            <div class="mt-auto ww-addon-footer">
+                                @if (offer.IsBundled)
                                 {
                                     <span class="text-info small"><i class="bi bi-box me-1"></i> Included in plan</span>
                                 }
@@ -130,6 +192,7 @@
                                     <button type="button" class="btn btn-primary btn-sm ww-subscribe-addon-btn"
                                             data-addon-id="@addon.Id"
                                             data-addon-name="@addon.Name"
+                                            data-pricing-id="@(offer.Pricing?.Id ?? string.Empty)"
                                             data-action="subscribe-addon">
                                         <i class="bi bi-plus-circle me-1"></i> Subscribe
                                     </button>
