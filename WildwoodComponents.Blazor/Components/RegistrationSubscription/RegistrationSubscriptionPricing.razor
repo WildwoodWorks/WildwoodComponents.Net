@@ -1,0 +1,72 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.RegistrationSubscription.Parts
+@inherits BaseWildwoodComponent
+
+@* The pricing view: what the app sells, at the price the server is quoting right now.
+   While the catalog loads the visitor sees shapes; if it cannot be read they see "pricing is
+   unavailable" and a Retry, never a number the server did not just say. *@
+<div class="ww-regsub ww-regsub-pricing @CssClass" data-ww-view="pricing" @attributes="AdditionalAttributes">
+    @if (Body == PricingBodyKind.Error)
+    {
+        @* Never a stale price and never an invented one: when the catalog cannot be read the
+           prices go away with it. *@
+        @if (ErrorFallback is not null)
+        {
+            @ErrorFallback
+        }
+        else
+        {
+            <div class="ww-regsub-unavailable ww-alert ww-alert-danger" role="alert">
+                <span>@ResolvedLabels.PricingUnavailable</span>
+                <button type="button" class="ww-btn ww-btn-outline" @onclick="RetryAsync">@ResolvedLabels.Retry</button>
+            </div>
+        }
+    }
+    else if (Body == PricingBodyKind.Loading)
+    {
+        @if (LoadingFallback is not null)
+        {
+            @LoadingFallback
+        }
+        else
+        {
+            <PricingSkeleton Label="@ResolvedLabels.LoadingPlans" />
+        }
+    }
+    else if (Body == PricingBodyKind.Content)
+    {
+        @if (ShowPlans)
+        {
+            <PlanGrid Tiers="VisibleTiers"
+                      Currency="@DisplayCurrency"
+                      Billing="_billing"
+                      OnBillingChange="HandleBillingChangeAsync"
+                      ShowBillingToggle="ShowBillingToggle"
+                      ShowFeatures="ShowFeatureComparison"
+                      ShowLimits="ShowLimits"
+                      HighlightTierId="@HighlightTierId"
+                      ContactUrl="@ContactUrl"
+                      Labels="ResolvedLabels"
+                      OnSelectTier="HandleSelectTierAsync" />
+        }
+
+        @if (ShowAddOns && Catalog is not null)
+        {
+            <PackGrid AddOns="Catalog.AddOns"
+                      Currency="@DisplayCurrency"
+                      AddOnGroups="AddOnGroups"
+                      Describe="DescribeAddOn"
+                      Selection="PackSelection"
+                      SelectedIds="_selectedPackIds"
+                      Labels="ResolvedLabels"
+                      OnToggle="HandleTogglePackAsync"
+                      OnChoose="HandleChoosePackAsync"
+                      OnContinue="HandleContinueWithPacksAsync" />
+        }
+
+        @if (IncludeJsonLd)
+        {
+            <CatalogJsonLd Catalog="Catalog" Url="@JsonLdUrl" />
+        }
+    }
+</div>

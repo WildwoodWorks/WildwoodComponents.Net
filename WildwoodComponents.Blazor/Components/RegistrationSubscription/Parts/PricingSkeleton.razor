@@ -1,0 +1,12 @@
+@using WildwoodComponents.Blazor.Components.Base
+@inherits BaseWildwoodComponent
+
+@* Blocks, never numbers. A skeleton that shows a price - a remembered one, a "from" price, a zero -
+   is a price the visitor may act on and the server never quoted, so there is nothing here to read
+   but shapes. The only text is the accessible status message. *@
+<div class="ww-pricing-skeleton @CssClass" role="status" aria-busy="true" aria-label="@Label" @attributes="AdditionalAttributes">
+    @for (var card = 0; card < CardCount; card++)
+    {
+        <div></div>
+    }
+</div>

@@ -1,0 +1,232 @@
+/* RegistrationSubscriptionPricing - scoped CSS.
+
+   Ported from the ww-regsub / ww-pack- / ww-pricing-skeleton families in the JS SDK
+   (packages/wildwood-react/src/styles/components.css). The class names are the cross-stack hook
+   every stack's end-to-end suite locates by, so they are identical here.
+
+   ::deep throughout: the classes sit on this component's own markup and on the Parts rendered
+   inside it (PlanGrid, PackGrid, PackCardBody, PricingSkeleton), all of which are descendants of
+   the scoped root element.
+
+   Every colour is a --ww-* custom property WITH a fallback, so the component looks right in a host
+   that has not imported wildwood-themes.css, and follows the host's theme in one that has. */
+
+/* ── The view itself ── */
+
+::deep .ww-regsub {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+::deep .ww-regsub-pricing {
+    width: 100%;
+}
+
+::deep .ww-regsub-plans,
+::deep .ww-regsub-packs {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+::deep .ww-regsub-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    border: 1px solid var(--ww-border-light, rgba(0, 0, 0, 0.125));
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+/* Shown in place of prices when the catalog cannot be read. Carries a Retry, never a price. */
+::deep .ww-regsub-unavailable {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+::deep .ww-regsub-notice {
+    margin: 0;
+    color: var(--ww-text-secondary, #495057);
+}
+
+/* ── The placeholder while live prices load: blocks only, never a number ── */
+
+::deep .ww-pricing-skeleton {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+}
+
+::deep .ww-pricing-skeleton > div {
+    height: 12rem;
+    border: 1px solid var(--ww-border-light, rgba(0, 0, 0, 0.125));
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    background: var(--ww-bg-tertiary, #e9ecef);
+    animation: ww-regsub-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes ww-regsub-pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.55;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    ::deep .ww-pricing-skeleton > div {
+        animation: none;
+    }
+}
+
+/* ── Pack groups ── */
+
+::deep .ww-regsub-pack-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+::deep .ww-regsub-pack-group-title {
+    margin: 0;
+    font-size: 1.05rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-regsub-pack-group-blurb {
+    margin: 0;
+    color: var(--ww-text-secondary, #495057);
+}
+
+/* ── Pack cards ── */
+
+::deep .ww-pack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+}
+
+::deep .ww-pack-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    background: var(--ww-bg-primary, #ffffff);
+    color: var(--ww-text-primary, #212529);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+::deep .ww-pack-card:hover {
+    border-color: var(--ww-primary, #0d6efd);
+    box-shadow: var(--ww-shadow-sm, 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075));
+}
+
+::deep .ww-pack-card--selected {
+    border-color: var(--ww-primary, #0d6efd);
+    box-shadow: var(--ww-shadow-sm, 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075));
+    background: var(--ww-hover-bg, rgba(13, 110, 253, 0.08));
+}
+
+::deep .ww-pack-card--granted {
+    border-color: var(--ww-success, #198754);
+    background: var(--ww-success-bg, #d1e7dd);
+    cursor: default;
+}
+
+/* Card internals. Every child is phrasing content so the multi-select card can be a button. */
+
+::deep .ww-pack-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+::deep .ww-pack-card-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--ww-primary, #0d6efd);
+}
+
+::deep .ww-pack-card-blurb {
+    color: var(--ww-text-secondary, #495057);
+}
+
+::deep .ww-pack-card-meter {
+    color: var(--ww-text-muted, #6c757d);
+    font-size: 0.875rem;
+}
+
+::deep .ww-pack-card-price {
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+/* A pack the operator has defined but not priced. Says so; never implies free. */
+::deep .ww-pack-card-unavailable {
+    font-weight: 400;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+::deep .ww-pack-card-trial {
+    color: var(--ww-success, #198754);
+    font-size: 0.875rem;
+}
+
+::deep .ww-pack-card-features {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+::deep .ww-pack-card-feature {
+    color: var(--ww-text-secondary, #495057);
+    font-size: 0.875rem;
+}
+
+/* ── The plan grid's own additions over wildwood-themes.css ── */
+
+::deep .ww-apptier-billing-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    color: var(--ww-text-secondary, #495057);
+}
+
+::deep .ww-billing-active {
+    color: var(--ww-text-primary, #212529);
+    font-weight: 600;
+}
+
+/* The plan the visitor arrived having already chosen. */
+::deep .ww-tier-preselected {
+    border-color: var(--ww-primary, #0d6efd);
+    box-shadow: var(--ww-shadow-sm, 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075));
+}
+
+::deep .ww-tier-preselected-badge {
+    align-self: flex-start;
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    background: var(--ww-primary, #0d6efd);
+    color: var(--ww-btn-primary-text, #ffffff);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+::deep .ww-plan-trial {
+    color: var(--ww-success, #198754);
+    font-size: 0.875rem;
+}

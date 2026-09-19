@@ -552,6 +552,20 @@ namespace WildwoodComponents.Blazor.Extensions
                 // Service may not exist, ignore
             }
 
+            // Register the shared public-catalog cache backing the registration + subscription views.
+            // Scoped, like every other cache here: on Blazor Server that is one per circuit, so a
+            // currency override or an operator's price change never leaks between visitors.
+            try
+            {
+                RegisterService(services, assembly,
+                    "WildwoodComponents.Blazor.Services.IPublicCatalogService",
+                    "WildwoodComponents.Blazor.Services.PublicCatalogService");
+            }
+            catch
+            {
+                // Service may not exist, ignore
+            }
+
             // Register Feedback service if available
             try
             {

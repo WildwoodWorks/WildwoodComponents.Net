@@ -1,0 +1,11 @@
+@using WildwoodComponents.Blazor.Components.Base
+@inherits BaseWildwoodComponent
+
+@* schema.org offers for what the app sells, straight off the live catalog. Nothing is rendered
+   when the catalog prices nothing: an unpriced "contact us" plan is left out rather than published
+   at zero. The payload is serialised with the default encoder, which escapes the opening angle bracket, so a
+   pack named "</script>" cannot close the element early. *@
+@if (Json.Length > 0)
+{
+    <script type="application/ld+json">@((MarkupString)Json)</script>
+}
