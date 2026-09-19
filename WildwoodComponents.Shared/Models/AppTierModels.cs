@@ -23,6 +23,13 @@ public class AppTierModel
     public string? ContactButtonUrl { get; set; }
     public bool ShowPrice { get; set; } = true;
     public string? CustomBadgeText { get; set; }
+
+    /// <summary>
+    /// ISO currency code the tier's prices are quoted in. The public catalog endpoint fills it in
+    /// so an anonymous pricing page never guesses a currency; older servers omit it.
+    /// </summary>
+    public string? Currency { get; set; }
+
     public List<AppTierPricingModel> PricingOptions { get; set; } = new();
     public List<AppTierFeatureModel> Features { get; set; } = new();
     public List<AppTierLimitModel> Limits { get; set; } = new();
@@ -95,6 +102,12 @@ public class AppTierAddOnModel
     public string IconClass { get; set; } = string.Empty;
     public string BadgeColor { get; set; } = string.Empty;
     public int? TrialDays { get; set; }
+
+    /// <summary>
+    /// ISO code the pack's prices are quoted in — the same app-level currency the tiers carry.
+    /// </summary>
+    public string? Currency { get; set; }
+
     public List<AppTierAddOnFeatureModel> Features { get; set; } = new();
     public List<AppTierAddOnPricingModel> PricingOptions { get; set; } = new();
     public List<string> BundledInTierIds { get; set; } = new();
@@ -115,6 +128,12 @@ public class AppTierAddOnPricingModel
     public string PricingModelName { get; set; } = string.Empty;
     public decimal Price { get; set; }
     public string BillingFrequency { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Trial length (days) from the underlying PricingModel; drives the processor's native trial.
+    /// </summary>
+    public int? TrialDays { get; set; }
+
     public bool IsDefault { get; set; }
 }
 
@@ -162,9 +181,25 @@ public class UserTierSubscriptionModel
 public class UserAddOnSubscriptionModel
 {
     public string Id { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string AppId { get; set; } = string.Empty;
     public string? CompanyId { get; set; }
     public string AppTierAddOnId { get; set; } = string.Empty;
+    public string? AppTierAddOnPricingId { get; set; }
     public string Status { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The payment that bought this pack. A row WITHOUT one was granted rather than sold — a
+    /// registration token's included pack, or an admin grant — so nothing bills it and there is
+    /// nothing to cancel at a provider.
+    /// </summary>
+    public string? PaymentTransactionId { get; set; }
+
+    /// <summary>
+    /// The payment provider the pack is billed through, when one bills it.
+    /// </summary>
+    public string? UserPaymentProviderId { get; set; }
+
     public string AddOnName { get; set; } = string.Empty;
     public string AddOnDescription { get; set; } = string.Empty;
     public bool IsBundled { get; set; }
@@ -270,6 +305,50 @@ public class AppTierChangeResultModel
     public UserTierSubscriptionModel? Subscription { get; set; }
     public bool IsScheduled { get; set; }
     public DateTime? EffectiveDate { get; set; }
+
+    /// <summary>
+    /// The customer must authenticate the prorated charge before the plan moves. Arrives with
+    /// Success=false and means "not yet", not a refusal.
+    /// </summary>
+    public bool? RequiresAction { get; set; }
+
+    /// <summary>
+    /// The secret the browser/app confirms. Secret — never log it, never store it.
+    /// </summary>
+    public string? ClientSecret { get; set; }
+
+    /// <summary>
+    /// Id of the parked change, for the completion endpoint.
+    /// </summary>
+    public string? PendingChangeId { get; set; }
+
+    public string? PaymentIntentId { get; set; }
+
+    /// <summary>
+    /// When the processor drops a parked change that is never authenticated.
+    /// </summary>
+    public DateTime? ExpiresAt { get; set; }
+
+    /// <summary>
+    /// Amount being authenticated, in major units.
+    /// </summary>
+    public decimal? AmountDue { get; set; }
+
+    /// <summary>
+    /// Currency of <see cref="AmountDue"/>.
+    /// </summary>
+    public string? Currency { get; set; }
+
+    /// <summary>
+    /// The payment is in but the processor has not finished applying the change — complete again
+    /// shortly. Arrives with Success=false and means "not yet", not a refusal.
+    /// </summary>
+    public bool? Processing { get; set; }
+
+    /// <summary>
+    /// Machine-readable refusal reason; see <see cref="TierChangeErrorCodes"/>.
+    /// </summary>
+    public string? ErrorCode { get; set; }
 }
 
 /// <summary>
