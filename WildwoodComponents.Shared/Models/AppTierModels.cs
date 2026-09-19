@@ -35,7 +35,7 @@ public class AppTierModel
     public List<AppTierLimitModel> Limits { get; set; } = new();
 }
 
-public class AppTierPricingModel
+public class AppTierPricingModel : ICatalogPriceOption
 {
     public string Id { get; set; } = string.Empty;
     public string AppTierId { get; set; } = string.Empty;
@@ -121,7 +121,7 @@ public class AppTierAddOnFeatureModel
     public string Description { get; set; } = string.Empty;
 }
 
-public class AppTierAddOnPricingModel
+public class AppTierAddOnPricingModel : ICatalogPriceOption
 {
     public string Id { get; set; } = string.Empty;
     public string PricingModelId { get; set; } = string.Empty;
@@ -135,6 +135,15 @@ public class AppTierAddOnPricingModel
     public int? TrialDays { get; set; }
 
     public bool IsDefault { get; set; }
+
+    /// <summary>
+    /// Add-on pricing has no display order of its own; the server returns it already ordered.
+    /// Explicit so the model's public surface does not gain a property the wire never sends.
+    /// </summary>
+    int ICatalogPriceOption.DisplayOrder
+    {
+        get { return 0; }
+    }
 }
 
 #endregion
