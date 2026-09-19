@@ -155,7 +155,7 @@ public static class FormatHelpers
         var last = symbol[symbol.Length - 1];
         return CharUnicodeInfo.GetUnicodeCategory(last) == UnicodeCategory.CurrencySymbol
             ? string.Empty
-            : " ";
+            : "\u00a0";
     }
 
     /// <summary>
@@ -186,7 +186,7 @@ public static class FormatHelpers
             "XAF" => "FCFA",
             "XCD" => "EC$",
             "XCG" => "Cg.",
-            "XOF" => "F CFA",
+            "XOF" => "F\u202fCFA",
             "XPF" => "CFPF",
             "XXX" => "¤",
             _ => code

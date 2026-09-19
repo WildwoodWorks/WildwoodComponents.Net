@@ -129,7 +129,7 @@ public class TierCardRenderTests
         // formatter this replaced had three entries and returned "$" for everything else.
         var markup = Render(Panel<TierPlansPanel>("USD", Tier(currency: "CHF", pricing: Pricing(price: 1234.5m))));
 
-        Assert.Contains("CHF 1,234.50", markup);
+        Assert.Contains("CHF\u00a01,234.50", markup);
         Assert.DoesNotContain("$1,234.50", markup);
     }
 

@@ -38,6 +38,7 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 | Token Registration | TokenRegistrationComponent | TokenRegistrationViewComponent | (via authService) | TokenRegistrationComponent | -- | -- |
 | App Tier | AppTierComponent | AppTierViewComponent | appTierService | AppTierComponent | -- | -- |
 | Pricing Display | PricingDisplayComponent | PricingDisplayViewComponent | (via appTierService) | -- | -- | -- |
+| Reg & Sub: pricing | RegistrationSubscriptionPricing | RegistrationSubscriptionPricingViewComponent | (via appTierService + catalog helpers) | RegistrationSubscriptionPricing | RegistrationSubscriptionPricing | -- |
 | Usage Dashboard | UsageDashboardComponent | UsageDashboardViewComponent | (via appTierService) | -- | -- | -- |
 | Overage Summary | OverageSummaryComponent | OverageSummaryViewComponent | (via appTierService) | -- | -- | -- |
 | Disclaimer | DisclaimerComponent | DisclaimerViewComponent | disclaimerService | DisclaimerComponent | -- | -- |
@@ -163,6 +164,8 @@ WildwoodComponents.Razor/
         Notification/               # Notification + Toast ViewComponents
         Payment/                    # Payment + PaymentForm ViewComponents
         Registration/               # Token Registration + Signup ViewComponents
+        RegistrationSubscription/   # Registration & Subscription pricing ViewComponent
+                                    #   + RegistrationSubscriptionPricingDecisions (pure, testable)
         Security/                   # Two-Factor Settings ViewComponent
         Subscription/Admin/         # Subscription Admin ViewComponents (status, tiers, features, add-ons, limits, overrides)
         Usage/                      # Usage Dashboard + Overage Summary ViewComponents
@@ -177,6 +180,7 @@ WildwoodComponents.Razor/
         IWildwoodDisclaimerService.cs + WildwoodDisclaimerService.cs
         IWildwoodMessagingService.cs + WildwoodMessagingService.cs
         IWildwoodPaymentService.cs + WildwoodPaymentService.cs
+        IWildwoodPublicCatalogService.cs + WildwoodPublicCatalogService.cs   # 60s catalog cache
         IWildwoodRegistrationService.cs + WildwoodRegistrationService.cs
         IWildwoodSessionManager.cs + WildwoodSessionManager.cs
         IWildwoodTwoFactorSettingsService.cs + WildwoodTwoFactorSettingsService.cs
@@ -190,11 +194,14 @@ WildwoodComponents.Razor/
         MessagingModels.cs
         NotificationModels.cs
         PaymentModels.cs
+        RegistrationSubscriptionPricingModels.cs
         SubscriptionModels.cs
         TokenRegistrationModels.cs
         TwoFactorSettingsModels.cs
         UsageModels.cs
     wwwroot/
         css/wildwood-razor-themes.css
+        css/regsub.css              # Registration & Subscription (pricing today; signup/manage extend it)
+        js/regsub-pricing.js        # billing toggle, pack basket, ww-regsub-select
     WildwoodComponents.Razor.csproj
 ```

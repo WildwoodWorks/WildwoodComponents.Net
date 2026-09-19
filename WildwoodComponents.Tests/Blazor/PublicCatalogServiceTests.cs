@@ -254,6 +254,48 @@ public class PublicCatalogServiceTests
     }
 
     /// <summary>
+    /// The key joins the app id and the currency override with a separator no id and no ISO code
+    /// can contain. Joined with nothing, ("tenant1", "GBP") and ("tenant1GBP", null) collapse onto
+    /// ONE key and one tenant is served the other's prices for the whole window. The separator is
+    /// a character no editor renders, so this ambiguity is written as a test: a reformat that eats
+    /// it fails here rather than in production.
+    /// </summary>
+    [Fact]
+    public async Task An_app_id_ending_in_a_currency_code_cannot_collide_with_that_currency()
+    {
+        const string OtherTiersJson = """
+            [{"id":"tier-other","appId":"tenant1GBP","name":"Other","status":"Active","displayOrder":1,"currency":"USD",
+              "pricingOptions":[{"id":"price-other","price":20,"billingFrequency":"Monthly","isDefault":true}]}]
+            """;
+
+        var handler = new FakeHttpMessageHandler();
+        handler.WhenOk("app-tier-addons/tenant1GBP/public", "[]");
+        handler.WhenOk("app-tiers/tenant1GBP/public", OtherTiersJson);
+        handler.WhenOk("app-tier-addons/tenant1/public", "[]");
+        handler.WhenOk("app-tiers/tenant1/public", TiersJson);
+        var service = new PublicCatalogService(
+            new AppTierComponentService(handler.CreateClient("https://api.test/"),
+                NullLogger<AppTierComponentService>.Instance),
+            NullLogger<PublicCatalogService>.Instance,
+            new TestClock());
+
+        var withOverride = await service.GetAsync("tenant1", "GBP");
+        var otherApp = await service.GetAsync("tenant1GBP");
+
+        // Two loads, not one answer served twice.
+        Assert.Equal(4, handler.Requests.Count);
+        Assert.NotSame(withOverride, otherApp);
+        Assert.Equal("tenant1", withOverride.AppId);
+        Assert.Equal("tenant1GBP", otherApp.AppId);
+        Assert.Equal("tier-pro", Assert.Single(withOverride.Tiers).Id);
+        Assert.Equal("tier-other", Assert.Single(otherApp.Tiers).Id);
+
+        // And the second read did not overwrite the first's entry.
+        Assert.Same(withOverride, await service.GetAsync("tenant1", "GBP"));
+        Assert.Equal(4, handler.Requests.Count);
+    }
+
+    /// <summary>
     /// The registration the library performs (<c>AddWildwoodComponents</c>) is an
     /// interface-to-implementation scoped registration, which means the container picks the
     /// constructor itself. It has to find one without a <see cref="TimeProvider"/> registered,

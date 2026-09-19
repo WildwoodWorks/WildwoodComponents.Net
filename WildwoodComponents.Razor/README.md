@@ -251,6 +251,140 @@ offered only on a user's own packs.
 
 ---
 
+## Registration & Subscription — pricing
+
+`<vc:registration-subscription-pricing />` is the Razor port of React's
+`RegistrationSubscriptionPricing` (and of the Blazor component of the same name): what the app
+sells, at the price the server is quoting right now.
+
+```html
+@* Minimal: plans only, using the app id from AddWildwoodComponentsRazor *@
+<vc:registration-subscription-pricing />
+
+@* Everything on *@
+<vc:registration-subscription-pricing
+    app-id="my-app"
+    show-plans="true"
+    show-add-ons="true"
+    pack-selection="multi"
+    default-billing="annual"
+    highlight-tier-id="@currentTierId"
+    contact-url="https://example.com/sales"
+    include-json-ld="true"
+    json-ld-url="https://example.com/pricing"
+    select-url="/signup?ref=pricing" />
+```
+
+Add the assets once, in your layout:
+
+```html
+<link rel="stylesheet" href="~/_content/WildwoodComponents.Razor/css/wildwood-razor-themes.css" />
+<link rel="stylesheet" href="~/_content/WildwoodComponents.Razor/css/regsub.css" />
+<script src="~/_content/WildwoodComponents.Razor/js/regsub-pricing.js"></script>
+```
+
+### First-paint prices, and no others
+
+The catalog is read **on the server**, before the first byte: the page arrives with real prices,
+which is what React reaches for with its `initialCatalog` prop. There is no skeleton, no hydration
+flash and no client round trip to quote a plan.
+
+Each plan card carries **both billing cycles**, formatted server-side through
+`FormatHelpers.FormatMoney`; `regsub-pricing.js` only swaps which of the two is hidden. The browser
+never formats money, so an amount a visitor reads is always one the server quoted.
+
+There is **no fallback price** anywhere. If the catalog cannot be read the whole grid is replaced
+by "Pricing is unavailable right now" and a **Retry** — the prices go away with the answer that
+produced them. Retry reloads the page: this component is server-rendered, so the server is the one
+source of truth for its markup, and a failed catalog load is never cached, so the reload really
+does ask again. (The same mechanism `subscription-admin.js` uses after a mutation.)
+
+The catalog sits behind a **60-second shared cache** (`IWildwoodPublicCatalogService`), so a page
+with several pricing surfaces makes one pair of requests. The cached catalog is treated as
+immutable — the view model is built per request and never edits it.
+
+### Parameters
+
+| Tag-helper attribute | Type | Default | Meaning |
+|---|---|---|---|
+| `app-id` | string | the configured `AppId` | Which app's catalog to show |
+| `currency` | string | the catalog's own | Display override, rarely needed |
+| `show-plans` | bool | `true` | The plan grid |
+| `show-add-ons` | bool | `false` | The pack grid |
+| `offer-free-tier-choice` | bool | `true` | `false` hides every free tier |
+| `pack-selection` | `"none"` \| `"multi"` | `"none"` | Per-pack "Select", or tick several and continue once |
+| `add-on-groups` | `IReadOnlyList<AddOnGroup>` | — | Headings matched on the pack's catalog `Category` |
+| `show-billing-toggle` | bool | `true` | Shown only when some plan is priced annually |
+| `default-billing` | `"monthly"` \| `"annual"` | `"monthly"` | Which side the toggle starts on |
+| `show-feature-comparison` | bool | `true` | Each plan's feature list |
+| `show-limits` | bool | `true` | Each plan's usage limits |
+| `highlight-tier-id` | string | — | Marks one plan as already chosen (case-insensitive) |
+| `contact-url` | string | — | Where an unpriced plan's "Contact Sales" points |
+| `include-json-ld` | bool | `false` | Emit schema.org offers |
+| `json-ld-url` | string | — | Canonical URL stamped on every offer |
+| `labels` | `RegistrationSubscriptionLabels` | shipped copy | Copy overrides; unset strings keep the shipped word |
+| `select-url` | string | — | Where a selection navigates (see below) |
+| `unavailable-text` | string | — | Replaces "Pricing is unavailable right now" |
+| `component-id` | string | generated | A stable id, for two instances on one page |
+
+`pack-selection` and `default-billing` are **strings**, in the JS union's own spelling, on purpose:
+a Razor tag-helper attribute whose property is not a `string` is compiled as a **C# expression**,
+so an enum would force every host to write `default-billing="@PricingBilling.Annual"` plus a
+`@using`. An unrecognised value falls back to the safe default rather than throwing the page away.
+`add-on-groups` and `labels` are genuine C# expressions (`add-on-groups="Model.PackGroups"`).
+
+### `ww-regsub-select` and `select-url`
+
+Razor has no callbacks, so React's `onSelect` is a **bubbling, cancelable `CustomEvent`**:
+
+```js
+document.addEventListener('ww-regsub-select', function (e) {
+    // e.detail = { tierId, pricingId, billing, addOnIds }
+    console.log(e.detail.tierId, e.detail.billing, e.detail.addOnIds);
+    e.preventDefault();   // stop the navigation and handle it yourself
+});
+```
+
+- A **plan** click sends the plan, its pricing option under the current cycle, and whatever packs
+  are ticked — one click buys the whole basket.
+- A **single pack** click sends `{ tierId: null, pricingId: null, billing, addOnIds: [id] }`.
+- The **multi-select Continue** sends every ticked pack, in **catalog order** (never click order),
+  capped at 25 — the same cap a selection arriving in a link gets.
+
+When `select-url` is set and no listener called `preventDefault()`, the browser then goes there
+with `tier`, `pricing` and `addons` appended, under the same query keys the JS SDK and the signup
+view read. A query already on the template is **kept**; those three keys are the visitor's to set,
+so a stale one in the template is dropped rather than left to win. Fragments survive
+(`/signup?ref=blog#plans` → `/signup?ref=blog&tier=…&pricing=…#plans`).
+
+### JSON-LD
+
+`include-json-ld="true"` writes a `<script type="application/ld+json">` with one schema.org
+`Offer` per priced plan and pack. Unpriced items are left out rather than published at zero. The
+payload is serialised with `System.Text.Json`'s **default** encoder, which escapes `<`, `>` and
+`&` — so an operator who names a plan with a closing script tag cannot break out of the element.
+
+### Test hooks
+
+Root `data-ww-view="pricing"`, classes `ww-regsub ww-regsub-pricing`; `data-ww-group="<id>"` on
+each pack heading (`all` when ungrouped, `more` for the catch-all); `data-ww-pack="<addOnId>"` on
+each pack card; `data-ww-tier="<tierId>"` on each plan card. The plan grid is the platform's
+`.ww-tier-grid` / `.ww-tier-card` markup, unchanged, because live sites' end-to-end suites locate
+plans by exactly those.
+
+### What differs from React, and why
+
+| React | Razor | Why |
+|---|---|---|
+| `onSelect` callback | `ww-regsub-select` event + `select-url` | A server-rendered stack cannot take a delegate |
+| `describeAddOn` returning a node | — | Markup callbacks are impossible here; a pack's blurb, features and price come from catalog fields only |
+| `loadingFallback` + `PricingSkeleton` | — | There is no loading state: the catalog is read before the first byte |
+| `errorFallback` node | `unavailable-text` string | Same reason; the Retry stays either way |
+| `initialCatalog` SSR snapshot | — | Razor gets it for free |
+| Pack prices follow nothing | Pack prices follow nothing | Unchanged on purpose: a pack quotes its DEFAULT option, so Razor and React never disagree about what the same pack costs. The toggle is a plan control |
+
+---
+
 ## Money is formatted in one place
 
 Every amount the package renders goes through `FormatHelpers.FormatMoney(amount, currency)` in

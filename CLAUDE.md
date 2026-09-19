@@ -22,7 +22,8 @@ Solution file: `WildwoodComponents.Net.slnx`
 Counts, with the rule that produces them so they stay reproducible (2026-09-19): **Blazor = 53**
 (`.razor` files under `WildwoodComponents.Blazor/Components/`, 56, minus the three `*Demo.razor`
 host samples — the Registration & Subscription shell, its three views and their `Parts/` are
-included). **Razor = 30** (`*ViewComponent.cs` under `WildwoodComponents.Razor/Components/`).
+included). **Razor = 31** (`*ViewComponent.cs` under `WildwoodComponents.Razor/Components/`; the
+Registration & Subscription pricing ViewComponent is the newest).
 **Test suite = 26** unique `@page` routes.
 
 ### Dependency Graph
@@ -136,6 +137,7 @@ WildwoodComponents.Razor/
         Notification/        # NotificationViewComponent, NotificationToastViewComponent
         Payment/             # PaymentViewComponent, PaymentFormViewComponent
         Registration/        # TokenRegistrationViewComponent, SignupWithSubscriptionViewComponent
+        RegistrationSubscription/  # RegistrationSubscriptionPricingViewComponent (+ pure decisions)
         Security/            # TwoFactorSettingsViewComponent
         Subscription/Admin/  # SubscriptionAdmin ViewComponents (status, tiers, features, add-ons, limits, overrides)
         Usage/               # UsageDashboardViewComponent, OverageSummaryViewComponent

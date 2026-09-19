@@ -167,6 +167,17 @@ public static class ServiceCollectionExtensions
             return new WildwoodAppTierService(httpClient, sessionManager, logger);
         });
 
+        // The public catalog, behind a 60-second shared cache. Every pricing surface on a page
+        // reads one pair of requests instead of one each, and a FAILED load is never cached — so
+        // "pricing is unavailable right now" lasts until the next render, not for a minute.
+        services.AddScoped<IWildwoodPublicCatalogService>(sp =>
+        {
+            var appTiers = sp.GetRequiredService<IWildwoodAppTierService>();
+            var cache = sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
+            var logger = sp.GetRequiredService<ILogger<WildwoodPublicCatalogService>>();
+            return new WildwoodPublicCatalogService(appTiers, cache, logger);
+        });
+
         // Payment service
         services.AddScoped<IWildwoodPaymentService>(sp =>
         {
