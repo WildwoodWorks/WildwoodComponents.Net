@@ -15,6 +15,17 @@ public interface IWildwoodRegistrationService
     Task<TokenValidationResponse?> ValidateTokenAsync(string token);
 
     /// <summary>
+    /// What a registration token grants (tier, pricing, packs and features per app), from
+    /// <c>GET api/registrationtokens/validate-detailed/{token}</c> with an optional <c>?appId=</c>
+    /// scope. Returns <c>null</c> when the details cannot be READ — an older server without the
+    /// route, or a transport failure — which is NOT the same as an invalid token: callers fall
+    /// back to <see cref="ValidateTokenAsync"/> instead of telling the registrant their token is
+    /// bad. An invalid token comes back as details with <c>IsValid=false</c> and the server's
+    /// message.
+    /// </summary>
+    Task<RegistrationTokenDetails?> GetRegistrationTokenDetailsAsync(string token, string? appId = null);
+
+    /// <summary>
     /// Validate registration data before creating the user (pre-payment check)
     /// </summary>
     Task<RegistrationValidationResponse?> ValidateRegistrationAsync(ValidateRegistrationRequest request);

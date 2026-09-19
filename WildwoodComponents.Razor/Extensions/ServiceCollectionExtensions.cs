@@ -156,7 +156,9 @@ public static class ServiceCollectionExtensions
             return new WildwoodAIProxyService(httpClient, sessionManager, logger, options.AppId);
         });
 
-        // App Tier service
+        // App Tier service. Also backs the /api/wildwood-regsub proxy (pack checkout, the pack
+        // lifecycle, the 3-D Secure plan change, trial eligibility and the public catalog): those
+        // methods put the session's bearer on the request, never on this shared client.
         services.AddScoped<IWildwoodAppTierService>(sp =>
         {
             var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
@@ -174,7 +176,8 @@ public static class ServiceCollectionExtensions
             return new WildwoodPaymentService(httpClient, sessionManager, logger);
         });
 
-        // Registration service
+        // Registration service. Also backs the /api/wildwood-regsub token-detail routes, which are
+        // anonymous because registration happens before there is a session.
         services.AddScoped<IWildwoodRegistrationService>(sp =>
         {
             var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");

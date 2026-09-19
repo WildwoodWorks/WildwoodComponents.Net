@@ -78,94 +78,16 @@ namespace WildwoodComponents.Blazor.Services
             => SendActionAsync(url, null, isPost: false, operation);
 
         /// <summary>
-        /// Turn a failed request into the structured refusal the tier/pack actions report.
-        ///
-        /// The server's own error code wins whenever it sent one. A 404 that carries NO code is
-        /// the one case worth naming: the route itself is absent, i.e. the server predates this
-        /// SDK, so it becomes <see cref="AppTierActionErrorCodes.NotSupported"/> rather than being
-        /// reported as a missing subscription. Anything else without a code — a network failure, a
-        /// 500, a bare 400 — is <see cref="AppTierActionErrorCodes.RequestFailed"/>. The message is
-        /// never empty.
+        /// Turn a failed request into the structured refusal the tier/pack actions report. The
+        /// rule itself lives in <see cref="AppTierActionMapper"/>, shared with the Razor service so
+        /// the two stacks cannot drift in wording or codes.
         /// </summary>
         private static AppTierActionError ToActionError(ActionResponse response, string fallbackMessage)
-        {
-            var body = TryParseObject(response.Content);
-            var code = StringField(body, "errorCode", "code");
-            var message = StringField(body, "errorMessage", "message", "error", "title");
-
-            if (message is null && response.Exception is not null && !string.IsNullOrWhiteSpace(response.Exception.Message))
-                message = response.Exception.Message;
-
-            if (message is null && response.Status.HasValue)
-                message = $"Request failed (HTTP {(int)response.Status.Value})";
-
-            if (string.IsNullOrWhiteSpace(message))
-                message = fallbackMessage;
-
-            if (response.Status.HasValue)
-            {
-                return new AppTierActionError
-                {
-                    Code = code ?? (response.Status.Value == HttpStatusCode.NotFound
-                        ? AppTierActionErrorCodes.NotSupported
-                        : AppTierActionErrorCodes.RequestFailed),
-                    Message = message!,
-                    Status = (int)response.Status.Value
-                };
-            }
-
-            return new AppTierActionError
-            {
-                Code = code ?? AppTierActionErrorCodes.RequestFailed,
-                Message = message!
-            };
-        }
-
-        private static JsonElement? TryParseObject(string? content)
-        {
-            if (string.IsNullOrWhiteSpace(content)) return null;
-            try
-            {
-                using var document = JsonDocument.Parse(content!);
-                if (document.RootElement.ValueKind != JsonValueKind.Object) return null;
-                return document.RootElement.Clone();
-            }
-            catch (JsonException)
-            {
-                return null;
-            }
-        }
-
-        private static bool TryGetPropertyIgnoreCase(JsonElement element, string name, out JsonElement value)
-        {
-            if (element.TryGetProperty(name, out value)) return true;
-            foreach (var property in element.EnumerateObject())
-            {
-                if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
-                {
-                    value = property.Value;
-                    return true;
-                }
-            }
-
-            value = default;
-            return false;
-        }
-
-        private static string? StringField(JsonElement? body, params string[] keys)
-        {
-            if (body is null) return null;
-            foreach (var key in keys)
-            {
-                if (TryGetPropertyIgnoreCase(body.Value, key, out var value) && value.ValueKind == JsonValueKind.String)
-                {
-                    var text = value.GetString();
-                    if (!string.IsNullOrWhiteSpace(text)) return text;
-                }
-            }
-
-            return null;
-        }
+            => AppTierActionMapper.ToActionError(
+                response.Status.HasValue ? (int)response.Status.Value : null,
+                response.Content,
+                response.Exception?.Message,
+                fallbackMessage);
 
         private static T? Deserialize<T>(string? content) where T : class
         {
@@ -175,39 +97,15 @@ namespace WildwoodComponents.Blazor.Services
         }
 
         /// <summary>
-        /// The refusal body read back as the result DTO, but only when the server really sent that
-        /// DTO — recognised by a property of the expected kind (JS checks
-        /// <c>typeof body.success === 'boolean'</c> / <c>typeof body.status === 'string'</c>).
-        /// Otherwise null, and the caller keeps its own empty result.
+        /// The refusal body read back as the result DTO, when the server really sent that DTO.
+        /// See <see cref="AppTierActionMapper.RefusalBody{T}"/>.
         /// </summary>
         private static T? RefusalBody<T>(string? content, string requiredProperty, bool requireString) where T : class
-        {
-            var body = TryParseObject(content);
-            if (body is null) return null;
-            if (!TryGetPropertyIgnoreCase(body.Value, requiredProperty, out var probe)) return null;
-
-            var matches = requireString
-                ? probe.ValueKind == JsonValueKind.String
-                : probe.ValueKind == JsonValueKind.True || probe.ValueKind == JsonValueKind.False;
-            if (!matches) return null;
-
-            return Deserialize<T>(content);
-        }
+            => AppTierActionMapper.RefusalBody<T>(content, requiredProperty, requireString, JsonOptions);
 
         /// <summary>The PascalCase basket the checkout endpoints bind.</summary>
         private static List<AddOnCheckoutItemInput> ToCheckoutItems(IReadOnlyList<AddOnCheckoutItemInput>? items)
-        {
-            var mapped = new List<AddOnCheckoutItemInput>();
-            if (items is null) return mapped;
-
-            foreach (var item in items)
-            {
-                if (item is null) continue;
-                mapped.Add(new AddOnCheckoutItemInput { AddOnId = item.AddOnId, PricingId = item.PricingId });
-            }
-
-            return mapped;
-        }
+            => AppTierActionMapper.ToCheckoutItems(items);
 
         #endregion
 

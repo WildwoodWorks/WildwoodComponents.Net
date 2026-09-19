@@ -146,6 +146,78 @@ The error/`429` shapes above match what the widget JavaScript expects (it reads 
 
 ---
 
+## Registration & subscription proxy (ships with the library)
+
+Unlike the feedback and authentication proxies above, this one **is in the package** — you do not
+write it. `WildwoodRegistrationSubscriptionProxyController` serves
+`/api/wildwood-regsub/*`, the same-origin routes the client JS needs for pack checkout, the pack
+lifecycle, the 3-D Secure plan change, trial eligibility, the public catalog and registration-token
+plans. A Razor app keeps the user's JWT in the server session, so the browser cannot call
+WildwoodAPI itself; shipping these routes is what stops every consumer 404ing on them.
+
+### Host wiring
+
+Exactly what the notifications and attribution proxies need — register MVC controllers, keep
+server-side session on, and map them:
+
+```csharp
+builder.Services.AddControllers();
+// ...
+app.UseSession();
+app.MapControllers();
+```
+
+Controllers in this package are discovered as an application part because your app references it.
+If your host narrows controller discovery (its own `ApplicationPartManager` setup), add the
+assembly explicitly:
+
+```csharp
+builder.Services.AddControllers()
+    .AddApplicationPart(typeof(WildwoodComponents.Razor.Controllers.WildwoodRegistrationSubscriptionProxyController).Assembly);
+```
+
+### Routes
+
+| Method & path (relative to `/api/wildwood-regsub`) | Auth | Forwards to |
+|---|---|---|
+| `GET  /trial-eligibility` | session | `GetTrialEligibilityAsync` |
+| `POST /checkout/quote` | session | `QuoteAddOnCheckoutAsync` — body `{ "Items": [{ "AddOnId", "PricingId" }] }` |
+| `POST /checkout/payment-method` | session | `CreateCheckoutPaymentMethodAsync` — body `{ "ProviderId" }` |
+| `POST /checkout` | session | `CheckoutAddOnsAsync` — body `{ "CheckoutId", "ProviderId", "PaymentTransactionId", "UseSavedCard", "Items" }` |
+| `POST /checkout/complete` | session | `CompleteAddOnCheckoutAsync` — body `{ "PaymentTransactionId" }` |
+| `POST /addons/subscribe` | session | `SubscribeToAddOnDetailedAsync` — body `{ "AddOnId", "PricingId", "PaymentTransactionId" }` |
+| `POST /addons/{subscriptionId}/cancel?immediate=false` | session | `CancelAddOnDetailedAsync` |
+| `POST /addons/{subscriptionId}/reactivate` | session | `ReactivateAddOnAsync` |
+| `POST /tier-change` | session | `ChangeTierAsync(options)` — body `{ "NewAppTierId", "NewAppTierPricingId", "Immediate", "PaymentTransactionId", "SupportsPaymentAction" }` |
+| `POST /tier-change/{pendingChangeId}/complete` | session | `CompleteTierChangeAsync` |
+| `GET  /catalog?currency=` | anonymous | `GetPublicCatalogAsync` — public data the pricing page already renders |
+| `GET  /token-details?token=` | anonymous | `GetRegistrationTokenDetailsAsync` |
+| `POST /token-details` | anonymous | the same lookup with the token in the body (`{ "Token" }`), so it never lands in an access log |
+
+### The three rules the client can rely on
+
+1. **Refusals are 200s.** Every structured answer is relayed as HTTP 200 with the service's result
+   DTO, a refusal included (`success:false` with `errorCode`/`errorMessage`, or a per-pack
+   `status:"failed"`). The upstream endpoints answer a refusal with the same DTO as a success, and
+   the UI has to word "you already own that pack" differently from "that route does not exist yet"
+   (`errorCode: "NotSupported"`). Only the proxy's own preconditions and an unreadable answer break
+   that: **401** when there is no signed-in session (nothing is forwarded — an empty bearer is never
+   sent), **400** for a missing body or an app id that is not this app's, and **502** for the two
+   loads with no structured refusal, the catalog and the token details, so "unavailable" stays
+   distinguishable from "sells nothing" and "invalid token".
+2. **The app id is the configured one.** `options.AppId` from `AddWildwoodComponentsRazor`, always.
+   A client may send `appId`, but only so a mismatch can be rejected with 400: the session token
+   lives on the server, so honouring a client-named app would let a page act on any app in the
+   company. App-scoped routes answer 400 when no `AppId` is configured.
+3. **Bodies are bound, not passed through.** Each body binds to its request model and the proxy
+   re-serialises that model, so a property nobody declared never reaches WildwoodAPI.
+
+**Anti-forgery**: none, matching the notifications and attribution proxies. Every route is
+JSON-bodied and session-authorised. A host that wants CSRF tokens should apply its own
+filter or middleware across all three proxies rather than singling one out.
+
+---
+
 ## Authentication proxy
 
 `<vc:authentication />` works the same way: its JavaScript posts to a **thin server-side proxy in
