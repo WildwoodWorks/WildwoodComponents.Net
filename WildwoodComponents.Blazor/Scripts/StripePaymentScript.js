@@ -428,6 +428,62 @@
     };
 
     /**
+     * Confirm a Stripe SetupIntent with client secret.
+     *
+     * Used for a free trial: nothing is charged now, but the card is saved so Stripe can charge it
+     * when the trial ends. Mirrors confirmStripePayment's shape exactly - the same not-initialized
+     * guard, the same { success, errorMessage, errorCode } error object - so the .NET side reads
+     * one result type either way.
+     *
+     * @param {string} clientSecret - Setup intent client secret
+     * @returns {Promise<object>}
+     */
+    wildwoodPayment.confirmStripeSetup = async function (clientSecret) {
+        try {
+            if (!stripe || !stripeCardElement) {
+                return { success: false, errorMessage: 'Stripe not initialized' };
+            }
+
+            console.log('WildwoodPayment/Stripe: Confirming card setup...');
+            const { setupIntent, error } = await stripe.confirmCardSetup(clientSecret, {
+                payment_method: {
+                    card: stripeCardElement
+                }
+            });
+
+            if (error) {
+                console.error('WildwoodPayment/Stripe: Card setup error:', error);
+                return {
+                    success: false,
+                    errorMessage: error.message,
+                    errorCode: error.code
+                };
+            }
+
+            if (setupIntent.status === 'succeeded') {
+                console.log('WildwoodPayment/Stripe: Card setup confirmed:', setupIntent.id);
+                return {
+                    success: true,
+                    setupIntentId: setupIntent.id
+                };
+            }
+
+            console.log('WildwoodPayment/Stripe: Card setup status:', setupIntent.status);
+            return {
+                success: false,
+                errorMessage: 'Card setup status: ' + setupIntent.status + '. Please try again.',
+                setupIntentId: setupIntent.id
+            };
+        } catch (error) {
+            console.error('WildwoodPayment/Stripe: Card setup error:', error);
+            return {
+                success: false,
+                errorMessage: error.message || 'Card setup failed'
+            };
+        }
+    };
+
+    /**
      * Dispose Stripe elements and clean up
      */
     wildwoodPayment.disposeStripe = function () {

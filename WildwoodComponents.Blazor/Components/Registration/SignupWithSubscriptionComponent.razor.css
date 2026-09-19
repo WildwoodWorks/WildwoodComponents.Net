@@ -105,6 +105,58 @@
     font-size: 1.5rem;
 }
 
+/* Free-trial lines: on the pre-selected plan card and in the order summary */
+::deep .ww-plan-trial,
+::deep .ww-order-summary-trial {
+    color: var(--ww-success, #28a745);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    margin-top: 0.25rem;
+}
+
+/* What a registration token sets up. Nothing here is priced: the registrant is not paying for
+   any of it, and a price beside a granted plan would say they were. */
+::deep .ww-token-plan-summary {
+    max-width: 600px;
+    margin: 0 auto 1.5rem;
+    padding: 1rem 1.25rem;
+    background: var(--ww-bg-secondary, #f8f9fa);
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius, 0.5rem);
+}
+
+::deep .ww-token-plan-summary-title {
+    color: var(--ww-text-primary, #212529);
+    font-size: 0.9375rem;
+    margin: 0 0 0.5rem;
+}
+
+::deep .ww-token-plan-tier {
+    color: var(--ww-text-primary, #212529);
+    margin: 0 0 0.5rem;
+}
+
+::deep .ww-token-plan-pricing {
+    color: var(--ww-text-muted, #6c757d);
+}
+
+::deep .ww-token-plan-group {
+    margin-top: 0.5rem;
+}
+
+::deep .ww-token-plan-group-title {
+    color: var(--ww-text-muted, #6c757d);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+::deep .ww-token-plan-list {
+    margin: 0.25rem 0 0;
+    padding-left: 1.25rem;
+    color: var(--ww-text-secondary, #495057);
+}
+
 /* Processing Step */
 ::deep .ww-signup-processing {
     text-align: center;

@@ -35,4 +35,34 @@ public static class SubscriptionAccess
 
         return false;
     }
+
+    /// <summary>
+    /// True when a subscription's trial is still running, which is the only time a trial end date
+    /// is worth showing. Ported from
+    /// packages/wildwood-react/src/components/subscription/admin/SubscriptionStatusPanel.tsx
+    /// (JS 1eefaa1).
+    /// </summary>
+    /// <remarks>
+    /// The server keeps a finished trial's end date on the row — that is how it records that the
+    /// account has already had its trial for the app. Showing it unconditionally put "Trial Ends"
+    /// with a future-looking date on an Active, paid plan after a repeat upgrade was charged. Two
+    /// conditions rule that out: the plan must not be Active (a trial reads Trialing), and the date
+    /// must still be ahead of <paramref name="asOf"/>.
+    /// </remarks>
+    /// <param name="status">The subscription's raw status, as the server sent it.</param>
+    /// <param name="trialEndDate">The row's trial end date, if any.</param>
+    /// <param name="asOf">
+    /// "Now", usually <c>DateTime.Now</c>. It is converted to UTC when the trial end carries a UTC
+    /// kind, so a server date serialised with a Z suffix is not compared against a local clock.
+    /// </param>
+    public static bool IsTrialRunning(string? status, DateTime? trialEndDate, DateTime asOf)
+    {
+        if (trialEndDate is not { } trialEnd) return false;
+
+        // Ordinal, like the JS `status !== 'Active'` comparison: the server sends this casing.
+        if (string.Equals(status, "Active", StringComparison.Ordinal)) return false;
+
+        var now = trialEnd.Kind == DateTimeKind.Utc ? asOf.ToUniversalTime() : asOf;
+        return trialEnd > now;
+    }
 }

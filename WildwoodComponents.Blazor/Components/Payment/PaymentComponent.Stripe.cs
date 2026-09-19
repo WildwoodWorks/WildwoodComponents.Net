@@ -33,16 +33,25 @@ public partial class PaymentComponent
         }
     }
 
-    private async Task ConfirmStripePayment(string clientSecret)
+    private async Task ConfirmStripePayment(InitiatePaymentResponse initiation)
     {
         try
         {
-            var result = await InvokeJSAsync<PaymentJsResult>("wildwoodPayment.confirmStripePayment", clientSecret) 
+            var result = await InvokeJSAsync<PaymentJsResult>("wildwoodPayment.confirmStripePayment", initiation.ClientSecret)
                 ?? new PaymentJsResult { Success = false, ErrorMessage = "JS call failed" };
-            
+
             if (result.Success)
             {
-                await CompletePayment(result.PaymentIntentId!);
+                // Confirm with the id the SERVER recorded for this payment (a subscription's first
+                // invoice, or the PaymentIntent itself for a one-time payment) so it can verify it
+                // with Stripe. The browser's id is the fallback, never an empty string.
+                if (PaymentDecisions.ConfirmationId(initiation, result.PaymentIntentId) is not { Length: > 0 } confirmationId)
+                {
+                    await HandlePaymentError(PaymentDecisions.MissingPaymentIdMessage, null);
+                    return;
+                }
+
+                await CompletePayment(confirmationId);
             }
             else
             {
@@ -52,6 +61,54 @@ public partial class PaymentComponent
         catch (Exception ex)
         {
             await HandleErrorAsync(ex, "Confirming card payment");
+        }
+    }
+
+    /// <summary>
+    /// Confirms a free trial's SetupIntent: nothing is charged now, but the card is saved so Stripe
+    /// can charge it when the trial ends. Without this a trial "succeeded" with no card attached
+    /// and there was nothing to bill.
+    /// </summary>
+    private async Task ConfirmStripeSetup(InitiatePaymentResponse initiation)
+    {
+        try
+        {
+            var result = await InvokeJSAsync<PaymentJsResult>("wildwoodPayment.confirmStripeSetup", initiation.ClientSecret)
+                ?? new PaymentJsResult { Success = false, ErrorMessage = "JS call failed" };
+
+            if (!result.Success || result.SetupIntentId is not { Length: > 0 } setupIntentId)
+            {
+                await HandlePaymentError(result.ErrorMessage ?? "Card setup failed", result.ErrorCode);
+                return;
+            }
+
+            var providerType = (PaymentProviderType)(_selectedProvider?.ProviderType ?? (int)PaymentProviderType.Stripe);
+            var serverResult = await PaymentProviderService.ConfirmPaymentAsync(setupIntentId, providerType);
+
+            if (!serverResult.Success)
+            {
+                await HandlePaymentError(
+                    serverResult.ErrorMessage ?? "Your card could not be verified. Please try another card.",
+                    serverResult.ErrorCode);
+                return;
+            }
+
+            // The server verifies the SetupIntent but need not echo its ids back, so fall back to
+            // what this flow already knows: the intent the browser confirmed and the subscription
+            // the initiation created.
+            serverResult.PaymentIntentId ??= setupIntentId;
+            serverResult.SubscriptionId ??= initiation.SubscriptionId;
+
+            _pendingIntent = null;
+            _pendingIntentKey = null;
+            _trialEndsAt = initiation.TrialEnd;
+            _paymentResult = serverResult;
+            _paymentComplete = true;
+            await NotifyPaymentSuccess();
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex, "Saving your card for the free trial");
         }
     }
 
@@ -99,6 +156,10 @@ public partial class PaymentComponent
     {
         public bool Success { get; set; }
         public string? PaymentIntentId { get; set; }
+
+        /// <summary>The confirmed SetupIntent's id, set by <c>confirmStripeSetup</c> only.</summary>
+        public string? SetupIntentId { get; set; }
+
         public string? ErrorMessage { get; set; }
         public string? ErrorCode { get; set; }
     }

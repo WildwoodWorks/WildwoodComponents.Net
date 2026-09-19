@@ -232,13 +232,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                     return;
                 }
 
-                paymentTransactionId = await OnPaymentRequired(new PaymentRequiredArgs
-                {
-                    TierId = args.TierId,
-                    TierName = args.TierName,
-                    PricingId = args.PricingId,
-                    Price = preview.ProratedChargeToday ?? preview.NewPrice ?? 0m,
-                });
+                paymentTransactionId = await OnPaymentRequired(BuildPaymentRequiredArgs(args, preview));
 
                 // Null/empty transaction id means the consumer cancelled payment collection.
                 if (string.IsNullOrEmpty(paymentTransactionId)) return;
@@ -246,6 +240,28 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
             await ExecuteTierChange(args, options.Immediate, paymentTransactionId);
         }
+
+        /// <summary>
+        /// What the host needs to collect payment for a tier change.
+        /// </summary>
+        /// <remarks>
+        /// The payment starts the NEW plan's own subscription, billed at the plan's price, so the
+        /// host gets the pricing MODEL (not the tier-pricing link id) and the price and trial that
+        /// subscription will have. Hosts used to be handed the link id and the prorated charge: the
+        /// server found no pricing model, charged the prorated amount once, and left no recurring
+        /// subscription, renewal or trial behind. The preview's numbers are the fallback for a plan
+        /// whose own price did not reach us.
+        /// </remarks>
+        internal static PaymentRequiredArgs BuildPaymentRequiredArgs(
+            TierSelectedEventArgs args, TierChangePreviewModel preview) => new PaymentRequiredArgs
+            {
+                TierId = args.TierId,
+                TierName = args.TierName,
+                PricingId = args.PricingId,
+                PricingModelId = args.PricingModelId,
+                Price = args.Price > 0m ? args.Price : (preview.NewPrice ?? preview.ProratedChargeToday ?? 0m),
+                TrialDays = args.TrialDays,
+            };
 
         private void HandleCancelConfirmation()
         {
@@ -519,11 +535,35 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
     /// Details passed to <see cref="SubscriptionAdminComponent.OnPaymentRequired"/> when a tier
     /// change requires payment. The handler returns a payment transaction id (or null to cancel).
     /// </summary>
+    /// <summary>
+    /// What the host needs to collect payment for a tier change. Additive since the first release:
+    /// a caller that only reads TierId/TierName/PricingId/Price keeps working.
+    /// </summary>
     public class PaymentRequiredArgs
     {
         public string TierId { get; set; } = string.Empty;
         public string TierName { get; set; } = string.Empty;
+
+        /// <summary>The tier's pricing option (AppTierPricing id). Not a pricing model id.</summary>
         public string? PricingId { get; set; }
+
+        /// <summary>
+        /// The pricing model behind that option — what <c>PaymentComponent.PricingModelId</c>
+        /// needs. Hosts used to wire <see cref="PricingId"/> there; the server found no pricing
+        /// model for it and charged the prorated amount once, with no recurring subscription,
+        /// renewal or trial.
+        /// </summary>
+        public string? PricingModelId { get; set; }
+
+        /// <summary>
+        /// The amount the plan's subscription charges (the pricing option's price) — NOT the
+        /// prorated one-time charge, which is not what the new subscription bills.
+        /// </summary>
         public decimal Price { get; set; }
+
+        /// <summary>
+        /// Free-trial days on the pricing option; pass to <c>PaymentComponent.TrialDays</c>.
+        /// </summary>
+        public int? TrialDays { get; set; }
     }
 }

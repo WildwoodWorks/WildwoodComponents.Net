@@ -17,12 +17,14 @@ namespace WildwoodComponents.Blazor.Components.Payment;
 ///   provider discovery, the non-Stripe provider flows, shared handlers and disposal
 /// - PaymentComponent.Stripe.cs - Stripe: card element initialisation and teardown, payment
 ///   confirmation and the JS-invokable card callbacks
+/// - PaymentDecisions.cs - the rules that decide whether a card is charged, saved or left alone
 /// </remarks>
 public partial class PaymentComponent : BaseWildwoodComponent, IAsyncDisposable
 {
     [Inject] private IPaymentProviderService PaymentProviderService { get; set; } = default!;
     [Inject] private IPlatformDetectionService PlatformService { get; set; } = default!;
     [Inject] private PaymentScriptLoader ScriptLoader { get; set; } = default!;
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
 
     // Required Parameters
     [Parameter, EditorRequired] public string AppId { get; set; } = string.Empty;
@@ -37,6 +39,14 @@ public partial class PaymentComponent : BaseWildwoodComponent, IAsyncDisposable
     [Parameter] public string? SubscriptionId { get; set; }
     [Parameter] public string? PricingModelId { get; set; }
     [Parameter] public bool IsSubscription { get; set; }
+
+    /// <summary>
+    /// The subscription starts with this many free-trial days. The button offers the trial instead
+    /// of a charge, and with Stripe the card is saved (confirmed as a SetupIntent) rather than
+    /// charged today, so the processor has something to bill when the trial ends.
+    /// </summary>
+    [Parameter] public int? TrialDays { get; set; }
+
     [Parameter] public bool ShowAmount { get; set; } = true;
     [Parameter] public bool RequireBillingAddress { get; set; } = false;
     [Parameter] public string? ReturnUrl { get; set; }
@@ -56,7 +66,20 @@ public partial class PaymentComponent : BaseWildwoodComponent, IAsyncDisposable
     [Parameter] public string? PreselectedProviderId { get; set; }
     
     // Events
+
+    /// <summary>
+    /// Fired exactly once per successful payment, as soon as the payment completes.
+    /// </summary>
     [Parameter] public EventCallback<PaymentSuccessEventArgs> OnPaymentSuccess { get; set; }
+
+    /// <summary>
+    /// Renders a "Continue" button on the success panel and is invoked when it is clicked. Without
+    /// it the panel offers no Continue, because advancing used to re-fire
+    /// <see cref="OnPaymentSuccess"/> and run the host's success handler (a signup, an upgrade) a
+    /// second time — with a thinner payload that dropped the payment intent and subscription ids.
+    /// </summary>
+    [Parameter] public EventCallback<PaymentSuccessEventArgs> OnContinue { get; set; }
+
     [Parameter] public EventCallback<PaymentFailureEventArgs> OnPaymentFailure { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 
@@ -89,6 +112,36 @@ public partial class PaymentComponent : BaseWildwoodComponent, IAsyncDisposable
     private string _billingCity = string.Empty;
     private string _billingState = string.Empty;
     private string _billingZip = string.Empty;
+    // No country picker yet — the form collects a US address, and the value still travels with it
+    // so the server and the provider get a complete address.
+    private string _billingCountry = "US";
+
+    // Inline problem with the form itself (an incomplete billing address), shown above the submit
+    // button. Distinct from ErrorMessage, which replaces the whole form with the Try Again panel.
+    private string? _formError;
+
+    // The Stripe intent created for this payment, kept after a declined card so a retry confirms
+    // the same intent instead of creating another subscription.
+    private InitiatePaymentResponse? _pendingIntent;
+    private string? _pendingIntentKey;
+
+    // Set when the plan advertises a trial but the server started a paid subscription instead (the
+    // account has already had its trial). The charge then waits for the user to agree to it.
+    private bool _trialUnavailable;
+
+    // Set when the completed payment saved a card for a free trial rather than charging it.
+    private DateTime? _trialEndsAt;
+
+    // Last plan the form was rendered for, so a form reused for another plan offers its trial again.
+    private string? _lastPricingModelId;
+    private int? _lastTrialDays;
+    private decimal _lastAmount;
+    private bool _planTracked;
+
+    /// <summary>
+    /// True while the component is offering a free trial rather than a charge.
+    /// </summary>
+    private bool HasTrial => (TrialDays ?? 0) > 0 && !_trialUnavailable;
 
     // Flag for tracking prevention detection
     private bool _trackingPreventionDetected = false;
@@ -106,6 +159,31 @@ public partial class PaymentComponent : BaseWildwoodComponent, IAsyncDisposable
     protected override async Task OnComponentInitializedAsync()
     {
         await LoadAvailableProviders();
+    }
+
+    /// <summary>
+    /// A "the trial isn't available" answer was about ONE plan. When the host reuses this form for
+    /// another plan — a different pricing model, trial length or amount — the new plan's trial is
+    /// offered again, and the previous plan's intent is dropped so nothing confirms against it.
+    /// </summary>
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+
+        if (_planTracked
+            && PaymentDecisions.PlanChanged(
+                _lastPricingModelId, _lastTrialDays, _lastAmount,
+                PricingModelId, TrialDays, Amount))
+        {
+            _trialUnavailable = false;
+            _pendingIntent = null;
+            _pendingIntentKey = null;
+        }
+
+        _lastPricingModelId = PricingModelId;
+        _lastTrialDays = TrialDays;
+        _lastAmount = Amount;
+        _planTracked = true;
     }
 
     private bool _providersInitialized = false;
@@ -493,6 +571,10 @@ public partial class PaymentComponent : BaseWildwoodComponent, IAsyncDisposable
         _cardComplete = false;
         _stripeInitialized = false;
         _paypalButtonsLoaded = false;
+        _formError = null;
+        // Another provider means another intent: the stored one belongs to the provider that made it.
+        _pendingIntent = null;
+        _pendingIntentKey = null;
         ClearError();
         StateHasChanged();
         
@@ -574,43 +656,101 @@ public partial class PaymentComponent : BaseWildwoodComponent, IAsyncDisposable
         if (_selectedProvider == null || _isProcessing)
             return;
 
+        var isStripe = (PaymentProviderType)_selectedProvider.ProviderType == PaymentProviderType.Stripe;
+
+        // An address the app requires has to be complete before anything is charged: an incomplete
+        // one fails at the provider, after the intent already exists.
+        if (!PaymentDecisions.TryBuildBillingAddress(
+                RequireBillingAddress,
+                _billingFirstName, _billingLastName, _billingAddress,
+                _billingCity, _billingState, _billingZip, _billingCountry,
+                out var billingAddress))
+        {
+            _formError = PaymentDecisions.IncompleteBillingAddressMessage;
+            StateHasChanged();
+            return;
+        }
+
+        _formError = null;
         _isProcessing = true;
         _loadingMessage = "Processing payment...";
         StateHasChanged();
 
         try
         {
-            var request = new InitiatePaymentRequest
-            {
-                ProviderId = _selectedProvider.Id,
-                AppId = AppId,
-                Amount = Amount,
-                Currency = Currency,
-                Description = Description,
-                CustomerId = CustomerId,
-                CustomerEmail = CustomerEmail,
-                OrderId = OrderId,
-                SubscriptionId = SubscriptionId,
-                PricingModelId = PricingModelId,
-                IsSubscription = IsSubscription,
-                ReturnUrl = ReturnUrl,
-                CancelUrl = CancelUrl,
-                Metadata = Metadata
-            };
+            // Reuse the intent a declined attempt already created rather than initiating again,
+            // which would leave a second subscription behind.
+            var intentKey = PaymentDecisions.BuildIntentKey(
+                _selectedProvider.Id, PricingModelId, Amount, IsSubscription);
 
-            var response = await PaymentProviderService.InitiatePaymentAsync(request);
-            Logger?.LogInformation("ProcessPayment: Payment initiation response: {Response}", response);
-
-            if (!response.Success)
+            InitiatePaymentResponse response;
+            if (PaymentDecisions.CanReuseIntent(_pendingIntentKey, _pendingIntent, intentKey))
             {
-                await HandlePaymentError(response.ErrorMessage ?? "Payment initiation failed", response.ErrorCode);
+                response = _pendingIntent!;
+            }
+            else
+            {
+                var request = new InitiatePaymentRequest
+                {
+                    ProviderId = _selectedProvider.Id,
+                    AppId = AppId,
+                    Amount = Amount,
+                    Currency = Currency,
+                    Description = Description,
+                    CustomerId = CustomerId,
+                    CustomerEmail = CustomerEmail,
+                    OrderId = OrderId,
+                    SubscriptionId = SubscriptionId,
+                    PricingModelId = PricingModelId,
+                    IsSubscription = IsSubscription,
+                    ReturnUrl = ReturnUrl,
+                    CancelUrl = CancelUrl,
+                    Metadata = Metadata,
+                    // Only present when the app asks for an address — the property is omitted otherwise.
+                    BillingAddress = billingAddress,
+                    // Lets a Stripe trial come back as a SetupIntent to confirm, so the card is
+                    // saved for the charge at trial end instead of nothing being collected at all.
+                    SupportsSetupIntent = PaymentDecisions.ShouldRequestSetupIntent(isStripe, HasTrial)
+                        ? true
+                        : null
+                };
+
+                response = await PaymentProviderService.InitiatePaymentAsync(request);
+                Logger?.LogInformation("ProcessPayment: Payment initiation response: {Response}", response);
+
+                if (!response.Success)
+                {
+                    await HandlePaymentError(response.ErrorMessage ?? "Payment initiation failed", response.ErrorCode);
+                    return;
+                }
+
+                if (isStripe && !string.IsNullOrEmpty(response.ClientSecret))
+                {
+                    _pendingIntent = response;
+                    _pendingIntentKey = intentKey;
+                }
+            }
+
+            // Offered a trial, but the server wants a charge today: never charge a card the user
+            // handed over for a free trial. Say so, and let them confirm the same intent next click.
+            if (PaymentDecisions.ShouldAskBeforeCharging(HasTrial, isStripe, response))
+            {
+                _trialUnavailable = true;
                 return;
             }
 
-            // If no client-side confirmation needed (trial, $0 amount, or payment succeeded immediately)
+            // Stripe free trial — nothing is charged now, but the card is saved (SetupIntent) so
+            // Stripe can charge it when the trial ends.
+            if (isStripe && PaymentDecisions.IsSetupIntentResponse(response))
+            {
+                await ConfirmStripeSetup(response);
+                return;
+            }
+
+            // If no client-side confirmation needed ($0 amount, or payment succeeded immediately)
             if (!response.RequiresClientConfirmation || string.IsNullOrEmpty(response.ClientSecret))
             {
-                await CompletePayment(response.PaymentIntentId ?? response.SubscriptionId ?? "");
+                await CompleteServerRecordedPayment(response);
                 return;
             }
 
@@ -618,11 +758,11 @@ public partial class PaymentComponent : BaseWildwoodComponent, IAsyncDisposable
             switch (providerType)
             {
                 case PaymentProviderType.Stripe:
-                    await ConfirmStripePayment(response.ClientSecret);
+                    await ConfirmStripePayment(response);
                     break;
 
                 default:
-                    await CompletePayment(response.PaymentIntentId!);
+                    await CompleteServerRecordedPayment(response);
                     break;
             }
         }
@@ -727,9 +867,18 @@ public partial class PaymentComponent : BaseWildwoodComponent, IAsyncDisposable
 
             var response = await PaymentProviderService.InitiatePaymentAsync(request);
 
-            if (response.Success && !string.IsNullOrEmpty(response.RedirectUrl))
+            if (response.Success && PaymentDecisions.IsSafeRedirectUrl(response.RedirectUrl))
             {
-                await InvokeJSVoidAsync("eval", $"window.location.href = '{response.RedirectUrl}'");
+                // The URL comes from the provider through the server, so it is navigated to as a
+                // value — never interpolated into a script string, which would let the answer run
+                // JavaScript in the host page.
+                Navigation.NavigateTo(response.RedirectUrl!, forceLoad: true);
+            }
+            else if (response.Success)
+            {
+                await HandlePaymentError(
+                    "The payment provider returned an address that cannot be opened. Please try again.",
+                    response.ErrorCode);
             }
             else
             {
@@ -747,6 +896,22 @@ public partial class PaymentComponent : BaseWildwoodComponent, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Confirms a payment with the id the SERVER recorded for it. When the server named neither a
+    /// payment intent nor a subscription there is nothing to confirm, and the payment fails with a
+    /// message instead of asking the server to verify an empty id.
+    /// </summary>
+    private async Task CompleteServerRecordedPayment(InitiatePaymentResponse response)
+    {
+        if (PaymentDecisions.ServerRecordedId(response) is not { Length: > 0 } paymentIntentId)
+        {
+            await HandlePaymentError(PaymentDecisions.MissingPaymentIdMessage, response.ErrorCode);
+            return;
+        }
+
+        await CompletePayment(paymentIntentId);
+    }
+
     private async Task CompletePayment(string paymentIntentId)
     {
         var providerType = (PaymentProviderType)(_selectedProvider?.ProviderType ?? (int)PaymentProviderType.Stripe);
@@ -754,6 +919,8 @@ public partial class PaymentComponent : BaseWildwoodComponent, IAsyncDisposable
 
         if (result.Success)
         {
+            _pendingIntent = null;
+            _pendingIntentKey = null;
             _paymentResult = result;
             _paymentComplete = true;
             await NotifyPaymentSuccess();
@@ -764,20 +931,29 @@ public partial class PaymentComponent : BaseWildwoodComponent, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// The completed payment, as the host sees it. Built once and reused so Continue cannot hand
+    /// back a thinner payload than the success callback did.
+    /// </summary>
+    private PaymentSuccessEventArgs BuildSuccessArgs() => new PaymentSuccessEventArgs
+    {
+        TransactionId = _paymentResult?.TransactionId,
+        PaymentIntentId = _paymentResult?.PaymentIntentId,
+        SubscriptionId = _paymentResult?.SubscriptionId,
+        Amount = Amount,
+        Currency = Currency,
+        ProviderType = _selectedProvider?.ProviderType ?? (int)PaymentProviderType.Stripe,
+        ReceiptUrl = _paymentResult?.ReceiptUrl
+    };
+
+    /// <summary>
+    /// Raises <see cref="OnPaymentSuccess"/> — exactly once per payment, as soon as it completes.
+    /// </summary>
     private async Task NotifyPaymentSuccess()
     {
         if (OnPaymentSuccess.HasDelegate)
         {
-            await OnPaymentSuccess.InvokeAsync(new PaymentSuccessEventArgs
-            {
-                TransactionId = _paymentResult?.TransactionId,
-                PaymentIntentId = _paymentResult?.PaymentIntentId,
-                SubscriptionId = _paymentResult?.SubscriptionId,
-                Amount = Amount,
-                Currency = Currency,
-                ProviderType = _selectedProvider?.ProviderType ?? (int)PaymentProviderType.Stripe,
-                ReceiptUrl = _paymentResult?.ReceiptUrl
-            });
+            await OnPaymentSuccess.InvokeAsync(BuildSuccessArgs());
         }
     }
 
@@ -800,23 +976,25 @@ public partial class PaymentComponent : BaseWildwoodComponent, IAsyncDisposable
     private void RetryPayment()
     {
         ClearError();
+        _formError = null;
         _paymentComplete = false;
         _paymentResult = null;
         _providersInitialized = false;
+        // _pendingIntent deliberately survives: the retry confirms the intent the declined attempt
+        // already created rather than starting a second subscription.
         StateHasChanged();
     }
 
+    /// <summary>
+    /// The success panel's Continue button. It invokes ONLY <see cref="OnContinue"/> —
+    /// <see cref="OnPaymentSuccess"/> already fired when the payment completed, and firing it again
+    /// ran the host's success handler (a signup, an upgrade) a second time.
+    /// </summary>
     private void HandleSuccessContinue()
     {
-        if (OnPaymentSuccess.HasDelegate && _paymentResult != null)
+        if (OnContinue.HasDelegate && _paymentResult != null)
         {
-            _ = OnPaymentSuccess.InvokeAsync(new PaymentSuccessEventArgs
-            {
-                TransactionId = _paymentResult.TransactionId,
-                Amount = Amount,
-                Currency = Currency,
-                ProviderType = _selectedProvider?.ProviderType ?? (int)PaymentProviderType.Stripe
-            });
+            _ = OnContinue.InvokeAsync(BuildSuccessArgs());
         }
     }
 

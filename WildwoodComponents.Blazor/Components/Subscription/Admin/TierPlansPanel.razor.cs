@@ -82,16 +82,11 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             {
                 if (OnTierSelected.HasDelegate)
                 {
-                    var pricing = FindPricingForCycle(tier, _selectedBillingCycle);
-                    await OnTierSelected.InvokeAsync(new TierSelectedEventArgs
-                    {
-                        TierId = tier.Id,
-                        TierName = tier.Name,
-                        PricingId = pricingId ?? pricing?.Id,
-                        Price = pricing?.Price ?? 0,
-                        IsFreeTier = tier.IsFreeTier,
-                        IsChange = _currentSubscription != null && _currentSubscription.IsActive
-                    });
+                    await OnTierSelected.InvokeAsync(BuildTierSelectedArgs(
+                        tier,
+                        pricingId,
+                        _selectedBillingCycle,
+                        isChange: _currentSubscription != null && _currentSubscription.IsActive));
                 }
             }
             finally
@@ -144,6 +139,41 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             tiers.Sort((a, b) => a.DisplayOrder.CompareTo(b.DisplayOrder));
         }
 
+        /// <summary>
+        /// Describes the plan the clicked button offered. The pricing model, the price and the trial
+        /// all come from ONE pricing option — the one named by <paramref name="pricingId"/>, falling
+        /// back to the option for the selected billing cycle when the caller named none (the
+        /// Contact Sales path) — so a host cannot start a payment for one plan at another's price.
+        /// </summary>
+        internal static TierSelectedEventArgs BuildTierSelectedArgs(
+            AppTierModel tier, string? pricingId, string billingCycle, bool isChange)
+        {
+            var pricing = FindPricingById(tier, pricingId) ?? FindPricingForCycle(tier, billingCycle);
+
+            return new TierSelectedEventArgs
+            {
+                TierId = tier.Id,
+                TierName = tier.Name,
+                PricingId = pricingId ?? pricing?.Id,
+                PricingModelId = pricing?.PricingModelId,
+                Price = pricing?.Price ?? 0,
+                TrialDays = pricing?.TrialDays,
+                IsFreeTier = tier.IsFreeTier,
+                IsChange = isChange
+            };
+        }
+
+        private static AppTierPricingModel? FindPricingById(AppTierModel tier, string? pricingId)
+        {
+            if (string.IsNullOrEmpty(pricingId)) return null;
+
+            foreach (var p in tier.PricingOptions)
+            {
+                if (string.Equals(p.Id, pricingId, StringComparison.OrdinalIgnoreCase)) return p;
+            }
+            return null;
+        }
+
         private static AppTierPricingModel? FindPricingForCycle(AppTierModel tier, string cycle)
         {
             bool wantAnnual = string.Equals(cycle, "annually", StringComparison.OrdinalIgnoreCase);
@@ -192,8 +222,25 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
     {
         public string TierId { get; set; } = string.Empty;
         public string TierName { get; set; } = string.Empty;
+
+        /// <summary>The tier's pricing option (AppTierPricing id). Not a pricing model id.</summary>
         public string? PricingId { get; set; }
+
+        /// <summary>
+        /// The pricing model behind that option — what <c>PaymentComponent.PricingModelId</c>
+        /// needs, so a payment starts the plan's recurring subscription (and its trial) rather than
+        /// a one-time charge.
+        /// </summary>
+        public string? PricingModelId { get; set; }
+
+        /// <summary>The amount the plan's subscription charges (the pricing option's price).</summary>
         public decimal Price { get; set; }
+
+        /// <summary>
+        /// Free-trial days on the pricing option; pass to <c>PaymentComponent.TrialDays</c>.
+        /// </summary>
+        public int? TrialDays { get; set; }
+
         public bool IsFreeTier { get; set; }
         public bool IsChange { get; set; }
     }

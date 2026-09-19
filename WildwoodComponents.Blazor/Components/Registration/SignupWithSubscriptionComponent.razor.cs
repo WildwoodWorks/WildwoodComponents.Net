@@ -96,9 +96,19 @@ namespace WildwoodComponents.Blazor.Components.Registration
         private AuthenticationResponse? _authResponse;
         private RegistrationSuccessResponse? _registrationResponse;
 
+        /// <summary>
+        /// The plan a registration token gives this app. Registering with the token subscribes the
+        /// user to it, so the wizard skips plan selection and payment, and must not self-subscribe
+        /// over it — that call replaced the subscription the token had just created.
+        /// </summary>
+        private RegistrationTokenAppGrant? _tokenGrant;
+
         // Payment tracking (deferred flow: payment before user creation)
         private string? _paymentTransactionId;
         private string? _paymentExternalId;
+
+        // One signup at a time — see ProcessSignupAsync.
+        private bool _signupInFlight;
 
         // Registration disclaimers gated in front of the Success step (populated
         // after login once the session JWT is stored)
@@ -217,16 +227,29 @@ namespace WildwoodComponents.Blazor.Components.Registration
         private bool HasPreSelectedTier => _preSelectedTier != null && !_showFullTierSelection;
 
         /// <summary>
-        /// Whether tier selection should be skipped (either explicitly or via pre-selected tier).
+        /// Whether the registration token already decided the plan for this app.
         /// </summary>
-        private bool EffectiveSkipTierSelection => SkipTierSelection || HasPreSelectedTier;
+        private bool HasTokenPlan => _tokenGrant != null;
 
         /// <summary>
-        /// Whether the selected tier requires payment.
+        /// Whether tier selection should be skipped (explicitly, via a pre-selected tier, or
+        /// because the token carries the plan).
+        /// </summary>
+        private bool EffectiveSkipTierSelection => SkipTierSelection || HasPreSelectedTier || HasTokenPlan;
+
+        /// <summary>
+        /// Whether the selected tier requires payment. A token's plan is already paid for (or free
+        /// by grant), so it collects nothing.
         /// </summary>
         private bool RequiresPayment =>
-            _selectedTier != null && !_selectedTier.IsFreeTier
+            !HasTokenPlan
+            && _selectedTier != null && !_selectedTier.IsFreeTier
             && _selectedPricing != null && _selectedPricing.Price > 0;
+
+        /// <summary>
+        /// Free-trial days on the plan being paid for, 0 when there is no trial or no payment.
+        /// </summary>
+        private int SelectedTrialDays => RequiresPayment ? (_selectedPricing?.TrialDays ?? 0) : 0;
 
         private void BuildStepConfig()
         {
@@ -253,9 +276,46 @@ namespace WildwoodComponents.Blazor.Components.Registration
 
         #region Event Handlers
 
-        private void HandleFormDataCollected(RegistrationFormData formData)
+        private async Task HandleFormDataCollected(RegistrationFormData formData)
         {
             _collectedFormData = formData;
+
+            // A token that carries a plan for this app decides the plan itself: registering with it
+            // subscribes the user, so there is nothing to choose or pay for. When the details cannot
+            // be read the wizard falls through to the normal flow — the token still grants access,
+            // and "unreadable" must not be reported as "invalid".
+            if (!string.IsNullOrEmpty(formData.Token))
+            {
+                _processingError = null;
+                _processingStatus = "Checking your registration token...";
+                _currentStep = SignupStep.Processing;
+                StateHasChanged();
+
+                RegistrationTokenDetails? details = null;
+                try
+                {
+                    details = await AuthService.GetRegistrationTokenDetailsAsync(formData.Token!, AppId);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Could not read registration token details; continuing with the normal flow");
+                }
+
+                _tokenGrant = SignupPlanDecisions.FindGrantForApp(details, AppId);
+                if (_tokenGrant != null)
+                {
+                    BuildStepConfig();
+                    await ProcessSignupAsync();
+                    return;
+                }
+
+                _processingStatus = null;
+                _currentStep = SignupStep.Register;
+            }
+            else
+            {
+                _tokenGrant = null;
+            }
 
             if (EffectiveSkipTierSelection)
             {
@@ -266,7 +326,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
                 }
                 else
                 {
-                    _ = ProcessSignupAsync();
+                    await ProcessSignupAsync();
                     return;
                 }
             }
@@ -277,7 +337,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
             StateHasChanged();
         }
 
-        private void HandleTierSelected(PricingTierSelectedEventArgs args)
+        private async Task HandleTierSelected(PricingTierSelectedEventArgs args)
         {
             _selectedTierId = args.Tier.Id;
             _selectedPricingId = args.SelectedPricing?.Id;
@@ -294,18 +354,37 @@ namespace WildwoodComponents.Blazor.Components.Registration
             }
             else
             {
-                _ = ProcessSignupAsync();
+                await ProcessSignupAsync();
             }
         }
 
-        private void HandlePaymentSuccess(PaymentSuccessEventArgs args)
+        private async Task HandlePaymentSuccess(PaymentSuccessEventArgs args)
         {
             _paymentTransactionId = args.TransactionId ?? args.PaymentIntentId;
             _paymentExternalId = args.PaymentIntentId;
 
             if (_collectedFormData != null)
             {
-                _ = ProcessSignupAsync();
+                await ProcessSignupAsync();
+            }
+        }
+
+        /// <summary>
+        /// The payment component's Continue button. Payment success already starts the signup, so
+        /// this only has work to do if the wizard is somehow still on the payment step — and it can
+        /// never start a second signup, because <see cref="ProcessSignupAsync"/> refuses to run twice
+        /// at once.
+        /// </summary>
+        private async Task HandlePaymentContinue(PaymentSuccessEventArgs args)
+        {
+            if (_currentStep != SignupStep.Payment) return;
+
+            _paymentTransactionId ??= args.TransactionId ?? args.PaymentIntentId;
+            _paymentExternalId ??= args.PaymentIntentId;
+
+            if (_collectedFormData != null)
+            {
+                await ProcessSignupAsync();
             }
         }
 
@@ -373,8 +452,13 @@ namespace WildwoodComponents.Blazor.Components.Registration
             _registrationResponse = null;
             _processingError = null;
             _processingStatus = null;
+            // A fresh start must not carry the previous attempt's payment, plan or outcome into the
+            // next one: a stale grant would skip plan selection, and a stale failure flag would make
+            // a healthy signup read "Plan activation is pending".
             _paymentTransactionId = null;
             _paymentExternalId = null;
+            _subscriptionFailed = false;
+            _tokenGrant = null;
             _pendingDisclaimers = null;
             BuildStepConfig();
             StateHasChanged();
@@ -386,6 +470,11 @@ namespace WildwoodComponents.Blazor.Components.Registration
 
         private async Task ProcessSignupAsync()
         {
+            // One signup at a time. Payment success and the success panel's Continue can both ask
+            // for one, and two concurrent runs would register the same person twice.
+            if (_signupInFlight) return;
+            _signupInFlight = true;
+
             _currentStep = SignupStep.Processing;
             _processingError = null;
             StateHasChanged();
@@ -531,16 +620,28 @@ namespace WildwoodComponents.Blazor.Components.Registration
                     }
                 }
 
-                // Step 4: Subscribe to selected tier (if a tier was selected)
-                if (!string.IsNullOrEmpty(_selectedTierId))
+                // Step 4: Subscribe to the selected tier — unless the registration token already
+                // put the account on a plan, in which case subscribing again REPLACES it, which
+                // cancels the subscription the token just created.
+                if (SignupPlanDecisions.ShouldSelfSubscribe(_tokenGrant, _selectedTierId))
                 {
                     _processingStatus = "Activating your plan...";
                     StateHasChanged();
 
-                    var result = await AppTierService.SubscribeToTierAsync(AppId, _selectedTierId, _selectedPricingId, _paymentTransactionId);
-                    if (!result.Success)
+                    // Non-fatal either way — the account exists and the plan can be activated later.
+                    // A refusal must never leave the wizard on "Activating your plan..." forever.
+                    try
                     {
-                        Logger.LogWarning("Tier subscription failed: {Message}", result.ErrorMessage);
+                        var result = await AppTierService.SubscribeToTierAsync(AppId, _selectedTierId!, _selectedPricingId, _paymentTransactionId);
+                        if (!result.Success)
+                        {
+                            Logger.LogWarning("Tier subscription failed: {Message}", result.ErrorMessage);
+                            _subscriptionFailed = true;
+                        }
+                    }
+                    catch (Exception subscribeEx)
+                    {
+                        Logger.LogWarning(subscribeEx, "Tier subscription failed");
                         _subscriptionFailed = true;
                     }
                 }
@@ -553,10 +654,13 @@ namespace WildwoodComponents.Blazor.Components.Registration
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error during signup processing");
+                // Never empty: the error view only renders when there is a message, so a blank one
+                // would leave the user on the spinner.
                 _processingError = "An error occurred. Please try again.";
             }
             finally
             {
+                _signupInFlight = false;
                 _processingStatus = null;
                 StateHasChanged();
             }

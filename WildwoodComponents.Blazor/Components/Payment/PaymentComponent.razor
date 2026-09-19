@@ -22,16 +22,30 @@
             <div class="success-icon mb-3">
                 <i class="bi bi-check-circle-fill text-success"></i>
             </div>
-            <h4 class="text-success">Payment Successful!</h4>
-            <p class="transaction-id-display">Transaction ID: <code>@_paymentResult.TransactionId</code></p>
-            <p class="mb-0">Amount: <strong>@FormatAmount(Amount, Currency)</strong></p>
+            @if (_trialEndsAt.HasValue)
+            {
+                <h4 class="text-success">Your free trial has started!</h4>
+                <p class="mb-0">
+                    Your card is saved. You won't be charged until
+                    <strong>@_trialEndsAt.Value.ToString("MMM d, yyyy")</strong>, when
+                    <strong>@FormatAmount(Amount, Currency)</strong> is due.
+                </p>
+            }
+            else
+            {
+                <h4 class="text-success">Payment Successful!</h4>
+                <p class="transaction-id-display">Transaction ID: <code>@_paymentResult.TransactionId</code></p>
+                <p class="mb-0">Amount: <strong>@FormatAmount(Amount, Currency)</strong></p>
+            }
             @if (!string.IsNullOrEmpty(_paymentResult.ReceiptUrl))
             {
                 <a href="@_paymentResult.ReceiptUrl" target="_blank" class="btn btn-outline-primary mt-3">
                     <i class="bi bi-receipt me-2"></i>View Receipt
                 </a>
             }
-            @if (OnPaymentSuccess.HasDelegate)
+            @* Continue renders only for a host that asked for it. It used to re-fire
+               OnPaymentSuccess, running the host's success handler a second time. *@
+            @if (OnContinue.HasDelegate)
             {
                 <button class="btn btn-primary mt-3 ms-2" @onclick="HandleSuccessContinue">
                     Continue
@@ -71,6 +85,15 @@
                 </div>
             }
 
+            @* The plan advertised a trial the account cannot have: nothing has been charged, and
+               the next Pay click confirms the SAME intent rather than starting another one. *@
+            @if (_trialUnavailable)
+            {
+                <div class="alert alert-warning mb-3" role="alert">
+                    The free trial isn't available on your account, so @FormatAmount(Amount, Currency) will be charged today. Select Pay to continue.
+                </div>
+            }
+
             <!-- Amount Display -->
             @if (ShowAmount)
             {
@@ -101,7 +124,9 @@
             }
 
             <!-- Provider Selection -->
-            @if (_availableProviders.Count > 1 && !_platformInfo?.RequiresAppStorePayment == true)
+            @* != true, not !(... == true): the latter parses as (!x) == true and hid the picker
+               whenever platform info had not loaded. *@
+            @if (_availableProviders.Count > 1 && _platformInfo?.RequiresAppStorePayment != true)
             {
                 <div class="payment-providers mb-4">
                     <label class="form-label fw-bold">Payment Method</label>
@@ -277,7 +302,11 @@
                 @if (!IsRedirectProvider(_selectedProvider.ProviderType))
                 {
                     <div class="payment-submit mt-4">
-                        <button class="btn btn-primary btn-lg w-100" 
+                        @if (!string.IsNullOrEmpty(_formError))
+                        {
+                            <div class="alert alert-danger" role="alert">@_formError</div>
+                        }
+                        <button class="btn btn-primary btn-lg w-100"
                                 @onclick="ProcessPayment"
                                 disabled="@_isProcessing">
                             @if (_isProcessing)
@@ -285,12 +314,23 @@
                                 <span class="spinner-border spinner-border-sm me-2"></span>
                                 <text>Processing...</text>
                             }
+                            else if (HasTrial)
+                            {
+                                <i class="bi bi-lock-fill me-2"></i>
+                                <text>Start @TrialDays-day free trial</text>
+                            }
                             else
                             {
                                 <i class="bi bi-lock-fill me-2"></i>
                                 <text>Pay @FormatAmount(Amount, Currency)</text>
                             }
                         </button>
+                        @if (HasTrial)
+                        {
+                            <p class="ww-order-summary-trial text-muted small mt-2 mb-0">
+                                You won't be charged today. @FormatAmount(Amount, Currency) is due when the trial ends unless you cancel before then.
+                            </p>
+                        }
                     </div>
                 }
 
