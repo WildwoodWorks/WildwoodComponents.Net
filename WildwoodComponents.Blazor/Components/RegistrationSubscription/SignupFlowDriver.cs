@@ -863,7 +863,13 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
                         Labels = Settings.Labels,
                         OnStatus = status =>
                         {
+                            // The status is the only thing that changes while the account is being
+                            // created — the machine stays on `creating` throughout — so the render
+                            // has to be marked dirty by hand. Without it Notify() reads a clean
+                            // flag and returns, and the panel says "Creating your account..." for
+                            // the whole of the sign-in and the subscription too.
                             _processingStatus = status;
+                            _dirty = true;
                             Notify();
                         }
                     },

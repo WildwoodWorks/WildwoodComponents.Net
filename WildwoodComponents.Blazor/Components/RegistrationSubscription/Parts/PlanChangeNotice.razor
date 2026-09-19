@@ -1,0 +1,36 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Shared.RegistrationSubscription
+@inherits BaseWildwoodComponent
+
+@* What a plan change says about itself while it is neither waiting on the customer nor finished.
+
+   Two things only, and both matter to somebody holding a card: the bank is being asked (or the
+   server is still applying a change that HAS been paid for), and a failure with the way back. A
+   failed change is never silent - a customer whose card was declined mid-upgrade would otherwise be
+   left looking at the plan they still have. *@
+@if (Step == PlanChangeStep.Authenticating || Step == PlanChangeStep.Completing)
+{
+    <div class="ww-regsub-plan-change" role="status">
+        <span class="ww-spinner ww-spinner-sm"></span>
+        <span class="ww-text-muted">@StatusText</span>
+    </div>
+}
+else if (Step == PlanChangeStep.Failed)
+{
+    <div class="ww-alert ww-alert-danger ww-regsub-plan-change-failed" role="alert">
+        <span>
+            <strong>@Labels.PlanChangeFailed</strong>
+            @if (!string.IsNullOrEmpty(Error))
+            {
+                <span class="ww-regsub-plan-change-reason">@Error</span>
+            }
+        </span>
+        <span class="ww-regsub-plan-change-actions">
+            @if (CanRetry)
+            {
+                <button type="button" class="ww-btn ww-btn-sm ww-btn-outline" @onclick="HandleRetryAsync">@Labels.TryAgain</button>
+            }
+            <button type="button" class="ww-alert-dismiss" aria-label="@Labels.Cancel" @onclick="HandleDismissAsync">&times;</button>
+        </span>
+    </div>
+}

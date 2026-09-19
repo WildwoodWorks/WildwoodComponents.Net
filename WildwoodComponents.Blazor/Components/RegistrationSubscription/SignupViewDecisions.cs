@@ -127,21 +127,17 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
         /// <summary>
         /// The plan the machine's selection names, priced off the live catalog. TS <c>plan</c>.
         /// </summary>
+        /// <remarks>
+        /// Matched case-insensitively, through the same <see cref="FindTier"/> the preset plan
+        /// uses: the selection can carry a link's casing for a GUID rather than the server's, and
+        /// an exact match would then lose the plan the signup is actually carrying — no summary
+        /// card, no price, and a payment step with nothing to charge for.
+        /// </remarks>
         public static SignupPlanView? ResolvePlan(PublicCatalog? catalog, string? tierId, string? pricingId)
         {
-            if (catalog is null || !(tierId is { Length: > 0 })) return null;
-
-            AppTierModel? tier = null;
-            foreach (var candidate in catalog.Tiers)
-            {
-                if (candidate is not null && string.Equals(candidate.Id, tierId, StringComparison.Ordinal))
-                {
-                    tier = candidate;
-                    break;
-                }
-            }
-
+            var tier = FindTier(catalog, tierId);
             if (tier is null) return null;
+
             return new SignupPlanView(tier, CatalogHelpers.ResolvePriceOption(tier, pricingId));
         }
 

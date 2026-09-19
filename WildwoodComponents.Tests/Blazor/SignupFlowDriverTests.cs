@@ -749,6 +749,62 @@ public class SignupFlowDriverTests
         Assert.Null(outcome.PlanActivationPending);
     }
 
+    /// <summary>
+    /// An account creator that reports each sub-step the way the real one does, and nothing else.
+    /// </summary>
+    private sealed class StatusReportingCreator : ISignupAccountCreator
+    {
+        public Task<SignupAccountResult> CreateAsync(SignupAccountRequest request, SignupAccountAttempt attempt)
+        {
+            var labels = RegistrationSubscriptionLabels.Defaults;
+            request.OnStatus?.Invoke(labels.StatusCreatingAccount);
+            request.OnStatus?.Invoke(labels.StatusSigningIn);
+            request.OnStatus?.Invoke(labels.StatusActivatingPlan);
+
+            attempt.Registered = true;
+            attempt.LoggedIn = true;
+            attempt.AuthResponse = new AuthenticationResponse { Id = "user-1", UserId = "user-1", JwtToken = "jwt-1" };
+
+            return Task.FromResult(new SignupAccountResult
+            {
+                Success = true,
+                UserId = "user-1",
+                AuthResponse = attempt.AuthResponse
+            });
+        }
+    }
+
+    /// <summary>
+    /// The machine stays on <c>creating</c> for the whole of the registration, the sign-in and the
+    /// subscription, so the status line is the only thing that moves — and it only moves if each
+    /// report marks the driver dirty. Without that the panel reads "Creating your account..." while
+    /// the plan is being activated, which is what React's own status sequence does not do.
+    /// </summary>
+    [Fact]
+    public async Task TheCreatingStepsStatusLine_AdvancesThroughEachSubStep()
+    {
+        var harness = Ready();
+        harness.Creator = new StatusReportingCreator();
+        var driver = harness.Build(settings => settings.PreSelectedTierId = "tier-free");
+
+        await driver.StartAsync();
+
+        var seen = new List<string>();
+        driver.StateChanged = () => seen.Add(driver.ProcessingStatus);
+
+        await driver.SubmitFormAsync(Form());
+
+        var labels = RegistrationSubscriptionLabels.Defaults;
+        var index = seen.IndexOf(labels.StatusCreatingAccount);
+        Assert.True(index >= 0, "the status line never said the account was being created");
+        Assert.Contains(labels.StatusSigningIn, seen);
+        Assert.Contains(labels.StatusActivatingPlan, seen);
+        Assert.True(
+            seen.IndexOf(labels.StatusSigningIn) > index
+            && seen.IndexOf(labels.StatusActivatingPlan) > seen.IndexOf(labels.StatusSigningIn),
+            "the status line did not advance in order");
+    }
+
     #endregion
 
     #region Teardown: detach, not abandon

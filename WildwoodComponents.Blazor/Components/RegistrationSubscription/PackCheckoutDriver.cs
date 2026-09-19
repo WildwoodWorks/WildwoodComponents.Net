@@ -125,6 +125,10 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
         /// <summary>The host's <see cref="Finished"/> callback actually ran.</summary>
         private bool _outcomeDelivered;
 
+        /// <param name="appTier">Quotes, buys and completes the packs.</param>
+        /// <param name="payments">Reads the app's payment configuration, for the publishable key.</param>
+        /// <param name="paymentActions">Puts a bought pack's 3-D Secure to the customer.</param>
+        /// <param name="settings">What is being bought, and for whom.</param>
         /// <param name="entitlements">
         /// The scoped entitlement cache, told when a purchase this driver DRAINED after teardown
         /// granted something — the host callback that would normally say so is gone by then. Null
@@ -608,14 +612,24 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
             try
             {
                 var providerId = _state.Quote?.ProviderId;
-                var intent = await _appTier.CreateCheckoutPaymentMethodAsync(Settings.AppId, providerId ?? string.Empty);
+
+                // The key first: without one there is no card field to mount, and creating the
+                // SetupIntent before finding that out leaves an intent on the account that nobody
+                // will ever confirm.
                 var key = await ResolvePublishableKeyAsync(providerId);
+                if (!(key is { Length: > 0 }))
+                {
+                    await ReportAsync(CardFailedCode, CardUnavailable);
+                    Apply(new PackCheckoutEvent.CardIntentFailed(token, CardUnavailable));
+                    return;
+                }
+
+                var intent = await _appTier.CreateCheckoutPaymentMethodAsync(Settings.AppId, providerId ?? string.Empty);
 
                 if (intent is null
                     || !intent.Success
                     || !(intent.ClientSecret is { Length: > 0 })
-                    || !(intent.PaymentTransactionId is { Length: > 0 })
-                    || !(key is { Length: > 0 }))
+                    || !(intent.PaymentTransactionId is { Length: > 0 }))
                 {
                     var message = intent?.ErrorMessage is { Length: > 0 } reason ? reason : CardUnavailable;
                     await ReportAsync(CardFailedCode, message);

@@ -27,6 +27,35 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
     }
 
     /// <summary>
+    /// How the manage view arranges its sections. Ported from the JS <c>layout</c> prop, whose two
+    /// members are the strings <c>tabs</c> and <c>stacked</c>.
+    /// </summary>
+    public enum ManageLayout
+    {
+        /// <summary>One section at a time, behind a tab bar. The default.</summary>
+        Tabs = 0,
+
+        /// <summary>Every section down the page, each under its own heading.</summary>
+        Stacked = 1
+    }
+
+    /// <summary>
+    /// A section of the manage view. The order of the members is the order they render in when the
+    /// host names none. Ported from the JS <c>ManageSection</c> union.
+    /// </summary>
+    public enum ManageSection
+    {
+        Subscription = 0,
+        Plans = 1,
+        Features = 2,
+        AddOns = 3,
+        Usage = 4,
+
+        /// <summary>Per-user feature overrides. Filtered out unless the viewer is an admin.</summary>
+        Overrides = 5
+    }
+
+    /// <summary>
     /// What the visitor chose on a pricing surface. The host decides where that leads — the view
     /// never navigates.
     /// </summary>

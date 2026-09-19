@@ -529,6 +529,41 @@ public class RegistrationSubscriptionSignupRenderTests
         Assert.Equal("Your account has been created successfully.", message);
     }
 
+    /// <summary>
+    /// The plan the flow is carrying is matched by the SAME case-insensitive rule the preset plan
+    /// uses. A selection can hold a link's casing for a GUID rather than the server's, and an
+    /// exact match would then lose the plan entirely: no summary card, no price, and a payment
+    /// step with nothing to charge for.
+    /// </summary>
+    [Theory]
+    [InlineData("tier-pro")]
+    [InlineData("TIER-PRO")]
+    [InlineData("Tier-Pro")]
+    public void The_carried_plan_is_matched_however_its_id_is_cased(string tierId)
+    {
+        var catalog = new PublicCatalog
+        {
+            Tiers = new List<AppTierModel>
+            {
+                new AppTierModel
+                {
+                    Id = "tier-pro",
+                    Name = "Pro",
+                    PricingOptions = new List<AppTierPricingModel>
+                    {
+                        new AppTierPricingModel { Id = "price-pro", Price = ProMonthly, IsDefault = true }
+                    }
+                }
+            }
+        };
+
+        var plan = SignupViewDecisions.ResolvePlan(catalog, tierId, "price-pro");
+
+        Assert.NotNull(plan);
+        Assert.Equal("tier-pro", plan!.Tier.Id);
+        Assert.Equal(ProMonthly, plan.Pricing!.Price);
+    }
+
     #endregion
 
     #region The parts

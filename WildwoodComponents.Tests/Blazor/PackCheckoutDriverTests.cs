@@ -444,6 +444,31 @@ public class PackCheckoutDriverTests
         Assert.Equal(2, harness.Handler.Count(PaymentMethodRoute));
     }
 
+    /// <summary>
+    /// With no Stripe account to mount a card field on, the SetupIntent is never asked for: one
+    /// created first would sit on the customer's account with nobody able to confirm it, and the
+    /// checkout stops either way.
+    /// </summary>
+    [Fact]
+    public async Task WithNoPublishableKey_NoSetupIntentIsCreatedAtAll()
+    {
+        // No provider configuration at all: nothing to mount a card field with.
+        var harness = new Harness();
+        harness.Handler
+            .On(QuoteRoute, NewCardQuote)
+            .On(PaymentMethodRoute,
+                """{"success":true,"clientSecret":"seti_1_secret","paymentTransactionId":"txn-1"}""");
+        var driver = harness.Build("radar");
+
+        await driver.StartAsync();
+
+        Assert.Equal(0, harness.Handler.Count(PaymentMethodRoute));
+        Assert.Equal(PackCheckoutStep.Failed, driver.Step);
+        Assert.Equal(PackCheckoutDriver.CardUnavailable, driver.State.Error);
+        Assert.Contains(harness.Errors, error => error.Code == PackCheckoutDriver.CardFailedCode);
+        Assert.Empty(harness.Handler.Requests.FindAll(IsPurchase));
+    }
+
     [Fact]
     public async Task ACardTheServerWillNotIssueAnIntentFor_FailsWithTheCardCode()
     {

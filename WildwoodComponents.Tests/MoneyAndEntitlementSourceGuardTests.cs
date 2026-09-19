@@ -216,10 +216,29 @@ public class MoneyAndEntitlementSourceGuardTests
     /// </summary>
     public static TheoryData<string, string> BlazorEntitlementCallSites() => new()
     {
-        // Tier change / first subscribe, every scope. SubscriptionAdminComponent.
+        // Tier change / first subscribe, every scope. Both SubscriptionAdminComponent and the
+        // manage view run the change through the shared driver, which owns the invalidation —
+        // it has to, because a change drained after teardown has no component callback left.
         {
-            "WildwoodComponents.Blazor/Components/Subscription/Admin/SubscriptionAdminComponent.razor.cs",
-            "await RaiseEntitlementsChangedAsync(EntitlementsChangedReasons.TierChange);"
+            "WildwoodComponents.Blazor/Components/RegistrationSubscription/PlanChangeDriver.cs",
+            "_entitlements.Invalidate(Settings.AppId, EntitlementsChangedReasons.TierChange);"
+        },
+        {
+            "WildwoodComponents.Blazor/Components/RegistrationSubscription/PlanChangeDriver.cs",
+            "await entitlements(EntitlementsChangedReasons.TierChange);"
+        },
+        // The manage view's own mutations: packs and the subscription itself.
+        {
+            "WildwoodComponents.Blazor/Components/RegistrationSubscription/RegistrationSubscriptionManage.razor.cs",
+            "await RaiseEntitlementsChangedAsync(EntitlementsChangedReasons.AddOn);"
+        },
+        {
+            "WildwoodComponents.Blazor/Components/RegistrationSubscription/RegistrationSubscriptionManage.razor.cs",
+            "await RaiseEntitlementsChangedAsync(EntitlementsChangedReasons.Cancel);"
+        },
+        {
+            "WildwoodComponents.Blazor/Components/RegistrationSubscription/RegistrationSubscriptionManage.razor.cs",
+            "await RaiseEntitlementsChangedAsync(EntitlementsChangedReasons.Manual);"
         },
         {
             "WildwoodComponents.Blazor/Components/Subscription/Admin/SubscriptionAdminComponent.razor.cs",

@@ -81,6 +81,17 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         private List<AppTierAddOnModel> _availableAddOns = new();
 
         /// <summary>
+        /// The packs still on offer, for a host picker that sells them itself. Exposed so a
+        /// surface wiring <see cref="OnAddPacks"/> offers exactly what this panel would — one rule
+        /// (<see cref="AddOnRowRules.AvailableRows"/>) and one set of reads, rather than a second
+        /// list built from a second fetch that could disagree with the rows on screen.
+        /// </summary>
+        public IReadOnlyList<AppTierAddOnModel> AvailableAddOns
+        {
+            get { return _availableAddOns; }
+        }
+
+        /// <summary>
         /// Why the last subscribe/cancel/reactivate failed. Rendered in the panel itself — a refusal
         /// used to reach the logger and nothing else, so a purchase that never happened looked as if
         /// it had. Cleared when the next attempt starts, so a retry never shows a stale message.
