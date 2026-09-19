@@ -21,6 +21,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
 
         [Inject] private IAuthenticationService AuthService { get; set; } = default!;
         [Inject] private IAppTierComponentService AppTierService { get; set; } = default!;
+        [Inject] private IFeatureEntitlementService EntitlementService { get; set; } = default!;
         [Inject] private IPaymentProviderService PaymentProviderService { get; set; } = default!;
         [Inject] private IDisclaimerService DisclaimerService { get; set; } = default!;
         [Inject] private IWildwoodSessionManager SessionManager { get; set; } = default!;
@@ -646,6 +647,13 @@ namespace WildwoodComponents.Blazor.Components.Registration
                     }
                 }
 
+                // A new account is entitled to whatever it just signed up for — the token's
+                // grant, the plan it bought, or the free tier. JS calls this reason "signup", and
+                // it is the signup flow's only one: it fires once, here, whether the plan came
+                // from a token grant or a self-subscribe, and even when neither happened, because
+                // the account itself is new.
+                EntitlementService.Invalidate(AppId, EntitlementsChangedReasons.Signup);
+
                 // Step 5: Gate the terminal Success transition on any pending registration
                 // disclaimers. The account exists and the session JWT is stored, so the
                 // signed-in user reviews and accepts before signup is considered complete.
@@ -767,15 +775,14 @@ namespace WildwoodComponents.Blazor.Components.Registration
             return GetStepIndex(_currentStep);
         }
 
-        private string GetCurrencySymbol(string currency = "USD")
+        /// <summary>
+        /// A plan's price in the plan's own currency, falling back to the USD this wizard has always
+        /// quoted (React's signup component still hard-codes 'USD' here). It used to print a dollar
+        /// sign for every currency it did not recognise, and a whole number for every price.
+        /// </summary>
+        private static string FormatPlanPrice(AppTierModel? tier, decimal amount)
         {
-            return currency switch
-            {
-                "EUR" => "\u20AC",
-                "GBP" => "\u00A3",
-                "JPY" => "\u00A5",
-                _ => "$"
-            };
+            return CatalogHelpers.FormatPrice(tier, amount, "USD");
         }
 
         #endregion

@@ -20,6 +20,28 @@
 (function () {
     'use strict';
 
+    /**
+     * Money for display. The ONE money formatter in this package's scripts, duplicated by name into
+     * each component IIFE because no shared script is loaded on every page: keep the copies
+     * identical. It is the JS SDK's own formatMoney
+     * (packages/wildwood-core/src/features/catalog.ts) and matches C# FormatHelpers.FormatMoney, so
+     * an amount the server rendered and an amount the browser re-renders read the same. The locale
+     * is fixed at en-US for exactly that reason.
+     */
+    function wwFormatMoney(amount, currency) {
+        var code = (typeof currency === 'string' ? currency.trim() : '');
+        code = (code.length > 0 ? code : 'USD').toUpperCase();
+        var value = Number(amount);
+        if (!isFinite(value)) value = 0;
+        try {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(value);
+        } catch (e) {
+            // Intl throws on anything that is not a three-letter code; say the amount and the code
+            // rather than nothing - and never a dollar sign for a currency that is not dollars.
+            return code + ' ' + value.toFixed(2);
+        }
+    }
+
     // Provider type constants (mirrors PaymentProviderType enum)
     var PT = {
         Stripe: 1,
@@ -1059,7 +1081,7 @@
         if (txnCode) txnCode.textContent = detail.transactionId || '';
 
         var amountEl = successDiv ? successDiv.querySelector('.ww-payment-success-amount') : null;
-        if (amountEl) amountEl.textContent = this._formatAmount(detail.amount, detail.currency);
+        if (amountEl) amountEl.textContent = wwFormatMoney(detail.amount, detail.currency);
 
         if (detail.receiptUrl) {
             var receiptLink = successDiv ? successDiv.querySelector('.ww-payment-receipt-link') : null;
@@ -1097,12 +1119,6 @@
         }
 
         btn.disabled = !enabled || this.isProcessing;
-    };
-
-    PaymentInstance.prototype._formatAmount = function (amount, currency) {
-        var symbols = { USD: '$', EUR: '\u20ac', GBP: '\u00a3', JPY: '\u00a5', CAD: 'CA$', AUD: 'A$' };
-        var symbol = symbols[currency.toUpperCase()] || (currency + ' ');
-        return symbol + parseFloat(amount).toFixed(2);
     };
 
     PaymentInstance.prototype._formatDate = function (value) {

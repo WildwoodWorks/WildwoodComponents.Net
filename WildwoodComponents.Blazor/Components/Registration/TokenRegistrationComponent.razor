@@ -1554,16 +1554,14 @@
         }
     }
 
+    /// <summary>
+    /// The plan's price in the currency the server quoted it in. One shared formatter instead of a
+    /// four-entry switch: every currency outside that switch printed the ISO code with no grouping,
+    /// and the two it did carry had lost their symbols to a bad encoding.
+    /// </summary>
     private string FormatPrice(decimal amount)
     {
-        var currency = _pricingDetails?.Currency ?? "USD";
-        return currency switch
-        {
-            "USD" => $"${amount:F2}",
-            "EUR" => $"�{amount:F2}",
-            "GBP" => $"�{amount:F2}",
-            _ => $"{currency} {amount:F2}"
-        };
+        return FormatHelpers.FormatMoney(amount, _pricingDetails?.Currency);
     }
 
     /// <summary>

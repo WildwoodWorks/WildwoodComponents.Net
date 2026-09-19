@@ -93,7 +93,7 @@
         @if (Model.ShowAmount)
         {
             <div class="ww-payment-amount-display mb-4 text-center">
-                <span class="amount-value fs-3 fw-bold">@ViewHelpers.FormatAmount(Model.Amount, Model.Currency)</span>
+                <span class="amount-value fs-3 fw-bold">@ViewHelpers.FormatMoney(Model.Amount, Model.Currency)</span>
                 @if (!string.IsNullOrEmpty(Model.Description))
                 {
                     <p class="text-muted mb-0">@Model.Description</p>

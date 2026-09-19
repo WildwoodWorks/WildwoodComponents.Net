@@ -638,6 +638,15 @@
     margin-top: 0.25rem;
 }
 
+/* The tier card's free-trial line (React's TierCardHeader, .ww-plan-trial). One rule for every
+   grid — pricing display, the admin plans panel, the app-tier component and the signup wizard. */
+.ww-plan-trial {
+    color: var(--ww-success, #28a745);
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-top: 0.25rem;
+}
+
 .ww-tier-description {
     color: var(--ww-text-secondary, #495057);
     font-size: 0.9rem;

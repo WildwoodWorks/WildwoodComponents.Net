@@ -33,6 +33,12 @@ public static class FormatHelpers
         return $"{(int)days}d ago";
     }
 
+    /// <summary>
+    /// A six-entry symbol table. Superseded by <see cref="FormatMoney"/>, which carries the full
+    /// CLDR table and the currency's own fraction digits; no component in the Blazor or Razor
+    /// packages calls this any more (a source guard keeps it that way). Kept because it is public
+    /// API a consumer may still call.
+    /// </summary>
     public static string GetCurrencySymbol(string currency)
     {
         return currency.ToUpperInvariant() switch
@@ -47,6 +53,10 @@ public static class FormatHelpers
         };
     }
 
+    /// <summary>
+    /// Symbol + grouped amount, always two decimals. Superseded by <see cref="FormatMoney"/>, which
+    /// is what the components render; kept because it is public API a consumer may still call.
+    /// </summary>
     public static string FormatAmount(decimal amount, string currency)
     {
         var symbol = GetCurrencySymbol(currency);

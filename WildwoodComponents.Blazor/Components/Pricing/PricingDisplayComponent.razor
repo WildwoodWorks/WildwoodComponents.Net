@@ -92,7 +92,7 @@
                                 }
                                 else if (pricing != null)
                                 {
-                                    <span class="ww-tier-price-amount">@FormatPrice(pricing.Price)</span>
+                                    <span class="ww-tier-price-amount">@CatalogHelpers.FormatPrice(tier, pricing.Price, Currency)</span>
                                     <span class="ww-tier-price-interval">/@(pricing.BillingFrequency?.ToLower() ?? "month")</span>
                                 }
                             </div>
@@ -100,6 +100,10 @@
                         @if (discount.HasValue && discount.Value > 0)
                         {
                             <div class="ww-tier-discount">Save @discount%</div>
+                        }
+                        @if (CatalogHelpers.TierCardTrialLabel(tier, pricing, tier.ShowPrice) is { Length: > 0 } trialLabel)
+                        {
+                            <div class="ww-plan-trial">@trialLabel</div>
                         }
                     </div>
 

@@ -78,7 +78,7 @@
                     }
                     else if (_preSelectedTierPricing != null)
                     {
-                        <span class="ww-price-amount">@GetCurrencySymbol()@_preSelectedTierPricing.Price.ToString("N0")</span>
+                        <span class="ww-price-amount">@FormatPlanPrice(_preSelectedTier, _preSelectedTierPricing.Price)</span>
                         <span class="ww-price-period">/@(_preSelectedTierPricing.BillingFrequency?.ToLower() ?? "month")</span>
                         @if (!_preSelectedTier.IsFreeTier && CatalogHelpers.TrialLabel(_preSelectedTierPricing.TrialDays) is { Length: > 0 } trialLabel)
                         {
@@ -154,7 +154,7 @@
                 <div class="ww-payment-summary-row">
                     <span>@_selectedTier.Name</span>
                     <span class="ww-payment-summary-price">
-                        @GetCurrencySymbol()@_selectedPricing.Price.ToString("N0")
+                        @FormatPlanPrice(_selectedTier, _selectedPricing.Price)
                         <span class="ww-payment-summary-period">/@(_selectedPricing.BillingFrequency?.ToLower() ?? "month")</span>
                     </span>
                 </div>

@@ -1,6 +1,7 @@
 @using WildwoodComponents.Razor.Models
 @using WildwoodComponents.Razor.Helpers
 @using WildwoodComponents.Shared.Models
+@using WildwoodComponents.Shared.Utilities
 @model SignupWithSubscriptionViewModel
 
 @{
@@ -119,9 +120,12 @@
                                                   data-price="@pricing.Price"
                                                   data-is-default="@pricing.IsDefault.ToString().ToLower()"
                                                   style="display:none;">
-                                                <span class="ww-price-currency">@ViewHelpers.GetCurrencySymbol(Model.Currency)</span>
-                                                <span class="fs-3 fw-bold">@pricing.Price.ToString("N0")</span>
+                                                <span class="ww-price-amount fs-3 fw-bold">@CatalogHelpers.FormatPrice(tier, pricing.Price, Model.Currency)</span>
                                                 <span class="text-muted">/@pricing.BillingFrequencyLabel.ToLower()</span>
+                                                @if (CatalogHelpers.TierCardTrialLabel(tier, pricing, tier.ShowPrice) is { Length: > 0 } trialLabel)
+                                                {
+                                                    <span class="ww-plan-trial">@trialLabel</span>
+                                                }
                                             </span>
                                         }
                                     }

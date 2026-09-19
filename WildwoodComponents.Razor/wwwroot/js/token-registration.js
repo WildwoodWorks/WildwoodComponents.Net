@@ -7,6 +7,28 @@
 (function () {
     'use strict';
 
+    /**
+     * Money for display. The ONE money formatter in this package's scripts, duplicated by name into
+     * each component IIFE because no shared script is loaded on every page: keep the copies
+     * identical. It is the JS SDK's own formatMoney
+     * (packages/wildwood-core/src/features/catalog.ts) and matches C# FormatHelpers.FormatMoney, so
+     * an amount the server rendered and an amount the browser re-renders read the same. The locale
+     * is fixed at en-US for exactly that reason.
+     */
+    function wwFormatMoney(amount, currency) {
+        var code = (typeof currency === 'string' ? currency.trim() : '');
+        code = (code.length > 0 ? code : 'USD').toUpperCase();
+        var value = Number(amount);
+        if (!isFinite(value)) value = 0;
+        try {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(value);
+        } catch (e) {
+            // Intl throws on anything that is not a three-letter code; say the amount and the code
+            // rather than nothing - and never a dollar sign for a currency that is not dollars.
+            return code + ' ' + value.toFixed(2);
+        }
+    }
+
     var instances = {};
 
     /**
@@ -894,7 +916,7 @@
 
         var isSub = p.isSubscription || (this.registrationResponse && this.registrationResponse.isSubscription);
         this.els.subscriptionBadge.style.display = isSub ? '' : 'none';
-        this.els.priceAmount.textContent = this._formatPrice(p.priceAmount || 0, p.currency);
+        this.els.priceAmount.textContent = wwFormatMoney(p.priceAmount || 0, p.currency);
         this.els.pricePeriod.textContent = isSub ? '/month' : ' one-time';
 
         if (p.planDescription) {
@@ -1289,18 +1311,6 @@
             if (ct.indexOf('json') >= 0) return r.json();
             return r.text();
         });
-    };
-
-    RegistrationInstance.prototype._formatPrice = function (amount, currency) {
-        var sym = '$';
-        switch ((currency || 'USD').toUpperCase()) {
-            case 'EUR': sym = '\u20ac'; break;
-            case 'GBP': sym = '\u00a3'; break;
-            case 'JPY': sym = '\u00a5'; break;
-            case 'CAD': sym = 'CA$'; break;
-            case 'AUD': sym = 'A$'; break;
-        }
-        return sym + parseFloat(amount).toFixed(2);
     };
 
     RegistrationInstance.prototype._esc = function (str) {

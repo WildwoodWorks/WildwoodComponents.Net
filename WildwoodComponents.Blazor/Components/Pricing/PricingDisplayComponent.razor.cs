@@ -184,10 +184,7 @@ namespace WildwoodComponents.Blazor.Components.Pricing
             {
                 foreach (var p in tier.PricingOptions)
                 {
-                    if (string.Equals(p.BillingFrequency, "Yearly", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(p.BillingFrequency, "Annual", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(p.BillingFrequency, "Annually", StringComparison.OrdinalIgnoreCase))
-                        return true;
+                    if (FormatHelpers.IsAnnualFrequency(p.BillingFrequency)) return true;
                 }
             }
             return false;
@@ -196,24 +193,6 @@ namespace WildwoodComponents.Blazor.Components.Pricing
         private bool IsEnterpriseTier(AppTierModel tier)
         {
             return !tier.IsFreeTier && tier.PricingOptions.Count == 0;
-        }
-
-        private string FormatPrice(decimal amount)
-        {
-            var symbol = GetCurrencySymbol(Currency);
-            if (string.Equals(Currency, "JPY", StringComparison.OrdinalIgnoreCase))
-                return $"{symbol}{Math.Round(amount)}";
-            return $"{symbol}{amount:N2}";
-        }
-
-        private static string GetCurrencySymbol(string currency)
-        {
-            if (string.Equals(currency, "USD", StringComparison.OrdinalIgnoreCase)) return "$";
-            if (string.Equals(currency, "EUR", StringComparison.OrdinalIgnoreCase)) return "\u20AC";
-            if (string.Equals(currency, "GBP", StringComparison.OrdinalIgnoreCase)) return "\u00A3";
-            if (string.Equals(currency, "JPY", StringComparison.OrdinalIgnoreCase)) return "\u00A5";
-            if (string.Equals(currency, "INR", StringComparison.OrdinalIgnoreCase)) return "\u20B9";
-            return currency;
         }
 
         private static void SortTiersByDisplayOrder(List<AppTierModel> tiers)

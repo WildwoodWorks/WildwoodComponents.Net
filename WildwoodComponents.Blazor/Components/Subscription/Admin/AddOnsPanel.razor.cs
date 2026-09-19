@@ -33,6 +33,14 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         [Parameter] public EventCallback OnSubscriptionChanged { get; set; }
 
         /// <summary>
+        /// Raised after a pack action that actually happened, carrying one of
+        /// <see cref="EntitlementsChangedReasons"/>: <c>addOn</c> for a purchase, <c>cancel</c> for a
+        /// cancellation, <c>reactivate</c> for taking one back. Additive — it says WHICH action
+        /// <see cref="OnSubscriptionChanged"/> is reporting, which the parameterless callback cannot.
+        /// </summary>
+        [Parameter] public EventCallback<string> OnEntitlementsChanged { get; set; }
+
+        /// <summary>
         /// Fallback currency for a pack that carries none of its own. The pack's own
         /// <see cref="AppTierAddOnModel.Currency"/> always wins.
         /// </summary>
@@ -210,7 +218,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                         : AddOnRowRules.FailureMessage(AddOnAction.Subscribe, addOn.Name, result.Error?.Message);
                 }
 
-                await FinishActionAsync(failure, "Subscribing to add-on");
+                await FinishActionAsync(failure, "Subscribing to add-on", EntitlementsChangedReasons.AddOn);
             }
             catch (Exception ex)
             {
@@ -260,7 +268,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                         : AddOnRowRules.FailureMessage(AddOnAction.Cancel, subscription.AddOnName, result.ErrorMessage);
                 }
 
-                await FinishActionAsync(failure, "Cancelling add-on");
+                await FinishActionAsync(failure, "Cancelling add-on", EntitlementsChangedReasons.Cancel);
             }
             catch (Exception ex)
             {
@@ -288,7 +296,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                     ? null
                     : AddOnRowRules.FailureMessage(AddOnAction.Reactivate, subscription.AddOnName, result.ErrorMessage);
 
-                await FinishActionAsync(failure, "Reactivating add-on");
+                await FinishActionAsync(failure, "Reactivating add-on", EntitlementsChangedReasons.Reactivate);
             }
             catch (Exception ex)
             {
@@ -319,7 +327,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             StateHasChanged();
         }
 
-        private async Task FinishActionAsync(string? failure, string context)
+        private async Task FinishActionAsync(string? failure, string context, string reason)
         {
             if (failure is null)
             {
@@ -327,6 +335,12 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 if (OnSubscriptionChanged.HasDelegate)
                 {
                     await OnSubscriptionChanged.InvokeAsync();
+                }
+                // Only a mutation that actually happened changes entitlements — a refusal above
+                // leaves this unraised, so nothing downstream re-reads a plan that did not change.
+                if (OnEntitlementsChanged.HasDelegate)
+                {
+                    await OnEntitlementsChanged.InvokeAsync(reason);
                 }
                 return;
             }

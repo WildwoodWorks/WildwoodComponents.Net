@@ -122,6 +122,52 @@ public static class CatalogHelpers
     }
 
     /// <summary>
+    /// The currency a tier's prices are quoted in: the tier's own, then the catalog's (or the
+    /// component's fallback), then null — which <see cref="FormatHelpers.FormatMoney"/> reads as
+    /// USD, exactly as the JS <c>formatMoney</c> does. The pack overload lives on
+    /// <see cref="AddOnRowRules.ResolveCurrency"/>; both follow the one precedence rule.
+    /// </summary>
+    public static string? ResolveCurrency(AppTierModel? tier, string? catalogCurrency)
+    {
+        var own = tier?.Currency;
+        if (own is not null && own.Trim().Length > 0) return own;
+        return catalogCurrency;
+    }
+
+    /// <summary>
+    /// A tier pricing option's price in the tier's own currency. One call so no component has to
+    /// keep a symbol table of its own — the private per-component copies priced a CHF or SEK plan
+    /// in dollars.
+    /// </summary>
+    public static string FormatPrice(AppTierModel? tier, decimal amount, string? catalogCurrency)
+    {
+        return FormatHelpers.FormatMoney(amount, ResolveCurrency(tier, catalogCurrency));
+    }
+
+    /// <summary>
+    /// The tier card's trial line, matching React's <c>TierCardHeader</c>: shown only when the card
+    /// is showing a price, the tier is neither enterprise nor free, the option costs something and
+    /// it starts a trial. Empty string otherwise, so the caller renders nothing.
+    /// </summary>
+    /// <remarks>
+    /// A free plan and a "contact us" tier both advertise no trial — there is nothing to try before
+    /// paying — and a zero-priced option is the same case even on a paid tier.
+    /// </remarks>
+    public static string TierCardTrialLabel(
+        AppTierModel? tier,
+        AppTierPricingModel? pricing,
+        bool showPrice = true)
+    {
+        if (tier is null || pricing is null || !showPrice) return string.Empty;
+        if (tier.IsFreeTier) return string.Empty;
+        // Enterprise = a paid tier that sells no pricing option at all; one was resolved here, so
+        // this tier is not enterprise. Guard anyway for callers passing a foreign option.
+        if (tier.PricingOptions.Count == 0) return string.Empty;
+        if (pricing.Price <= 0m) return string.Empty;
+        return TrialLabel(pricing.TrialDays);
+    }
+
+    /// <summary>
     /// "14-day free trial", or an empty string when the pricing starts no trial. Exact wording —
     /// it is a cross-stack contract.
     /// </summary>

@@ -1024,17 +1024,14 @@ public partial class PaymentComponent : BaseWildwoodComponent, IAsyncDisposable
                code != "stolen_card";
     }
 
+    /// <summary>
+    /// The amount the customer is about to be charged. One formatter, fixed at en-US like the JS
+    /// SDK's <c>formatMoney</c>: the per-currency culture switch meant the same price came out
+    /// "1.234,56 €" on the server and "€1,234.56" in a browser rendering it from the same data.
+    /// </summary>
     private static string FormatAmount(decimal amount, string currency)
     {
-        return currency.ToUpperInvariant() switch
-        {
-            "USD" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-US")),
-            "EUR" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("de-DE")),
-            "GBP" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-GB")),
-            "JPY" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("ja-JP")),
-            "INR" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-IN")),
-            _ => $"{currency} {amount:N2}"
-        };
+        return FormatHelpers.FormatMoney(amount, currency);
     }
 
     public async ValueTask DisposeAsync()

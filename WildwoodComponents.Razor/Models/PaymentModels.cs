@@ -58,7 +58,7 @@ public class PaymentViewModel
     public string TrialLabel => CatalogHelpers.TrialLabel(TrialDays);
 
     /// <summary>The amount, formatted once here so no script has to format money.</summary>
-    public string AmountDisplay => FormatHelpers.FormatAmount(Amount, Currency);
+    public string AmountDisplay => FormatHelpers.FormatMoney(Amount, Currency);
 
     /// <summary>
     /// What the submit button says when the form loads: the trial offer when there is one,

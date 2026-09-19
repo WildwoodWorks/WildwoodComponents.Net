@@ -14,6 +14,43 @@
     // already-decided row into a request and an outcome into words. Pure, so they can be read and
     // reasoned about on their own; this package has no JS test harness.
 
+    /**
+     * Money for display. The ONE money formatter in this package's scripts, duplicated by name into
+     * each component IIFE because no shared script is loaded on every page: keep the copies
+     * identical. It is the JS SDK's own formatMoney
+     * (packages/wildwood-core/src/features/catalog.ts) and matches C# FormatHelpers.FormatMoney, so
+     * an amount the server rendered and an amount the browser re-renders read the same. The locale
+     * is fixed at en-US for exactly that reason.
+     */
+    function wwFormatMoney(amount, currency) {
+        var code = (typeof currency === 'string' ? currency.trim() : '');
+        code = (code.length > 0 ? code : 'USD').toUpperCase();
+        var value = Number(amount);
+        if (!isFinite(value)) value = 0;
+        try {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(value);
+        } catch (e) {
+            // Intl throws on anything that is not a three-letter code; say the amount and the code
+            // rather than nothing - and never a dollar sign for a currency that is not dollars.
+            return code + ' ' + value.toFixed(2);
+        }
+    }
+
+    /**
+     * Why a user's entitlements changed. The six values of the JS entitlementsChanged event
+     * (events/eventEmitter.ts) and of C# EntitlementsChangedReasons - one vocabulary across the
+     * three stacks, so a host listening on the DOM reads the same words the SDKs emit.
+     */
+    var WW_REASON = {
+        Signup: 'signup',
+        TierChange: 'tierChange',
+        AddOn: 'addOn',
+        Cancel: 'cancel',
+        Reactivate: 'reactivate',
+        Manual: 'manual'
+    };
+
+
     /** Where the shipped same-origin proxy lives when a panel names none. */
     var WW_REGSUB_DEFAULT_URL = '/api/wildwood-regsub';
 
@@ -243,7 +280,7 @@
                             : 'Your cancellation is scheduled for the end of the current billing period.')
                         : 'Your subscription has been cancelled.';
 
-                    dispatchChanged('cancelled');
+                    dispatchChanged('cancelled', WW_REASON.Cancel);
 
                     if (result && result.requiresUserAction) {
                         // Store-billed subscription (App Store / Google Play): the platform
@@ -365,7 +402,7 @@
                         return false;
                     }
                     showMessage('Successfully ' + (ctx.isChange ? 'changed to ' : 'subscribed to ') + ctx.tierName + '!', 'success');
-                    dispatchChanged(ctx.isChange ? 'changed' : 'subscribed');
+                    dispatchChanged(ctx.isChange ? 'changed' : 'subscribed', WW_REASON.TierChange);
                     setTimeout(function () { window.location.reload(); }, 1500);
                     return true;
                 })
@@ -380,13 +417,10 @@
 
         // ===== TIER CHANGE CONFIRMATION MODAL =====
 
+        // An amount the server left out is zero IN THE PREVIEW'S CURRENCY, and an ISO code Intl
+        // cannot render says the code - the old null and catch paths both quoted dollars.
         function formatCurrency(amount, ccy) {
-            if (amount === null || amount === undefined) return '$0.00';
-            try {
-                return new Intl.NumberFormat('en-US', { style: 'currency', currency: ccy || 'USD' }).format(amount);
-            } catch (e) {
-                return '$' + Number(amount).toFixed(2);
-            }
+            return wwFormatMoney(amount === null || amount === undefined ? 0 : amount, ccy || currency);
         }
 
         function el(tag, className, text) {
@@ -735,7 +769,7 @@
                 .then(function () {
                     showMessage('Feature ' + featureCode + ' ' + (newState ? 'enabled' : 'disabled') + '.', 'success');
                     if (confirmRow) confirmRow.style.display = 'none';
-                    dispatchChanged('feature_toggled');
+                    dispatchChanged('feature_toggled', WW_REASON.Manual);
                     setTimeout(function () { window.location.reload(); }, 1000);
                 })
                 .catch(function (err) {
@@ -763,7 +797,7 @@
             apiDelete(appId + '/admin/feature-overrides/' + featureCode + userQuery)
                 .then(function () {
                     showMessage('Override removed for ' + featureCode + '.', 'success');
-                    dispatchChanged('override_removed');
+                    dispatchChanged('override_removed', WW_REASON.Manual);
                     setTimeout(function () { window.location.reload(); }, 1000);
                 })
                 .catch(function (err) {
@@ -798,7 +832,7 @@
             })
                 .then(function () {
                     showMessage('Override for ' + featureCode + ' is now permanent.', 'success');
-                    dispatchChanged('override_updated');
+                    dispatchChanged('override_updated', WW_REASON.Manual);
                     setTimeout(function () { window.location.reload(); }, 1000);
                 })
                 .catch(function (err) {
@@ -888,7 +922,7 @@
 
         // One place that turns any outcome - refusal, 401, transport failure - into what the panel
         // says, and reloads only when the mutation actually happened.
-        function runAddOnAction(card, action, name, busyText, successText, reason, request) {
+        function runAddOnAction(card, action, name, busyText, successText, reason, entitlementReason, request) {
             clearAddOnError();
             setRowBusy(card, busyText);
 
@@ -900,7 +934,7 @@
                         return;
                     }
                     showMessage(successText, 'success');
-                    dispatchChanged(reason);
+                    dispatchChanged(reason, entitlementReason);
                     setTimeout(function () { window.location.reload(); }, 1500);
                 })
                 .catch(function (err) {
@@ -925,7 +959,7 @@
             var scope = scopeParams();
 
             runAddOnAction(card, 'subscribe', addOnName, 'Subscribing...',
-                'Subscribed to ' + (addOnName || 'the add-on') + '.', 'addon_subscribed', function () {
+                'Subscribed to ' + (addOnName || 'the add-on') + '.', 'addon_subscribed', WW_REASON.AddOn, function () {
                     // Buying for someone else stays on the host's app-tier proxy: the shipped proxy
                     // acts as the signed-in user and has no company or admin scope.
                     if (scope.useCompany) {
@@ -976,7 +1010,7 @@
             showCancelConfirm(card, false);
 
             runAddOnAction(card, 'cancel', addonName, 'Cancelling...',
-                (addonName || 'The add-on') + ' cancelled.', 'addon_cancelled', function () {
+                (addonName || 'The add-on') + ' cancelled.', 'addon_cancelled', WW_REASON.Cancel, function () {
                     // Cancelling someone else's pack stays on the host's app-tier proxy.
                     if (scope.useCompany) {
                         return apiPost(appId + '/addons/subscriptions/' + subscriptionId + '/cancel?immediate=true');
@@ -1003,7 +1037,7 @@
             var addonName = (card && card.dataset.addonName) || '';
 
             runAddOnAction(card, 'reactivate', addonName, 'Reactivating...',
-                (addonName || 'The add-on') + ' reactivated.', 'addon_reactivated', function () {
+                (addonName || 'The add-on') + ' reactivated.', 'addon_reactivated', WW_REASON.Reactivate, function () {
                     return regsubPost(addOnReactivatePath(subscriptionId));
                 });
         });
@@ -1061,7 +1095,7 @@
             apiPut(path, { MaxValue: newMax })
                 .then(function () {
                     showMessage('Limit updated for ' + limitCode + '.', 'success');
-                    dispatchChanged('limit_updated');
+                    dispatchChanged('limit_updated', null);
                     setTimeout(function () { window.location.reload(); }, 1000);
                 })
                 .catch(function (err) {
@@ -1097,7 +1131,7 @@
             apiPost(path)
                 .then(function () {
                     showMessage('Usage reset for ' + limitCode + '.', 'success');
-                    dispatchChanged('usage_reset');
+                    dispatchChanged('usage_reset', null);
                     setTimeout(function () { window.location.reload(); }, 1000);
                 })
                 .catch(function (err) {
@@ -1110,11 +1144,25 @@
 
         // ===== EVENT DISPATCH =====
 
-        function dispatchChanged(action) {
+        /**
+         * Says a mutation happened. `action` is this panel's own fine-grained word and is
+         * unchanged; `reason` is the cross-stack one (WW_REASON), null for a mutation that changes
+         * no entitlement - editing a usage limit or resetting a counter moves a number, not what
+         * the plan includes. A reason also raises a second, dedicated event so a host can listen
+         * for "re-read my entitlements" without knowing this panel's action words.
+         */
+        function dispatchChanged(action, reason) {
             root.dispatchEvent(new CustomEvent('ww-subscription-admin-changed', {
-                detail: { action: action, appId: appId },
+                detail: { action: action, appId: appId, reason: reason || null },
                 bubbles: true
             }));
+
+            if (reason) {
+                root.dispatchEvent(new CustomEvent('ww-entitlements-changed', {
+                    detail: { appId: appId, reason: reason },
+                    bubbles: true
+                }));
+            }
         }
     }
 

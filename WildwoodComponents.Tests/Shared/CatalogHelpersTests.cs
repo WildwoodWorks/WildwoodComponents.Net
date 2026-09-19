@@ -268,6 +268,73 @@ public class CatalogHelpersTests
         Assert.Equal(string.Empty, CatalogHelpers.TrialLabel(-7));
     }
 
+    /// <summary>
+    /// The tier card's trial line, React's <c>TierCardHeader</c> rule
+    /// (<c>showPrice &amp;&amp; !isEnterprise &amp;&amp; !isFreeTier &amp;&amp; price &gt; 0 &amp;&amp; trialDays &gt; 0</c>).
+    /// </summary>
+    [Fact]
+    public void TierCardTrialLabel_ShowsTheTrialOnAPaidPricedPlanOnly()
+    {
+        var paid = Tier(pricingOptions: new List<AppTierPricingModel> { Pricing(price: 79m) });
+        paid.PricingOptions[0].TrialDays = 14;
+
+        Assert.Equal("14-day free trial", CatalogHelpers.TierCardTrialLabel(paid, paid.PricingOptions[0]));
+
+        // The card is not showing a price at all, so it advertises no trial either.
+        Assert.Equal(string.Empty, CatalogHelpers.TierCardTrialLabel(paid, paid.PricingOptions[0], showPrice: false));
+    }
+
+    [Fact]
+    public void TierCardTrialLabel_SaysNothingForFree_Enterprise_ZeroPriced_OrNoTrial()
+    {
+        var free = Tier();
+        free.IsFreeTier = true;
+        free.PricingOptions[0].TrialDays = 14;
+        Assert.Equal(string.Empty, CatalogHelpers.TierCardTrialLabel(free, free.PricingOptions[0]));
+
+        // Enterprise = a paid tier that sells no pricing option.
+        var enterprise = Tier(pricingOptions: new List<AppTierPricingModel>());
+        Assert.Equal(string.Empty, CatalogHelpers.TierCardTrialLabel(enterprise, Pricing(price: 79m)));
+
+        var zeroPriced = Tier(pricingOptions: new List<AppTierPricingModel> { Pricing(price: 0m) });
+        zeroPriced.PricingOptions[0].TrialDays = 14;
+        Assert.Equal(string.Empty, CatalogHelpers.TierCardTrialLabel(zeroPriced, zeroPriced.PricingOptions[0]));
+
+        var noTrial = Tier(pricingOptions: new List<AppTierPricingModel> { Pricing(price: 79m) });
+        Assert.Equal(string.Empty, CatalogHelpers.TierCardTrialLabel(noTrial, noTrial.PricingOptions[0]));
+
+        Assert.Equal(string.Empty, CatalogHelpers.TierCardTrialLabel(null, null));
+    }
+
+    #endregion
+
+    #region resolveCurrency / formatPrice
+
+    /// <summary>
+    /// Currency precedence for a tier: its own, then the catalog's (or the component's fallback),
+    /// then null - which FormatMoney reads as USD, as JS formatMoney does.
+    /// </summary>
+    [Fact]
+    public void ResolveCurrency_PrefersTheTiersOwnCurrency_ThenTheCatalogs()
+    {
+        Assert.Equal("CHF", CatalogHelpers.ResolveCurrency(Tier(currency: "CHF"), "USD"));
+        Assert.Equal("USD", CatalogHelpers.ResolveCurrency(Tier(currency: null), "USD"));
+        Assert.Equal("USD", CatalogHelpers.ResolveCurrency(Tier(currency: "   "), "USD"));
+        Assert.Null(CatalogHelpers.ResolveCurrency(Tier(currency: null), null));
+        Assert.Equal("EUR", CatalogHelpers.ResolveCurrency(null, "EUR"));
+    }
+
+    [Fact]
+    public void FormatPrice_UsesTheTiersOwnCurrency_AndNeverFallsBackToADollarSign()
+    {
+        // The live bug in the private per-component formatters: an unknown code became "$".
+        Assert.Equal("CHF\u00a079.00", CatalogHelpers.FormatPrice(Tier(currency: "CHF"), 79m, "USD"));
+        Assert.Equal("$79.00", CatalogHelpers.FormatPrice(Tier(currency: null), 79m, "USD"));
+        Assert.Equal("$79.00", CatalogHelpers.FormatPrice(null, 79m, null));
+        // JPY has no minor units, so no decimals - and grouping, which toFixed(2) never did.
+        Assert.Equal("\u00a51,234", CatalogHelpers.FormatPrice(Tier(currency: "JPY"), 1234m, "USD"));
+    }
+
     #endregion
 
     #region catalogToJsonLdOffers

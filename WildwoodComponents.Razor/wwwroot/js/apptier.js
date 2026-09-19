@@ -17,6 +17,33 @@
         allowRegistration: root.dataset.allowRegistration === 'true'
     };
 
+    /**
+     * Why a user's entitlements changed. The six values of the JS entitlementsChanged event
+     * (events/eventEmitter.ts) and of C# EntitlementsChangedReasons - one vocabulary across the
+     * three stacks. Duplicated by name into each component IIFE: no shared script is loaded on
+     * every page, so keep the copies identical.
+     */
+    var WW_REASON = {
+        Signup: 'signup',
+        TierChange: 'tierChange',
+        AddOn: 'addOn',
+        Cancel: 'cancel',
+        Reactivate: 'reactivate',
+        Manual: 'manual'
+    };
+
+    /**
+     * "Re-read this user's entitlements." Raised after every mutation here that changes what the
+     * plan includes, alongside the component's own ww-subscription-changed, so a host can listen
+     * for one event across every Wildwood surface instead of each component's own word.
+     */
+    function dispatchEntitlementsChanged(reason) {
+        root.dispatchEvent(new CustomEvent('ww-entitlements-changed', {
+            detail: { appId: config.appId, reason: reason },
+            bubbles: true
+        }));
+    }
+
     let currentBillingCycle = 'monthly';
 
     // ===== VIEW MANAGEMENT =====
@@ -180,10 +207,11 @@
                     showView('ww-tier-success-view');
 
                     var event = new CustomEvent('ww-subscription-changed', {
-                        detail: { action: 'subscribed', tierId: tierId },
+                        detail: { action: 'subscribed', tierId: tierId, reason: WW_REASON.TierChange },
                         bubbles: true
                     });
                     root.dispatchEvent(event);
+                    dispatchEntitlementsChanged(WW_REASON.TierChange);
                 } else {
                     showMessage(result.errorMessage || 'Subscription failed.', 'danger');
                 }
@@ -237,10 +265,11 @@
                     if (subSection) subSection.style.display = 'none';
 
                     var event = new CustomEvent('ww-subscription-changed', {
-                        detail: { action: 'cancelled' },
+                        detail: { action: 'cancelled', reason: WW_REASON.Cancel },
                         bubbles: true
                     });
                     root.dispatchEvent(event);
+                    dispatchEntitlementsChanged(WW_REASON.Cancel);
                 } else {
                     showMessage('Failed to cancel subscription' + (result && result.errorMessage ? ': ' + result.errorMessage : '.'), 'danger');
                     showView('ww-tier-selection-view');

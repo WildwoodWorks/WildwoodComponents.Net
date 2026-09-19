@@ -6,6 +6,21 @@
 (function () {
     'use strict';
 
+    /**
+     * Why a user's entitlements changed. The six values of the JS entitlementsChanged event
+     * (events/eventEmitter.ts) and of C# EntitlementsChangedReasons - one vocabulary across the
+     * three stacks. Duplicated by name into each component IIFE: no shared script is loaded on
+     * every page, so keep the copies identical.
+     */
+    var WW_REASON = {
+        Signup: 'signup',
+        TierChange: 'tierChange',
+        AddOn: 'addOn',
+        Cancel: 'cancel',
+        Reactivate: 'reactivate',
+        Manual: 'manual'
+    };
+
     // ===== PLAN DECISIONS (pure) =====
     //
     // Ported from the Blazor SignupPlanDecisions. Every one of them answers from the state it is
@@ -234,8 +249,17 @@
                     tierName: tokenGrant ? grantPlanName(tokenGrant) : (selectedTier ? selectedTier.name : null),
                     fromTokenGrant: !!tokenGrant,
                     subscriptionPending: subscriptionFailed,
-                    user: registeredUser
+                    user: registeredUser,
+                    reason: WW_REASON.Signup
                 },
+                bubbles: true
+            }));
+
+            // A new account is entitled to whatever it just signed up for - the token's grant, the
+            // plan it bought, or the free tier. "signup" is the signup flow's only reason, and it
+            // fires once, here, even when no plan was taken: the account itself is new.
+            root.dispatchEvent(new CustomEvent('ww-entitlements-changed', {
+                detail: { appId: appId, reason: WW_REASON.Signup },
                 bubbles: true
             }));
         }

@@ -134,7 +134,7 @@ public class PaymentViewComponentTests
     public async Task A_trial_offers_the_trial_instead_of_a_charge()
     {
         var model = await InvokeAsync(amount: 99m, trialDays: 14);
-        var amount = FormatHelpers.FormatAmount(99m, "USD");
+        var amount = FormatHelpers.FormatMoney(99m, "USD");
 
         Assert.Equal("14-day free trial", model.TrialLabel);
         Assert.Equal("Start 14-day free trial", model.PayButtonLabel);
@@ -150,7 +150,7 @@ public class PaymentViewComponentTests
 
         Assert.False(model.HasTrial);
         Assert.Equal(string.Empty, model.TrialLabel);
-        Assert.Equal($"Pay {FormatHelpers.FormatAmount(99m, "USD")}", model.PayButtonLabel);
+        Assert.Equal($"Pay {FormatHelpers.FormatMoney(99m, "USD")}", model.PayButtonLabel);
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public class PaymentViewComponentTests
         var model = await InvokeAsync(amount: 99m, trialDays: 0);
 
         Assert.False(model.HasTrial);
-        Assert.Equal($"Pay {FormatHelpers.FormatAmount(99m, "USD")}", model.PayButtonLabel);
+        Assert.Equal($"Pay {FormatHelpers.FormatMoney(99m, "USD")}", model.PayButtonLabel);
     }
 
     /// <summary>
@@ -171,7 +171,7 @@ public class PaymentViewComponentTests
     {
         var model = await InvokeAsync(amount: 99m, trialDays: 14);
 
-        Assert.Equal($"Pay {FormatHelpers.FormatAmount(99m, "USD")}", model.ChargeButtonLabel);
+        Assert.Equal($"Pay {FormatHelpers.FormatMoney(99m, "USD")}", model.ChargeButtonLabel);
         Assert.NotEqual(model.PayButtonLabel, model.ChargeButtonLabel);
     }
 
@@ -179,7 +179,7 @@ public class PaymentViewComponentTests
     public async Task The_trial_unavailable_notice_names_what_will_be_charged()
     {
         var model = await InvokeAsync(amount: 99m, trialDays: 14);
-        var amount = FormatHelpers.FormatAmount(99m, "USD");
+        var amount = FormatHelpers.FormatMoney(99m, "USD");
 
         Assert.Equal(
             $"The free trial isn't available on your account, so {amount} will be charged today. Select Pay to continue.",
@@ -194,7 +194,7 @@ public class PaymentViewComponentTests
     public async Task Copy_is_formatted_in_the_payments_currency()
     {
         var model = await InvokeAsync(amount: 49.5m, trialDays: 7, currency: "EUR");
-        var amount = FormatHelpers.FormatAmount(49.5m, "EUR");
+        var amount = FormatHelpers.FormatMoney(49.5m, "EUR");
 
         Assert.StartsWith("€", amount);
         Assert.Equal(amount, model.AmountDisplay);

@@ -251,6 +251,78 @@ offered only on a user's own packs.
 
 ---
 
+## Money is formatted in one place
+
+Every amount the package renders goes through `FormatHelpers.FormatMoney(amount, currency)` in
+`WildwoodComponents.Shared`, which reproduces the JS SDK's
+`Intl.NumberFormat('en-US', { style: 'currency', currency })` byte for byte — CLDR's symbol, the
+currency's own number of decimals (so JPY shows none), and a fixed `en-US` locale so a price
+rendered on the server and re-rendered in the browser read the same.
+
+**Deprecated, not removed:** `ViewHelpers.GetCurrencySymbol` and `ViewHelpers.FormatAmount` are
+superseded by **`ViewHelpers.FormatMoney(amount, currency)`**. Both are still there and still do
+exactly what they always did — your own views keep compiling and rendering unchanged — but they now
+carry `[Obsolete]`, so the compiler points you at the replacement. Both old helpers read a
+six-entry symbol table, so every currency outside it (CHF, SEK, PLN, ...) rendered inconsistently
+and a zero-decimal currency always showed two. A tier or pack price is better taken from
+`CatalogHelpers.FormatPrice(tier, price, fallbackCurrency)` or
+`AddOnRowRules.FormatPrice(addOn, pricing, fallbackCurrency)`, which prefer the item's **own**
+currency over the page's.
+
+Client-side, the four scripts that must format an amount in the browser (`payment.js`,
+`payment-form.js`, `token-registration.js`, `subscription-admin.js`) each carry the same
+`wwFormatMoney(amount, currency)` helper. The copies are deliberate — no shared script is loaded
+on every page — and must stay identical; a test asserts they are.
+
+---
+
+## Subscription events: `detail.reason` and `ww-entitlements-changed`
+
+Every mutation that changes what a user's plan includes now says **why**, using the six-word
+vocabulary of the JS SDK's `entitlementsChanged` event and of C#
+`WildwoodComponents.Shared.Models.EntitlementsChangedReasons`:
+
+`signup` · `tierChange` · `addOn` · `cancel` · `reactivate` · `manual`
+
+Two things carry it.
+
+**1. The existing changed events gained `detail.reason`** (additive — every other field is
+unchanged):
+
+| Event | Raised by | Detail |
+|---|---|---|
+| `ww-subscription-admin-changed` | `<vc:subscription-admin />` | `action`, `appId`, **`reason`** |
+| `ww-subscription-changed` | `<vc:app-tier />` | `action`, `tierId` (subscribe only), **`reason`** |
+| `ww-signup-complete` | `<vc:signup-with-subscription />` | `tierId`, `tierName`, `fromTokenGrant`, `subscriptionPending`, `user`, **`reason`** (always `signup`) |
+
+`reason` is **`null`** on `ww-subscription-admin-changed` for the two actions that change a number
+rather than an entitlement — `limit_updated` and `usage_reset`.
+
+**2. A dedicated bubbling `ww-entitlements-changed`** is raised after every entitlement-changing
+mutation, so a host listens once instead of learning each component's own action words:
+
+```js
+document.addEventListener('ww-entitlements-changed', function (e) {
+    // e.detail = { appId, reason }  -> re-read the subscription and the feature map
+    refreshMyFeatureGates(e.detail.appId);
+});
+```
+
+| Mutation | `reason` | Raised by |
+|---|---|---|
+| Tier change or first subscribe | `tierChange` | `subscription-admin.js`, `apptier.js` |
+| Subscription cancelled | `cancel` | `subscription-admin.js`, `apptier.js` |
+| Pack subscribed | `addOn` | `subscription-admin.js` |
+| Pack cancelled | `cancel` | `subscription-admin.js` |
+| Pack reactivated | `reactivate` | `subscription-admin.js` |
+| Feature override set, made permanent or removed | `manual` | `subscription-admin.js` |
+| Signup completed | `signup` | `signup-subscription.js` |
+
+It is a signal to **re-read**, not proof the change has propagated: fetch the subscription and the
+feature map again rather than assuming what changed.
+
+---
+
 ## Payment component: trials, events and the billing address
 
 `<vc:payment />` renders the provider picker, the Stripe card element and the submit button;

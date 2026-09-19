@@ -41,8 +41,29 @@ namespace WildwoodComponents.Blazor.Services
         /// </summary>
         void Invalidate();
 
-        /// <summary>Raised when the cache is invalidated (auth change or entitlement mutation).</summary>
+        /// <summary>
+        /// Drops the cached feature maps and says WHICH app changed and WHY — the .NET spelling of
+        /// the JS <c>entitlementsChanged</c> event (<c>{ appId, reason }</c>). Use it from every
+        /// entitlement-changing mutation so a host can tell a plan change from a pack purchase.
+        /// </summary>
+        /// <param name="appId">
+        /// The app whose entitlements changed, or null for every app (a sign-in/sign-out).
+        /// </param>
+        /// <param name="reason">One of <see cref="EntitlementsChangedReasons"/>.</param>
+        void Invalidate(string? appId, string reason);
+
+        /// <summary>
+        /// Raised when the cache is invalidated (auth change or entitlement mutation). Carries no
+        /// payload; <see cref="EntitlementsChangedDetailed"/> carries the app and the reason.
+        /// </summary>
         event Action? EntitlementsChanged;
+
+        /// <summary>
+        /// Raised alongside <see cref="EntitlementsChanged"/> with the JS event's payload. Separate
+        /// rather than a widened signature so <c>FeatureGateComponent</c> and every existing host
+        /// subscription keep working untouched.
+        /// </summary>
+        event Action<EntitlementsChangedEventArgs>? EntitlementsChangedDetailed;
     }
 
     public class FeatureEntitlementService : IFeatureEntitlementService, IDisposable
@@ -60,6 +81,7 @@ namespace WildwoodComponents.Blazor.Services
         private bool _disposed;
 
         public event Action? EntitlementsChanged;
+        public event Action<EntitlementsChangedEventArgs>? EntitlementsChangedDetailed;
 
         public FeatureEntitlementService(
             IAppTierComponentService appTierService,
@@ -126,13 +148,22 @@ namespace WildwoodComponents.Blazor.Services
             return features;
         }
 
-        public void Invalidate()
+        public void Invalidate() => Invalidate(null, EntitlementsChangedReasons.Manual);
+
+        public void Invalidate(string? appId, string reason)
         {
+            // The whole cache goes, whichever app was named: an appId only labels the event. A
+            // per-app eviction would leave a stale map behind for a host that passes the app id on
+            // some calls and not others, and re-fetching one map is cheap.
             lock (_cacheLock)
             {
                 _cache.Clear();
             }
+
             EntitlementsChanged?.Invoke();
+            EntitlementsChangedDetailed?.Invoke(new EntitlementsChangedEventArgs(
+                appId,
+                EntitlementsChangedReasons.IsKnown(reason) ? reason : EntitlementsChangedReasons.Manual));
         }
 
         private async Task<Dictionary<string, bool>?> LoadFeaturesAsync(string appId)

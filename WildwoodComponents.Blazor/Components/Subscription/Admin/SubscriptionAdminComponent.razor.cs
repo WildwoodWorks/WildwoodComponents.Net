@@ -30,6 +30,19 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         [Parameter] public EventCallback<AppTierSubscriptionChangedEventArgs> OnSubscriptionChanged { get; set; }
 
         /// <summary>
+        /// Raised after every mutation here that changes what the user is entitled to, carrying one
+        /// of <see cref="EntitlementsChangedReasons"/>. Additive: the panel already invalidates the
+        /// shared entitlement cache, and a host that only needs that can keep ignoring this.
+        /// </summary>
+        /// <remarks>
+        /// React reaches the same place two ways — <c>useSubscriptionAdmin</c> emits
+        /// <c>entitlementsChanged</c> on the client's emitter, and the manage view forwards it to an
+        /// <c>onEntitlementsChanged</c> prop. .NET has both: <c>IFeatureEntitlementService</c>'s
+        /// <c>EntitlementsChangedDetailed</c> is the emitter, and this is the prop.
+        /// </remarks>
+        [Parameter] public EventCallback<string> OnEntitlementsChanged { get; set; }
+
+        /// <summary>
         /// Called when the server confirms a tier change requires payment and no card is on file.
         /// Return a payment transaction id to complete the change, or null/empty to cancel.
         /// Consumers typically wire this to a modal containing PaymentFormComponent.
@@ -326,7 +339,9 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                     await RefreshAllPanels();
                     // Entitlements changed with the plan — refresh FeatureGate instances
                     // elsewhere in the app so they don't serve the old plan for the cache TTL.
-                    EntitlementService.Invalidate();
+                    // A first subscribe is a tier change too, exactly as JS's wrapMutation labels
+                    // selfSubscribeTo and every company/user subscribe.
+                    await RaiseEntitlementsChangedAsync(EntitlementsChangedReasons.TierChange);
                     await NotifySubscriptionChanged(args.TierName, args.IsChange ? "changed" : "subscribed");
                 }
                 else
@@ -376,7 +391,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                     // A scheduled cancellation keeps the subscription (status PendingCancellation)
                     // until the period ends — the refresh reloads whatever state the server has now.
                     await RefreshAllPanels();
-                    EntitlementService.Invalidate();
+                    await RaiseEntitlementsChangedAsync(EntitlementsChangedReasons.Cancel);
                     BuildCancelNotice(result);
                     await NotifySubscriptionChanged("", "cancelled");
                 }
@@ -426,7 +441,12 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
         #region Add-On Change Handler
 
-        private async Task HandleAddOnChanged()
+        /// <summary>
+        /// A pack row finished. The panel says WHICH action it was, because the three do not share
+        /// one reason: buying is <c>addOn</c>, cancelling is <c>cancel</c> and taking a scheduled
+        /// cancellation back is <c>reactivate</c> — the same split JS's <c>wrapMutation</c> makes.
+        /// </summary>
+        private async Task HandleAddOnChanged(string reason)
         {
             // Refresh features and status after add-on changes
             await LoadSubscriptionAsync();
@@ -441,7 +461,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             }
 
             // Add-ons grant features — refresh FeatureGate instances elsewhere in the app.
-            EntitlementService.Invalidate();
+            await RaiseEntitlementsChangedAsync(reason);
             await NotifySubscriptionChanged("", "addon_changed");
         }
 
@@ -457,7 +477,8 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 await _featuresPanel.LoadFeaturesAsync();
             }
             await LoadOverrideCountAsync();
-            EntitlementService.Invalidate();
+            // An override is granted or revoked by hand, outside any plan — JS's "manual".
+            await RaiseEntitlementsChangedAsync(EntitlementsChangedReasons.Manual);
             StateHasChanged();
         }
 
@@ -469,7 +490,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 await _overridesPanel.LoadDataAsync();
             }
             await LoadOverrideCountAsync();
-            EntitlementService.Invalidate();
+            await RaiseEntitlementsChangedAsync(EntitlementsChangedReasons.Manual);
             StateHasChanged();
         }
 
@@ -500,6 +521,22 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             if (_usagePanel != null)
             {
                 await _usagePanel.LoadDataAsync();
+            }
+        }
+
+        /// <summary>
+        /// Drops the shared entitlement cache with the reason attached, then tells the host. Both
+        /// halves always happen together: a cache that is dropped without saying why leaves a host
+        /// unable to tell a plan change from a pack purchase, and a callback without the eviction
+        /// leaves every FeatureGate in the circuit serving the old plan for the cache TTL.
+        /// </summary>
+        private async Task RaiseEntitlementsChangedAsync(string reason)
+        {
+            EntitlementService.Invalidate(AppId, reason);
+
+            if (OnEntitlementsChanged.HasDelegate)
+            {
+                await OnEntitlementsChanged.InvokeAsync(reason);
             }
         }
 
