@@ -74,6 +74,18 @@ namespace WildwoodComponents.Blazor.Services
         Task<string> GetPasswordRequirementsAsync(string appId);
         Task<bool> HasRegistrationTokensAsync(string appId);
         Task<bool> ValidateRegistrationTokenAsync(string token);
+
+        /// <summary>
+        /// What a registration token grants (tier, pricing, packs and features per app), from
+        /// <c>GET api/registrationtokens/validate-detailed/{token}</c> with an optional
+        /// <c>?appId=</c> scope. Returns <c>null</c> when the details cannot be READ — an older
+        /// server without the route, or a transport failure — which is NOT the same as an invalid
+        /// token: callers fall back to <see cref="ValidateRegistrationTokenAsync"/> instead of
+        /// telling the registrant their token is bad. An invalid token comes back as details with
+        /// <c>IsValid=false</c> and the server's message.
+        /// </summary>
+        Task<WildwoodComponents.Shared.Models.RegistrationTokenDetails?> GetRegistrationTokenDetailsAsync(string token, string? appId = null);
+
         /// <summary>
         /// Completes a password reset. The forced (temporary-password) flow leaves
         /// <paramref name="resetToken"/> null and is authenticated with the stored bearer
@@ -1081,6 +1093,37 @@ namespace WildwoodComponents.Blazor.Services
             {
                 _logger.LogError(ex, "Error validating registration token {Token}", token);
                 return false;
+            }
+        }
+
+        public async Task<WildwoodComponents.Shared.Models.RegistrationTokenDetails?> GetRegistrationTokenDetailsAsync(
+            string token, string? appId = null)
+        {
+            try
+            {
+                var encodedToken = Uri.EscapeDataString(token ?? string.Empty);
+                var appQuery = string.IsNullOrEmpty(appId) ? string.Empty : $"?appId={Uri.EscapeDataString(appId!)}";
+                var response = await _httpClient.GetAsync($"api/registrationtokens/validate-detailed/{encodedToken}{appQuery}");
+
+                // "Details unreadable" is NOT "token invalid": a server that predates this route,
+                // or a transport failure, must let the caller fall back to the plain validity
+                // check rather than tell the registrant their token is bad.
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Registration token details unavailable: HTTP {StatusCode}", (int)response.StatusCode);
+                    return null;
+                }
+
+                var details = await response.Content.ReadFromJsonAsync<WildwoodComponents.Shared.Models.RegistrationTokenDetails>();
+                if (details is null) return null;
+
+                details.AppGrants ??= new List<WildwoodComponents.Shared.Models.RegistrationTokenAppGrant>();
+                return details;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error reading registration token details");
+                return null;
             }
         }
 
