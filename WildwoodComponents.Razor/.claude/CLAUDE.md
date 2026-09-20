@@ -40,6 +40,8 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 | Pricing Display | PricingDisplayComponent | PricingDisplayViewComponent | (via appTierService) | -- | -- | -- |
 | Reg & Sub: pricing | RegistrationSubscriptionPricing | RegistrationSubscriptionPricingViewComponent | (via appTierService + catalog helpers) | RegistrationSubscriptionPricing | RegistrationSubscriptionPricing | -- |
 | Reg & Sub: signup | RegistrationSubscriptionSignup | RegistrationSubscriptionSignupViewComponent | (via authService + appTierService) | RegistrationSubscriptionSignup | RegistrationSubscriptionSignup | -- |
+| Reg & Sub: manage | RegistrationSubscriptionManage | RegistrationSubscriptionManageViewComponent | (via appTierService) | ManageView | ManageView | -- |
+| Reg & Sub: shell | RegistrationAndSubscriptionComponent | RegistrationAndSubscriptionViewComponent | -- | RegistrationAndSubscriptionComponent | RegistrationAndSubscriptionComponent | -- |
 | Usage Dashboard | UsageDashboardComponent | UsageDashboardViewComponent | (via appTierService) | -- | -- | -- |
 | Overage Summary | OverageSummaryComponent | OverageSummaryViewComponent | (via appTierService) | -- | -- | -- |
 | Disclaimer | DisclaimerComponent | DisclaimerViewComponent | disclaimerService | DisclaimerComponent | -- | -- |
@@ -165,9 +167,13 @@ WildwoodComponents.Razor/
         Notification/               # Notification + Toast ViewComponents
         Payment/                    # Payment + PaymentForm ViewComponents
         Registration/               # Token Registration + Signup ViewComponents
-        RegistrationSubscription/   # Registration & Subscription pricing + signup ViewComponents
+        RegistrationSubscription/   # Registration & Subscription pricing + signup + manage
+                                    #   ViewComponents, and the RegistrationAndSubscription shell
+                                    #   (a view="pricing|signup|manage" switch, nothing else)
                                     #   + RegistrationSubscriptionPricingDecisions (pure, testable)
                                     #   + RegistrationSubscriptionSignupDecisions (pure, testable)
+                                    #   + RegistrationSubscriptionManageDecisions (pure, testable)
+                                    #   + RegistrationAndSubscriptionShell (pure, testable)
         Security/                   # Two-Factor Settings ViewComponent
         Subscription/Admin/         # Subscription Admin ViewComponents (status, tiers, features, add-ons, limits, overrides)
         Usage/                      # Usage Dashboard + Overage Summary ViewComponents
@@ -203,12 +209,27 @@ WildwoodComponents.Razor/
         UsageModels.cs
     wwwroot/
         css/wildwood-razor-themes.css
-        css/regsub.css              # Registration & Subscription (pricing + signup; manage extends it)
+        css/regsub.css              # Registration & Subscription: pricing, signup and manage
         js/regsub-pricing.js        # billing toggle, pack basket, ww-regsub-select
-        js/regsub-machines.js       # signup + pack-checkout reducers, ported table-identical from
-                                    #   @wildwood/react-shared. Pure; load BEFORE regsub-signup.js.
+        js/regsub-machines.js       # signup + pack-checkout + plan-change reducers, ported
+                                    #   table-identical from @wildwood/react-shared. Pure; load it
+                                    #   FIRST, before every driver below.
                                     #   Covered by WildwoodComponents.Tests/Razor/js/regsub-machines.selftest.mjs,
                                     #   which RegSubMachineSelfTestRunnerTests runs through node.
+        js/regsub-packcheckout.js   # SHARED driver: quote -> one card -> checkout -> 3DS walk.
+                                    #   Used by the signup's pack step AND the manage view's picker.
+        js/regsub-planchange.js     # SHARED driver: preview -> confirmation modal -> change ->
+                                    #   3DS on the card on file -> complete the parked change.
+                                    #   Used by the manage view AND subscription-admin.js. Carries
+                                    #   the one wwFormatMoney copy those two need.
         js/regsub-signup.js         # the signup driver: pay-first, card-once pack checkout
+        js/regsub-manage.js         # the manage driver: sections, plan-change notice, pack picker
+
+    NEVER copy a sequence out of the two SHARED drivers into a view's own script. They are shared
+    because they are the parts that move money - whether the server may park a change on a bank
+    challenge, whether a parked change is ever completed, whether an authenticated pack is
+    recorded - and a second copy is a second place for those to drift. A source guard fails the
+    build if `confirmCardPayment`, `confirmCardSetup`, a reducer call or `SupportsPaymentAction`
+    appears in regsub-signup.js, regsub-manage.js or subscription-admin.js.
     WildwoodComponents.Razor.csproj
 ```

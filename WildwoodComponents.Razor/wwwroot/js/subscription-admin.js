@@ -3,6 +3,18 @@
  * Handles tab switching, tier selection, cancellation, feature toggling,
  * override management, add-on subscribe/cancel, and usage limit editing.
  * Razor Pages equivalent of the Blazor SubscriptionAdminComponent interactivity.
+ *
+ * TWO SHARED SCRIPTS MUST LOAD FIRST for the plan change to work - the preview, the confirmation
+ * modal, the flag that lets the server park a change on a bank challenge, the challenge itself on
+ * a card already on file, and the completion of the parked change all live in
+ * regsub-planchange.js, shared with the manage view so the two cannot drift:
+ *
+ *   <script src="~/_content/WildwoodComponents.Razor/js/regsub-machines.js"></script>
+ *   <script src="~/_content/WildwoodComponents.Razor/js/regsub-planchange.js"></script>
+ *   <script src="~/_content/WildwoodComponents.Razor/js/subscription-admin.js"></script>
+ *
+ * Without them every other action on this panel still works and a plan click says so rather than
+ * failing silently.
  */
 (function () {
     'use strict';
@@ -13,28 +25,6 @@
     // rows server-side. Nothing here re-derives ownership or what a row offers - these only turn an
     // already-decided row into a request and an outcome into words. Pure, so they can be read and
     // reasoned about on their own; this package has no JS test harness.
-
-    /**
-     * Money for display. The ONE money formatter in this package's scripts, duplicated by name into
-     * each component IIFE because no shared script is loaded on every page: keep the copies
-     * identical. It is the JS SDK's own formatMoney
-     * (packages/wildwood-core/src/features/catalog.ts) and matches C# FormatHelpers.FormatMoney, so
-     * an amount the server rendered and an amount the browser re-renders read the same. The locale
-     * is fixed at en-US for exactly that reason.
-     */
-    function wwFormatMoney(amount, currency) {
-        var code = (typeof currency === 'string' ? currency.trim() : '');
-        code = (code.length > 0 ? code : 'USD').toUpperCase();
-        var value = Number(amount);
-        if (!isFinite(value)) value = 0;
-        try {
-            return new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(value);
-        } catch (e) {
-            // Intl throws on anything that is not a three-letter code; say the amount and the code
-            // rather than nothing - and never a dollar sign for a currency that is not dollars.
-            return code + ' ' + value.toFixed(2);
-        }
-    }
 
     /**
      * Why a user's entitlements changed. The six values of the JS entitlementsChanged event
@@ -305,20 +295,109 @@
         });
 
         // ===== TIER PLANS: SELECT TIER =====
-        // For an existing subscription a tier click previews the change and shows a
-        // confirmation modal (preview -> modal -> confirm). New subscriptions execute
-        // directly. Mirrors the Blazor SubscriptionAdminComponent / React flow.
+        //
+        // The whole sequence - preview, the confirmation modal, the change itself, the 3-D Secure
+        // challenge on a card already on file and the completion of the parked change - is
+        // regsub-planchange.js, shared with <vc:registration-subscription-manage />. It is shared
+        // precisely because that is the part that moves money: a second copy is a second place
+        // for "may the server park this change" and "is a parked change ever completed" to drift.
+        // What stays here is this panel's own presentation: the loading overlay, the message bar
+        // and the ww-subscription-admin-changed event.
+        //
+        // The manage view carries data-ww-view="manage" on the SAME root (it is a
+        // .ww-subscription-admin-component too, so every other panel action keeps working), and
+        // regsub-manage.js attaches the driver there. One root, one driver.
+
+        var isManagedElsewhere = root.getAttribute('data-ww-view') === 'manage';
+        var planChangeCtx = null;
+        var planChange = null;
+
+        function ensurePlanChange() {
+            if (planChange) return planChange;
+
+            var factory = window.wwRegSubPlanChange;
+            if (!factory || !window.wwRegSubMachines) {
+                if (window.console) {
+                    window.console.error(
+                        '[wwSubscriptionAdmin] regsub-machines.js and regsub-planchange.js must be '
+                        + 'loaded before subscription-admin.js for plan changes to work.');
+                }
+                showMessage('Plan changes are unavailable on this page.', 'danger');
+                return null;
+            }
+
+            planChange = factory.create({
+                appId: appId,
+                userId: userId,
+                companyId: companyId,
+                isCompanyMode: isCompanyMode,
+                currency: currency,
+                container: root,
+                publishableKey: root.dataset.publishableKey || '',
+                hostPost: apiPost,
+                regsubPost: regsubPost,
+                onState: paintPlanChange,
+                onError: function (code, message) { showMessage(message, 'danger'); },
+                onPaymentRequired: function (detail) {
+                    root.dispatchEvent(new CustomEvent('ww-regsub-payment-required', {
+                        detail: detail,
+                        bubbles: true
+                    }));
+                },
+                onChanged: function () {
+                    var ctx = planChangeCtx || { isChange: true, tierName: '' };
+                    showMessage(
+                        'Successfully ' + (ctx.isChange ? 'changed to ' : 'subscribed to ') + ctx.tierName + '!',
+                        'success');
+                    dispatchChanged(ctx.isChange ? 'changed' : 'subscribed', WW_REASON.TierChange);
+                    setTimeout(function () { window.location.reload(); }, 1500);
+                },
+                // dispatchChanged already raises ww-entitlements-changed with the reason; a second
+                // event from the driver would have hosts counting one change twice.
+                onEntitlements: function () { },
+                confirmSubscribe: function (ctx) {
+                    return confirm('Subscribe to ' + ctx.tierName + '?');
+                }
+            });
+
+            return planChange;
+        }
+
+        function paintPlanChange(view) {
+            var isChange = planChangeCtx ? planChangeCtx.isChange : true;
+
+            switch (view.step) {
+                case 'previewing':
+                    setLoading(true, 'Loading preview...');
+                    break;
+
+                case 'changing':
+                    setLoading(true, isChange ? 'Changing plan...' : 'Subscribing...');
+                    break;
+
+                case 'authenticating':
+                    setLoading(true, 'Confirming the charge with your bank...');
+                    break;
+
+                case 'completing':
+                    setLoading(true, 'Applying your new plan...');
+                    break;
+
+                default:
+                    setLoading(false);
+                    break;
+            }
+        }
 
         root.addEventListener('click', function (e) {
+            if (isManagedElsewhere) return;
+
             var btn = e.target.closest('[data-action="select-tier"]');
             if (!btn) return;
 
-            var tierId = btn.dataset.tierId;
-            var tierName = btn.dataset.tierName;
-            var isChange = btn.dataset.isChange === 'true';
             var isFree = btn.dataset.isFree === 'true';
 
-            // Find visible pricing option
+            // The pricing option currently on screen decides the price and the trial.
             var card = btn.closest('.ww-admin-plan-card');
             var pricingId = null;
             if (card && !isFree) {
@@ -326,338 +405,22 @@
                 if (visiblePrice) pricingId = visiblePrice.dataset.pricingId;
             }
 
-            if (isChange) {
-                // Preview the change, then show the confirmation modal.
-                setLoading(true, 'Loading preview...');
+            var flow = ensurePlanChange();
+            if (!flow) return;
 
-                var scope = scopeParams();
-                // Known limitation (mirrors @wildwood/core / React useSubscriptionAdmin):
-                // there is no company-scoped preview endpoint, so in company mode the
-                // preview falls back to the self endpoint. The change itself is still
-                // routed company-scoped in executeTierChange. In Company tracking the API
-                // typically resolves "my-subscription" to the caller's company, so this is
-                // only inaccurate when an admin previews a company other than their own.
-                var previewPath = scope.useUser
-                    ? appId + '/admin/preview-change/' + userId
-                    : appId + '/my-subscription/preview-change';
+            planChangeCtx = {
+                tierId: btn.dataset.tierId,
+                tierName: btn.dataset.tierName,
+                pricingId: pricingId,
+                pricingModelId: btn.dataset.pricingModelId || null,
+                price: Number(btn.dataset.price || '0'),
+                trialDays: parseInt(btn.dataset.trialDays || '0', 10) || 0,
+                isChange: btn.dataset.isChange === 'true',
+                isFreeTier: isFree
+            };
 
-                apiPost(previewPath, { NewAppTierId: tierId, NewAppTierPricingId: pricingId })
-                    .then(function (preview) {
-                        if (!preview || preview.success === false) {
-                            showMessage((preview && preview.errorMessage) || 'Failed to preview tier change.', 'danger');
-                            return;
-                        }
-                        openTierChangeModal(preview, { tierId: tierId, tierName: tierName, pricingId: pricingId, isChange: true });
-                    })
-                    .catch(function (err) {
-                        showMessage('Failed to preview: ' + err.message, 'danger');
-                    })
-                    .finally(function () {
-                        setLoading(false);
-                    });
-            } else {
-                // New subscription - confirm and execute directly (no preview).
-                if (!confirm('Subscribe to ' + tierName + '?')) return;
-                executeTierChange({ tierId: tierId, tierName: tierName, pricingId: pricingId, isChange: false }, true);
-            }
+            flow.selectTier(planChangeCtx);
         });
-
-        // Performs the actual subscribe/change request. Resolves to true on success,
-        // false on failure (the failure message is shown before resolving). Never rejects,
-        // so callers can ignore the result without risking an unhandled rejection.
-        function executeTierChange(ctx, immediate) {
-            setLoading(true, ctx.isChange ? 'Changing plan...' : 'Subscribing...');
-
-            var scope = scopeParams();
-            var path, body;
-
-            if (ctx.isChange) {
-                if (scope.useCompany) {
-                    path = appId + '/change-tier/company';
-                    body = { CompanyId: companyId, NewAppTierId: ctx.tierId, NewAppTierPricingId: ctx.pricingId, Immediate: immediate };
-                } else if (scope.useUser) {
-                    path = 'change-tier';
-                    body = { UserId: userId, AppId: appId, NewAppTierId: ctx.tierId, NewAppTierPricingId: ctx.pricingId, Immediate: immediate };
-                } else {
-                    path = appId + '/my-subscription/change';
-                    body = { NewAppTierId: ctx.tierId, NewAppTierPricingId: ctx.pricingId, Immediate: immediate };
-                }
-            } else {
-                if (scope.useCompany) {
-                    path = appId + '/subscribe/company';
-                    body = { CompanyId: companyId, AppTierId: ctx.tierId, AppTierPricingId: ctx.pricingId };
-                } else if (scope.useUser) {
-                    path = 'subscribe';
-                    body = { UserId: userId, AppId: appId, AppTierId: ctx.tierId, AppTierPricingId: ctx.pricingId };
-                } else {
-                    path = appId + '/my-subscription';
-                    body = { AppTierId: ctx.tierId, AppTierPricingId: ctx.pricingId };
-                }
-            }
-
-            return apiPost(path, body)
-                .then(function (result) {
-                    if (result.success === false) {
-                        showMessage(result.errorMessage || 'Tier change failed.', 'danger');
-                        return false;
-                    }
-                    showMessage('Successfully ' + (ctx.isChange ? 'changed to ' : 'subscribed to ') + ctx.tierName + '!', 'success');
-                    dispatchChanged(ctx.isChange ? 'changed' : 'subscribed', WW_REASON.TierChange);
-                    setTimeout(function () { window.location.reload(); }, 1500);
-                    return true;
-                })
-                .catch(function (err) {
-                    showMessage('Failed: ' + err.message, 'danger');
-                    return false;
-                })
-                .finally(function () {
-                    setLoading(false);
-                });
-        }
-
-        // ===== TIER CHANGE CONFIRMATION MODAL =====
-
-        // An amount the server left out is zero IN THE PREVIEW'S CURRENCY, and an ISO code Intl
-        // cannot render says the code - the old null and catch paths both quoted dollars.
-        function formatCurrency(amount, ccy) {
-            return wwFormatMoney(amount === null || amount === undefined ? 0 : amount, ccy || currency);
-        }
-
-        function el(tag, className, text) {
-            var node = document.createElement(tag);
-            if (className) node.className = className;
-            if (text !== undefined && text !== null) node.textContent = text;
-            return node;
-        }
-
-        function openTierChangeModal(preview, ctx) {
-            // Downgrades default to end-of-period; upgrades/other default to immediate.
-            var state = { immediate: !preview.isDowngrade, bypassPayment: false, loading: false };
-
-            var overlay = el('div', 'ww-modal-overlay');
-            overlay.addEventListener('click', function (e) {
-                if (e.target === overlay && !state.loading) close();
-            });
-
-            function close() {
-                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-            }
-
-            function submitChange() {
-                state.loading = true;
-                render();
-                executeTierChange(ctx, state.immediate).then(function (ok) {
-                    // On failure the message was already shown; close the modal so it is
-                    // visible (it renders in the component, beneath the overlay). On success
-                    // the page reloads shortly, so leave the modal up.
-                    if (!ok) close();
-                });
-            }
-
-            function render() {
-                var ccy = preview.currency || currency;
-                var effectivePaymentRequired = preview.paymentRequired && !state.bypassPayment;
-                var showPaymentBypass = preview.paymentBypassAllowed && preview.paymentRequired;
-
-                overlay.innerHTML = '';
-
-                var modal = el('div', 'ww-modal ww-tier-change-modal');
-                modal.addEventListener('click', function (e) { e.stopPropagation(); });
-
-                // Header
-                var header = el('div', 'ww-modal-header');
-                var title = preview.isUpgrade
-                    ? 'Upgrade to ' + (preview.newTierName || '')
-                    : 'Downgrade to ' + (preview.newTierName || '');
-                header.appendChild(el('h3', 'ww-modal-title', title));
-                var closeBtn = el('button', 'ww-modal-close', '×');
-                closeBtn.type = 'button';
-                closeBtn.setAttribute('aria-label', 'Close');
-                closeBtn.disabled = state.loading;
-                closeBtn.addEventListener('click', close);
-                header.appendChild(closeBtn);
-                modal.appendChild(header);
-
-                // Body
-                var body = el('div', 'ww-modal-body');
-
-                // Plan comparison
-                var comparison = el('div', 'ww-tier-change-comparison');
-                var curPlan = el('div', 'ww-tier-change-plan');
-                curPlan.appendChild(el('span', 'ww-tier-change-plan-label', 'Current'));
-                curPlan.appendChild(el('span', 'ww-tier-change-plan-name', preview.currentTierName || 'None'));
-                if (preview.currentPrice !== null && preview.currentPrice !== undefined) {
-                    curPlan.appendChild(el('span', 'ww-tier-change-plan-price',
-                        formatCurrency(preview.currentPrice, ccy) + '/' + (preview.currentBillingFrequency || 'mo').toLowerCase()));
-                }
-                comparison.appendChild(curPlan);
-                comparison.appendChild(el('span', 'ww-tier-change-arrow', '→'));
-                var newPlan = el('div', 'ww-tier-change-plan');
-                newPlan.appendChild(el('span', 'ww-tier-change-plan-label', 'New'));
-                newPlan.appendChild(el('span', 'ww-tier-change-plan-name', preview.newTierName || 'Unknown'));
-                if (preview.newPrice !== null && preview.newPrice !== undefined) {
-                    newPlan.appendChild(el('span', 'ww-tier-change-plan-price',
-                        formatCurrency(preview.newPrice, ccy) + '/' + (preview.newBillingFrequency || 'mo').toLowerCase()));
-                }
-                comparison.appendChild(newPlan);
-                body.appendChild(comparison);
-
-                // Billing frequency savings
-                if (preview.isBillingFrequencyChange &&
-                    preview.monthlyEquivalentCurrent != null &&
-                    preview.monthlyEquivalentNew != null &&
-                    preview.monthlyEquivalentNew < preview.monthlyEquivalentCurrent) {
-                    var pct = Math.round(((preview.monthlyEquivalentCurrent - preview.monthlyEquivalentNew) / preview.monthlyEquivalentCurrent) * 100);
-                    body.appendChild(el('div', 'ww-tier-change-savings',
-                        'Save ' + pct + '% — ' + formatCurrency(preview.monthlyEquivalentNew, ccy) + '/mo billed ' + (preview.newBillingFrequency || '').toLowerCase()));
-                }
-
-                // Proration / charge details for upgrades
-                if (preview.isUpgrade && effectivePaymentRequired && preview.proratedChargeToday != null) {
-                    var charge = el('div', 'ww-tier-change-charge');
-                    charge.appendChild(el('div', 'ww-tier-change-charge-header', "Today's charge"));
-                    if (preview.creditAmount != null && preview.creditAmount > 0) {
-                        var creditLine = el('div', 'ww-tier-change-line-item');
-                        creditLine.appendChild(el('span', null, 'Credit (' + preview.daysRemainingInPeriod + ' unused days on ' + (preview.currentTierName || '') + ')'));
-                        creditLine.appendChild(el('span', 'ww-tier-change-credit', '-' + formatCurrency(preview.creditAmount, ccy)));
-                        charge.appendChild(creditLine);
-                    }
-                    var newLine = el('div', 'ww-tier-change-line-item');
-                    newLine.appendChild(el('span', null, (preview.newTierName || '') + ' (' + preview.daysRemainingInPeriod + ' days)'));
-                    newLine.appendChild(el('span', null, formatCurrency((preview.proratedChargeToday || 0) + (preview.creditAmount || 0), ccy)));
-                    charge.appendChild(newLine);
-                    var total = el('div', 'ww-tier-change-total');
-                    total.appendChild(el('span', null, 'Net charge today'));
-                    total.appendChild(el('span', null, formatCurrency(preview.proratedChargeToday, ccy)));
-                    charge.appendChild(total);
-                    if (preview.nextBillingDate) {
-                        charge.appendChild(el('div', 'ww-tier-change-next-billing',
-                            'Next billing: ' + new Date(preview.nextBillingDate).toLocaleDateString() + ' — ' +
-                            formatCurrency(preview.nextBillingAmount, ccy) + '/' + (preview.newBillingFrequency || 'mo').toLowerCase()));
-                    }
-                    body.appendChild(charge);
-                }
-
-                // Downgrade credit
-                if (preview.isDowngrade && preview.creditAmount != null && preview.creditAmount > 0) {
-                    body.appendChild(el('div', 'ww-tier-change-credit-info',
-                        formatCurrency(preview.creditAmount, ccy) + ' credit will be applied to your next bill.'));
-                }
-
-                // Feature diff
-                if (preview.featuresGained && preview.featuresGained.length > 0) {
-                    body.appendChild(buildFeatureList('You\'ll gain:', preview.featuresGained, true));
-                }
-                if (preview.featuresLost && preview.featuresLost.length > 0) {
-                    body.appendChild(buildFeatureList('You\'ll lose access to:', preview.featuresLost, false));
-                }
-
-                // Downgrade timing choice
-                if (preview.isDowngrade && preview.allowScheduledChange) {
-                    var timing = el('div', 'ww-tier-change-timing');
-                    timing.appendChild(el('div', 'ww-tier-change-timing-label', 'When should this take effect?'));
-                    var endLabel = preview.nextBillingDate
-                        ? 'End of billing period (' + new Date(preview.nextBillingDate).toLocaleDateString() + ')'
-                        : 'End of billing period';
-                    var creditNote = (preview.creditAmount != null && preview.creditAmount > 0)
-                        ? ' ' + formatCurrency(preview.creditAmount, ccy) + ' credit on your next bill.'
-                        : '';
-                    timing.appendChild(buildTimingOption(endLabel,
-                        'Keep ' + (preview.currentTierName || '') + ' features until then.' + creditNote,
-                        !state.immediate, function () { state.immediate = false; render(); }));
-                    timing.appendChild(buildTimingOption('Immediately',
-                        'Switch to ' + (preview.newTierName || '') + ' now.' + creditNote,
-                        state.immediate, function () { state.immediate = true; render(); }));
-                    body.appendChild(timing);
-                }
-
-                // No payment provider warning
-                if (effectivePaymentRequired && !preview.paymentProviderAvailable && !preview.paymentBypassAllowed) {
-                    body.appendChild(el('div', 'ww-alert ww-alert-warning',
-                        'Payment processing is not configured for this application. Contact your administrator.'));
-                }
-
-                // Admin bypass toggle
-                if (showPaymentBypass) {
-                    var bypassLabel = el('label', 'ww-tier-change-bypass');
-                    var bypassInput = document.createElement('input');
-                    bypassInput.type = 'checkbox';
-                    bypassInput.checked = state.bypassPayment;
-                    bypassInput.disabled = state.loading;
-                    bypassInput.addEventListener('change', function () { state.bypassPayment = bypassInput.checked; render(); });
-                    bypassLabel.appendChild(bypassInput);
-                    bypassLabel.appendChild(el('span', null, 'Bypass payment (admin override)'));
-                    body.appendChild(bypassLabel);
-                }
-
-                modal.appendChild(body);
-
-                // Footer
-                var footer = el('div', 'ww-modal-footer');
-                var cancelBtn = el('button', 'ww-btn ww-btn-outline btn btn-outline-secondary', 'Keep Current Plan');
-                cancelBtn.type = 'button';
-                cancelBtn.disabled = state.loading;
-                cancelBtn.addEventListener('click', close);
-                footer.appendChild(cancelBtn);
-
-                var confirmLabel = state.loading
-                    ? 'Processing...'
-                    : state.bypassPayment
-                        ? 'Apply change (no charge)'
-                        : (preview.isUpgrade && preview.proratedChargeToday)
-                            ? 'Upgrade for ' + formatCurrency(preview.proratedChargeToday, ccy)
-                            : preview.isDowngrade
-                                ? 'Confirm Downgrade'
-                                : 'Switch to ' + (preview.newTierName || '');
-                var confirmBtn = el('button', 'ww-btn btn ' + (preview.isUpgrade ? 'ww-btn-primary btn-primary' : 'ww-btn-outline btn-outline-primary'), confirmLabel);
-                confirmBtn.type = 'button';
-                confirmBtn.disabled = state.loading ||
-                    (effectivePaymentRequired && !preview.paymentProviderAvailable && !preview.paymentBypassAllowed);
-                confirmBtn.addEventListener('click', submitChange);
-                footer.appendChild(confirmBtn);
-
-                modal.appendChild(footer);
-                overlay.appendChild(modal);
-            }
-
-            function buildFeatureList(label, features, gained) {
-                var wrap = el('div', 'ww-tier-change-features');
-                wrap.appendChild(el('div', 'ww-tier-change-features-label', label));
-                var list = el('ul', 'ww-tier-change-features-list');
-                var icon = gained
-                    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>'
-                    : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
-                for (var i = 0; i < features.length; i++) {
-                    var li = el('li', gained ? 'ww-tier-change-feature-gained' : 'ww-tier-change-feature-lost');
-                    var iconSpan = document.createElement('span');
-                    iconSpan.innerHTML = icon;
-                    li.appendChild(iconSpan);
-                    li.appendChild(document.createTextNode(features[i]));
-                    list.appendChild(li);
-                }
-                wrap.appendChild(list);
-                return wrap;
-            }
-
-            function buildTimingOption(titleText, descText, checked, onSelect) {
-                var label = el('label', 'ww-tier-change-timing-option');
-                var input = document.createElement('input');
-                input.type = 'radio';
-                input.name = 'ww-tier-change-timing';
-                input.checked = checked;
-                input.disabled = state.loading;
-                input.addEventListener('change', onSelect);
-                label.appendChild(input);
-                var content = el('div');
-                content.appendChild(el('strong', null, titleText));
-                content.appendChild(el('span', 'ww-tier-change-timing-desc', descText));
-                label.appendChild(content);
-                return label;
-            }
-
-            render();
-            root.appendChild(overlay);
-        }
 
         // ===== TIER PLANS: BILLING TOGGLE =====
 

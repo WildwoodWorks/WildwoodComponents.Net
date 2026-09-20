@@ -189,11 +189,16 @@ public class MoneyAndEntitlementSourceGuardTests
     /// There is no shared script every page loads, so the copies are the contract; one drifting
     /// copy is how a currency starts rendering two ways in one app again.
     /// </summary>
+    /// <remarks>
+    /// <c>subscription-admin.js</c> was one of these until the tier-change confirmation moved into
+    /// <c>regsub-planchange.js</c>, shared with the manage view. The panel now formats no money at
+    /// all, and the copy went with the modal rather than being left behind unused.
+    /// </remarks>
     [Theory]
     [InlineData("payment.js")]
     [InlineData("payment-form.js")]
     [InlineData("token-registration.js")]
-    [InlineData("subscription-admin.js")]
+    [InlineData("regsub-planchange.js")]
     public void Razor_scripts_that_format_money_use_the_one_shared_helper(string script)
     {
         var source = ReadSource($"WildwoodComponents.Razor/wwwroot/js/{script}");

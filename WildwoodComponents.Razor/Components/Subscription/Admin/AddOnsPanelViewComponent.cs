@@ -33,30 +33,45 @@ public class AddOnsPanelViewComponent : ViewComponent
         UserTierSubscriptionModel? subscription = null,
         bool allowCancel = true,
         bool allowReactivate = true,
-        string regSubProxyUrl = "/api/wildwood-regsub")
+        string regSubProxyUrl = "/api/wildwood-regsub",
+        bool showAddPacks = false,
+        List<UserAddOnSubscriptionModel>? activeAddOnsOverride = null,
+        List<AppTierAddOnModel>? availableAddOnsOverride = null)
     {
-        var activeAddOns = new List<UserAddOnSubscriptionModel>();
-        var availableAddOns = new List<AppTierAddOnModel>();
+        var activeAddOns = activeAddOnsOverride ?? new List<UserAddOnSubscriptionModel>();
+        var availableAddOns = availableAddOnsOverride ?? new List<AppTierAddOnModel>();
 
         var useCompanyScope = isCompanyMode && !string.IsNullOrEmpty(companyId);
         var useUserScope = !isCompanyMode && !string.IsNullOrEmpty(userId);
 
-        try
+        // A caller that already read these hands them in: the manage view does, so its pack
+        // picker and these rows cannot disagree about what the account owns, and one render does
+        // not make the same two calls twice.
+        if (activeAddOnsOverride is null || availableAddOnsOverride is null)
         {
-            if (useCompanyScope)
-                activeAddOns = await _appTierService.GetCompanyAddOnSubscriptionsAsync(appId, companyId!);
-            else if (useUserScope)
-                activeAddOns = await _appTierService.GetUserAddOnsAsync(appId, userId!);
-            else
-                activeAddOns = await _appTierService.GetMyAddOnsAsync(appId);
+            try
+            {
+                if (activeAddOnsOverride is null)
+                {
+                    if (useCompanyScope)
+                        activeAddOns = await _appTierService.GetCompanyAddOnSubscriptionsAsync(appId, companyId!);
+                    else if (useUserScope)
+                        activeAddOns = await _appTierService.GetUserAddOnsAsync(appId, userId!);
+                    else
+                        activeAddOns = await _appTierService.GetMyAddOnsAsync(appId);
+                }
 
-            availableAddOns = isAdmin
-                ? await _appTierService.GetAllAddOnsAsync(appId)
-                : await _appTierService.GetAvailableAddOnsAsync(appId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load add-ons for app {AppId}", appId);
+                if (availableAddOnsOverride is null)
+                {
+                    availableAddOns = isAdmin
+                        ? await _appTierService.GetAllAddOnsAsync(appId)
+                        : await _appTierService.GetAvailableAddOnsAsync(appId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load add-ons for app {AppId}", appId);
+            }
         }
 
         var model = new AddOnsPanelViewModel
@@ -73,7 +88,10 @@ public class AddOnsPanelViewComponent : ViewComponent
             AllowCancel = allowCancel,
             // Reactivate is the signed-in user's own action: the shipped proxy route acts as that
             // user and there is no company- or admin-scoped equivalent to offer.
-            AllowReactivate = allowReactivate && !useCompanyScope && !useUserScope
+            AllowReactivate = allowReactivate && !useCompanyScope && !useUserScope,
+            // "Add packs" opens the manage view's picker. It is the caller's to offer: this panel
+            // renders no picker of its own, so a surface without one must not show the button.
+            ShowAddPacks = showAddPacks && !useCompanyScope && !useUserScope
         };
 
         return View(model);

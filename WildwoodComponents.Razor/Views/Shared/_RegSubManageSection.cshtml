@@ -1,0 +1,104 @@
+@using WildwoodComponents.Razor.Models
+@model RegSubManageSectionViewModel
+
+@*
+    One section of the manage view.
+
+    The two layouts - tabs and stacked - render the SAME panels with the same parameters and differ
+    only in what wraps them, so the invocations live here once. Writing them out twice is how a
+    stacked layout ends up quietly missing a parameter the tabbed one got.
+
+    Every panel is the platform's own ViewComponent, unchanged: subscription-admin.js wires their
+    actions on the manage root exactly as it does on <vc:subscription-admin />.
+*@
+@{
+    var manage = Model.Manage;
+    var cid = manage.ComponentId;
+}
+
+@switch (Model.Section)
+{
+    case ManageSection.Subscription:
+        @await Component.InvokeAsync("SubscriptionStatusPanel", new
+        {
+            componentId = cid + "-status",
+            appId = manage.AppId,
+            proxyBaseUrl = manage.ProxyBaseUrl,
+            isAdmin = manage.IsAdmin,
+            subscription = manage.Subscription
+        })
+        break;
+
+    case ManageSection.Plans:
+        @await Component.InvokeAsync("TierPlansPanel", new
+        {
+            componentId = cid + "-plans",
+            appId = manage.AppId,
+            proxyBaseUrl = manage.ProxyBaseUrl,
+            currency = manage.Currency,
+            showBillingToggle = manage.ShowBillingToggle,
+            isAdmin = manage.IsAdmin,
+            subscription = manage.Subscription
+        })
+        break;
+
+    case ManageSection.Features:
+        @await Component.InvokeAsync("FeaturesPanel", new
+        {
+            componentId = cid + "-features",
+            appId = manage.AppId,
+            proxyBaseUrl = manage.ProxyBaseUrl,
+            isAdmin = manage.IsAdmin,
+            isCompanyMode = manage.IsCompanyMode,
+            companyId = manage.CompanyId,
+            userId = manage.UserId
+        })
+        break;
+
+    case ManageSection.AddOns:
+        @* The two lists were read by the manage ViewComponent, so these rows and the pack picker
+           cannot disagree about what the account owns - and one render does not make the same two
+           calls twice. *@
+        @await Component.InvokeAsync("AddOnsPanel", new
+        {
+            componentId = cid + "-addons",
+            appId = manage.AppId,
+            proxyBaseUrl = manage.ProxyBaseUrl,
+            isAdmin = manage.IsAdmin,
+            currency = manage.Currency,
+            isCompanyMode = manage.IsCompanyMode,
+            companyId = manage.CompanyId,
+            userId = manage.UserId,
+            subscription = manage.Subscription,
+            allowCancel = manage.AllowCancel,
+            regSubProxyUrl = manage.RegSubProxyUrl,
+            showAddPacks = manage.ShowPackPicker,
+            activeAddOnsOverride = manage.ActiveAddOns,
+            availableAddOnsOverride = manage.AvailableAddOns
+        })
+        break;
+
+    case ManageSection.Usage:
+        @await Component.InvokeAsync("UsageLimitsPanel", new
+        {
+            componentId = cid + "-usage",
+            appId = manage.AppId,
+            proxyBaseUrl = manage.ProxyBaseUrl,
+            isAdmin = manage.IsAdmin,
+            isCompanyMode = manage.IsCompanyMode,
+            companyId = manage.CompanyId,
+            userId = manage.UserId
+        })
+        break;
+
+    default:
+        @await Component.InvokeAsync("OverridesPanel", new
+        {
+            componentId = cid + "-overrides",
+            appId = manage.AppId,
+            proxyBaseUrl = manage.ProxyBaseUrl,
+            isCompanyMode = manage.IsCompanyMode,
+            userId = manage.UserId
+        })
+        break;
+}

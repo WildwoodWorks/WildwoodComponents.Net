@@ -2,9 +2,10 @@
  * WildwoodComponents.Razor - Registration & Subscription: signup view
  *
  * The client half of <vc:registration-subscription-signup />. Classic script, no modules, no
- * build step, matching every other file in this folder. Load regsub-machines.js FIRST:
+ * build step, matching every other file in this folder. Load the two shared files FIRST:
  *
  *   <script src="~/_content/WildwoodComponents.Razor/js/regsub-machines.js"></script>
+ *   <script src="~/_content/WildwoodComponents.Razor/js/regsub-packcheckout.js"></script>
  *   <script src="~/_content/WildwoodComponents.Razor/js/payment.js"></script>
  *   <script src="~/_content/WildwoodComponents.Razor/js/regsub-signup.js"></script>
  *
@@ -33,6 +34,10 @@
  *      instance lets go. The authenticate-then-complete pair is therefore ONE awaited chain
  *      rather than two separately pumped steps.
  *
+ * The pack step's quote -> card -> checkout -> 3-D Secure walk is NOT in this file: it is
+ * regsub-packcheckout.js, shared with the manage view's pack picker, because two copies of that
+ * sequence would be two places for those rules to drift.
+ *
  * Everything the browser posts goes to the SHIPPED same-origin proxy (/api/wildwood-regsub):
  * register, log in, link the payment, subscribe, the disclaimer gate, the pack checkout and the
  * payment intent. A consuming app writes none of those routes.
@@ -49,22 +54,14 @@
     var EVT_ENTITLEMENTS = 'ww-entitlements-changed';
     var EVT_STEP = 'ww-regsub-step';
 
-    var STRIPE_SRC = 'https://js.stripe.com/v3/';
     var DEFAULT_PACK_MAX = 25;
     var MAX_PUMP_ITERATIONS = 32;
 
-    // Codes, matching the other stacks exactly. A host's analytics switches on these.
+    // Codes, matching the other stacks exactly. A host's analytics switches on these. The three
+    // pack codes are raised by the shared pack-checkout driver and pass straight through.
     var CODE_SIGNUP_FAILED = 'signup_failed';
     var CODE_TOKEN_REJECTED = 'registration_token_rejected';
     var CODE_CATALOG = 'catalog_unavailable';
-    var CODE_PACK_QUOTE = 'pack_quote_failed';
-    var CODE_PACK_CARD = 'pack_card_failed';
-    var CODE_PACK_CHECKOUT = 'pack_checkout_failed';
-
-    // The three sentences React itself hard-codes inside the pack checkout rather than putting
-    // them in its label bundle. They are reproduced verbatim so the stacks read the same; every
-    // OTHER string in this file comes off the server.
-    var CARD_UNAVAILABLE_MESSAGE = 'A card could not be collected right now.';
 
     // ===== Pure decisions (no DOM, no state, no I/O) ==============================================
 
@@ -128,78 +125,6 @@
         if (status === 'active') return 'packStatusActive';
         if (status === 'granted') return 'packStatusGranted';
         return 'packStatusFailed';
-    }
-
-    /**
-     * PackCheckout's toOutcomes: ONE outcome per requested item, in the order they were asked for.
-     * A status that is not trialing/active is a failure, with the server's own words when it sent
-     * any.
-     */
-    function toOutcomes(items, results, quote, names, fallbackMessage) {
-        var outcomes = [];
-        var lines = (quote && quote.lines) || [];
-
-        for (var i = 0; i < items.length; i++) {
-            var addOnId = items[i].addOnId;
-            var result = null;
-            for (var r = 0; r < results.length; r++) {
-                if (results[r] && results[r].addOnId === addOnId) { result = results[r]; break; }
-            }
-
-            var quoted = null;
-            for (var q = 0; q < lines.length; q++) {
-                if (lines[q] && lines[q].addOnId === addOnId) { quoted = lines[q]; break; }
-            }
-
-            var name = names[addOnId] || (quoted && quoted.name) || addOnId;
-            var status = result ? result.status : null;
-
-            if (status === 'trialing' || status === 'active') {
-                outcomes.push({
-                    addOnId: addOnId,
-                    name: name,
-                    status: status,
-                    trialEnd: result.trialEnd || undefined
-                });
-            } else {
-                outcomes.push({
-                    addOnId: addOnId,
-                    name: name,
-                    status: 'failed',
-                    errorMessage: (result && result.errorMessage) || fallbackMessage
-                });
-            }
-        }
-
-        return outcomes;
-    }
-
-    /** Every requested pack as a checkout item. */
-    function checkoutItems(addOnIds) {
-        var items = [];
-        for (var i = 0; i < addOnIds.length; i++) items.push({ addOnId: addOnIds[i] });
-        return items;
-    }
-
-    /** A basket in CATALOG order rather than click order, so it reads like the grid it came from. */
-    function orderSelection(order, selected) {
-        var ordered = [];
-        for (var i = 0; i < order.length; i++) {
-            if (selected.indexOf(order[i]) !== -1) ordered.push(order[i]);
-        }
-        return ordered;
-    }
-
-    /** Tick or untick one pack. Unticking is always allowed, cap or no cap. */
-    function toggleSelection(order, selected, addOnId, max) {
-        var index = selected.indexOf(addOnId);
-        if (index === -1) {
-            if (selected.length >= max) return selected.slice();
-            return orderSelection(order, selected.concat([addOnId]));
-        }
-        var next = selected.slice();
-        next.splice(index, 1);
-        return orderSelection(order, next);
     }
 
     /** A comma-separated attribute as a list of non-empty ids. */
@@ -266,25 +191,6 @@
 
     // ===== DOM and I/O ============================================================================
 
-    /** Loads a script once, deduping by exact src - the same rule payment.js follows. */
-    function loadScript(src) {
-        return new Promise(function (resolve, reject) {
-            var existing = document.querySelectorAll('script[src]');
-            for (var i = 0; i < existing.length; i++) {
-                if (existing[i].getAttribute('src') === src) {
-                    resolve();
-                    return;
-                }
-            }
-            var script = document.createElement('script');
-            script.src = src;
-            script.async = true;
-            script.onload = function () { resolve(); };
-            script.onerror = function () { reject(new Error('Could not load ' + src)); };
-            document.head.appendChild(script);
-        });
-    }
-
     function initInstance(root) {
         if (!root) return null;
 
@@ -292,10 +198,14 @@
         if (!cid || instances[cid]) return instances[cid] || null;
 
         var machines = window.wwRegSubMachines;
-        if (!machines) {
-            // Loading regsub-machines.js is the host's one obligation; say so rather than
+        var packCheckouts = window.wwRegSubPackCheckout;
+        if (!machines || !packCheckouts) {
+            // Loading the two shared scripts is the host's one obligation; say so rather than
             // half-working.
-            if (window.console) window.console.error('[wwRegSubSignup] regsub-machines.js must be loaded first.');
+            if (window.console) {
+                window.console.error(
+                    '[wwRegSubSignup] regsub-machines.js and regsub-packcheckout.js must be loaded first.');
+            }
             return null;
         }
 
@@ -344,20 +254,13 @@
         var paymentIds = { transactionId: null, externalId: null };
         var selectedPacks = parseIdList(data.wwAddons);
         var runs = {};                   // work-key -> the step token it was claimed with
-        var packState = machines.initialPackCheckoutState({ appId: appId });
-        var packQuote = null;
-        var stripe = null;
-        var stripeCard = null;
+        var packRunner = null;           // the shared pack-checkout driver, while one is running
         var detached = false;
         var settling = false;            // a money-moving chain is in flight
         var entitlementsNotified = false;
         var signedInNotified = false;
         var pumping = false;
         var lastStepName = '';
-
-        // The SIGNUP step token the pack checkout belongs to, held across the pause while the
-        // visitor fills in the card form.
-        var packCheckoutStepToken = null;
 
         // ----- Elements -------------------------------------------------------------------------
 
@@ -966,334 +869,35 @@
         }
 
         // ----- Pack checkout ---------------------------------------------------------------------
-
-        function packDispatch(event) {
-            var next = machines.packCheckoutTransition(packState, event);
-            if (next === packState) return false;
-            packState = next;
-            paintPackCheckout();
-            return true;
-        }
-
-        function paintPackCheckout() {
-            var status = q('[data-ww-pack-status]');
-            var step = packState.step;
-
-            if (step === 'authenticating' || step === 'completing') {
-                var item = machines.currentPackCheckoutItem(packState);
-                var name = item ? (packNames[item.addOnId] || item.addOnId) : '';
-                setText(status, formatLabel(labels.authenticatingPack, 'name', name));
-            } else if (step === 'quoting' || step === 'checkingOut') {
-                setText(status, labels.buyingPacks);
-            } else {
-                setText(status, '');
-            }
-
-            show(q('[data-ww-pack-card-form]'), step === 'collectingCard');
-
-            var error = q('[data-ww-pack-error]');
-            setText(error, packState.error || '');
-            show(error, Boolean(packState.error));
-            show(q('[data-ww-pack-actions]'), step === 'failed');
-
-            paintQuote();
-        }
-
-        function paintQuote() {
-            var panel = q('[data-ww-pack-summary]');
-            if (!panel) return;
-
-            if (!packQuote || !packQuote.success) {
-                show(panel, false);
-                return;
-            }
-
-            var lines = q('[data-ww-pack-summary-lines]');
-            if (lines) {
-                while (lines.firstChild) lines.removeChild(lines.firstChild);
-                for (var i = 0; i < (packQuote.lines || []).length; i++) {
-                    var line = packQuote.lines[i];
-                    var row = document.createElement('div');
-                    row.className = 'ww-payment-summary-row';
-                    row.setAttribute('data-ww-pack', line.addOnId);
-
-                    var nameEl = document.createElement('span');
-                    nameEl.textContent = packNames[line.addOnId] || line.name || line.addOnId;
-                    row.appendChild(nameEl);
-
-                    // The server quoted these amounts as numbers; the formatted total below is the
-                    // only money this panel shows, and it comes straight off the quote.
-                    lines.appendChild(row);
-                }
-            }
-
-            var saved = q('[data-ww-pack-saved-card]');
-            if (saved) {
-                if (packQuote.savedCard && packQuote.savedCard.last4) {
-                    var text = formatLabel(labels.savedCardOnFile, 'brand', packQuote.savedCard.brand || '');
-                    setText(saved, formatLabel(text, 'last4', packQuote.savedCard.last4));
-                    show(saved, true);
-                } else {
-                    show(saved, false);
-                }
-            }
-
-            show(panel, true);
-        }
+        //
+        // The sequence itself - quote, one card for the whole basket, one checkout call, then each
+        // pack the bank wants authenticated walked in order - is regsub-packcheckout.js, shared
+        // with the manage view's pack picker. What stays here is the signup's half: which step
+        // token the run belongs to, and turning its outcomes into the machine's event.
 
         /**
-         * Buys the basket AS THE SIGNED-IN USER: one quote, one card when there is none on file,
-         * one checkout call, and then each pack the bank wants authenticated walked in order.
+         * Buys the basket AS THE SIGNED-IN USER. The run is claimed by the signup's own step
+         * token, so a doubled entry into the step cannot start a second checkout.
          */
         function runPackCheckout(stepToken) {
-            var items = checkoutItems(state.packsToBuy);
-            packState = machines.initialPackCheckoutState({ appId: appId, items: items });
-            packQuote = null;
+            if (packRunner) packRunner.destroy();
 
-            packDispatch({ type: 'QUOTE_REQUESTED', appId: appId, items: items });
-            quote(stepToken, items);
-        }
-
-        function quote(stepToken, items) {
-            var token = packState.token;
-            settling = true;
-
-            proxyPost(appQuery('/checkout/quote'), {
-                Items: items.map(function (item) { return { AddOnId: item.addOnId }; })
-            })
-                .then(function (result) {
-                    packQuote = result;
-                    if (!result || !result.success) {
-                        report(CODE_PACK_QUOTE, refusalMessage(result, labels.packsUnavailable));
-                    }
-                    packDispatch({ type: 'QUOTE_RECEIVED', token: token, quote: result });
-                    afterQuote(stepToken);
-                })
-                .catch(function (error) {
-                    report(CODE_PACK_QUOTE, (error && error.message) || labels.packsUnavailable);
-                    packDispatch({
-                        type: 'QUOTE_FAILED',
-                        token: token,
-                        message: (error && error.message) || labels.packsUnavailable
-                    });
-                    settling = false;
-                });
-        }
-
-        function afterQuote(stepToken) {
-            if (packState.step !== 'quoted') { settling = false; return; }
-
-            if (packQuote.requiresPaymentMethod) {
-                packDispatch({ type: 'CARD_REQUESTED' });
-                collectCard(stepToken);
-                return;
-            }
-
-            packDispatch({ type: 'CHECKOUT_REQUESTED' });
-            checkout(stepToken);
-        }
-
-        /** The SetupIntent: one card, for a basket of any size. */
-        function collectCard(stepToken) {
-            var token = packState.token;
-
-            if (!publishableKey) {
-                packDispatch({ type: 'CARD_INTENT_FAILED', token: token, message: CARD_UNAVAILABLE_MESSAGE });
-                report(CODE_PACK_CARD, CARD_UNAVAILABLE_MESSAGE);
-                settling = false;
-                return;
-            }
-
-            Promise.all([
-                proxyPost(appQuery('/checkout/payment-method'), {
-                    ProviderId: packQuote.providerId || root.dataset.wwPaymentProvider || ''
-                }),
-                mountCard()
-            ])
-                .then(function (answers) {
-                    var intent = answers[0];
-                    if (!intent || !intent.success || !intent.clientSecret) {
-                        throw new Error(refusalMessage(intent, CARD_UNAVAILABLE_MESSAGE));
-                    }
-                    packDispatch({
-                        type: 'CARD_INTENT_RECEIVED',
-                        token: token,
-                        clientSecret: intent.clientSecret,
-                        paymentTransactionId: intent.paymentTransactionId
-                    });
-                    // Waits for the visitor now: the Save card button confirms the intent.
-                    packCheckoutStepToken = stepToken;
-                    settling = false;
-                })
-                .catch(function (error) {
-                    var message = (error && error.message) || CARD_UNAVAILABLE_MESSAGE;
-                    packDispatch({ type: 'CARD_INTENT_FAILED', token: token, message: message });
-                    report(CODE_PACK_CARD, message);
-                    settling = false;
-                });
-        }
-
-        function mountCard() {
-            if (stripeCard) return Promise.resolve();
-
-            return loadScript(STRIPE_SRC).then(function () {
-                if (typeof window.Stripe === 'undefined') throw new Error(CARD_UNAVAILABLE_MESSAGE);
-                var host = document.getElementById('ww-regsub-card-' + cid);
-                if (!host) throw new Error(CARD_UNAVAILABLE_MESSAGE);
-
-                stripe = window.Stripe(publishableKey);
-                stripeCard = stripe.elements().create('card');
-                stripeCard.mount(host);
+            packRunner = packCheckouts.create({
+                machines: machines,
+                appId: appId,
+                scope: stepEl('packCheckout') || root,
+                post: function (path, body) { return proxyPost(appQuery(path), body); },
+                labels: labels,
+                packNames: packNames,
+                publishableKey: publishableKey,
+                providerId: data.wwPaymentProvider || '',
+                onError: report,
+                onFinished: function (outcomes) {
+                    dispatch({ type: 'PACK_CHECKOUT_FINISHED', token: stepToken, packs: outcomes });
+                }
             });
-        }
 
-        function confirmCard() {
-            var token = packState.token;
-            if (packState.step !== 'collectingCard' || !packState.cardClientSecret || !stripe) return;
-
-            var error = q('[data-ww-pack-card-error]');
-            show(error, false);
-            settling = true;
-
-            stripe.confirmCardSetup(packState.cardClientSecret, { payment_method: { card: stripeCard } })
-                .then(function (answer) {
-                    if (answer.error || !answer.setupIntent || answer.setupIntent.status !== 'succeeded') {
-                        var message = (answer.error && answer.error.message) || CARD_UNAVAILABLE_MESSAGE;
-                        setText(error, message);
-                        show(error, true);
-                        settling = false;
-                        return;
-                    }
-                    packDispatch({ type: 'CARD_CONFIRMED', token: token });
-                    checkout(packCheckoutStepToken);
-                })
-                .catch(function (e) {
-                    setText(error, (e && e.message) || CARD_UNAVAILABLE_MESSAGE);
-                    show(error, true);
-                    settling = false;
-                });
-        }
-
-        function checkout(stepToken) {
-            var token = packState.token;
-            settling = true;
-
-            proxyPost(appQuery('/checkout'), {
-                CheckoutId: packQuote.checkoutId,
-                ProviderId: packQuote.providerId || '',
-                PaymentTransactionId: packState.paymentTransactionId || null,
-                UseSavedCard: packState.useSavedCard,
-                Items: packState.items.map(function (item) { return { AddOnId: item.addOnId }; })
-            })
-                .then(function (result) {
-                    if (!result || !result.results || result.results.length === 0) {
-                        report(CODE_PACK_CHECKOUT, refusalMessage(result, labels.packsUnavailable));
-                    }
-                    packDispatch({ type: 'CHECKOUT_RECEIVED', token: token, result: result });
-                    walkPending(stepToken);
-                })
-                .catch(function (error) {
-                    var message = (error && error.message) || labels.packsUnavailable;
-                    report(CODE_PACK_CHECKOUT, message);
-                    packDispatch({ type: 'CHECKOUT_FAILED', token: token, message: message });
-                    settling = false;
-                });
-        }
-
-        /**
-         * Each pack the bank wants authenticated, strictly one at a time and in order. One pack
-         * failing never stops the others - a basket is a basket, not a transaction.
-         *
-         * The authenticate and the complete are ONE chain on purpose: a teardown between them
-         * would leave a charge the customer authenticated with nothing recorded against it.
-         */
-        function walkPending(stepToken) {
-            if (packState.step === 'done') { settling = false; finishPacks(stepToken); return; }
-            if (packState.step !== 'authenticating') { settling = false; return; }
-
-            var token = packState.token;
-            var item = machines.currentPackCheckoutItem(packState);
-
-            if (!item || !item.clientSecret || !stripe) {
-                // Nothing to confirm with: this pack is lost, the rest of the basket is not.
-                packDispatch({
-                    type: 'ITEM_AUTH_FAILED',
-                    token: token,
-                    message: item && item.errorMessage ? item.errorMessage : CARD_UNAVAILABLE_MESSAGE
-                });
-                walkPending(stepToken);
-                return;
-            }
-
-            settling = true;
-
-            stripe.confirmCardPayment(item.clientSecret)
-                .then(function (answer) {
-                    if (answer.error) {
-                        packDispatch({
-                            type: 'ITEM_AUTH_FAILED',
-                            token: token,
-                            message: answer.error.message || CARD_UNAVAILABLE_MESSAGE
-                        });
-                        walkPending(stepToken);
-                        return null;
-                    }
-
-                    packDispatch({ type: 'ITEM_AUTHENTICATED', token: token });
-
-                    // The money has moved. Completing it on the server is owed even if the view
-                    // has gone in the meantime, so it is awaited here rather than pumped.
-                    var completingToken = packState.token;
-                    return proxyPost(appQuery('/checkout/complete'), {
-                        PaymentTransactionId: item.paymentTransactionId
-                    }).then(function (completed) {
-                        var merged = completed || {};
-                        if (!merged.addOnId) merged.addOnId = item.addOnId;
-                        packDispatch({ type: 'ITEM_COMPLETED', token: completingToken, result: merged });
-                        walkPending(stepToken);
-                    }).catch(function (error) {
-                        packDispatch({
-                            type: 'ITEM_COMPLETED',
-                            token: completingToken,
-                            result: {
-                                addOnId: item.addOnId,
-                                status: 'failed',
-                                errorMessage: (error && error.message) || labels.packsUnavailable
-                            }
-                        });
-                        walkPending(stepToken);
-                    });
-                })
-                .catch(function (error) {
-                    packDispatch({
-                        type: 'ITEM_AUTH_FAILED',
-                        token: token,
-                        message: (error && error.message) || CARD_UNAVAILABLE_MESSAGE
-                    });
-                    walkPending(stepToken);
-                });
-        }
-
-        function finishPacks(stepToken) {
-            var outcomes = toOutcomes(
-                packState.items, packState.results, packQuote, packNames, labels.packsUnavailable);
-
-            dispatch({ type: 'PACK_CHECKOUT_FINISHED', token: stepToken, packs: outcomes });
-        }
-
-        /** "Skip for now": every requested pack is reported as failed and the signup still finishes. */
-        function skipPacks(stepToken) {
-            var outcomes = [];
-            for (var i = 0; i < packState.items.length; i++) {
-                var addOnId = packState.items[i].addOnId;
-                outcomes.push({
-                    addOnId: addOnId,
-                    name: packNames[addOnId] || addOnId,
-                    status: 'failed',
-                    errorMessage: packState.error || labels.packsUnavailable
-                });
-            }
-            dispatch({ type: 'PACK_CHECKOUT_FINISHED', token: stepToken, packs: outcomes });
+            packRunner.start(packCheckouts.checkoutItems(state.packsToBuy));
         }
 
         // ----- Finishing --------------------------------------------------------------------------
@@ -1456,7 +1060,7 @@
                 case 'toggle-pack': {
                     var pack = trigger.closest('[data-ww-pack]');
                     if (!pack) break;
-                    selectedPacks = toggleSelection(
+                    selectedPacks = packCheckouts.toggleSelection(
                         packOrder, selectedPacks, pack.getAttribute('data-ww-pack'), packMax);
                     paintPacks();
                     break;
@@ -1475,16 +1079,15 @@
                     break;
 
                 case 'confirm-card':
-                    confirmCard();
+                    if (packRunner) packRunner.confirmCard();
                     break;
 
                 case 'retry-packs':
-                    packDispatch({ type: 'RETRY' });
-                    resumePackCheckout();
+                    if (packRunner) packRunner.retry();
                     break;
 
                 case 'skip-packs-checkout':
-                    skipPacks(state.token);
+                    if (packRunner) packRunner.skip();
                     break;
 
                 case 'retry':
@@ -1524,19 +1127,12 @@
             dispatch({ type: 'PAYMENT_COMPLETED', paymentTransactionId: paymentIds.transactionId });
         });
 
-        function resumePackCheckout() {
-            if (packState.step === 'quoting') { quote(state.token, packState.items); return; }
-            if (packState.step === 'collectingCard') { collectCard(state.token); return; }
-            if (packState.step === 'checkingOut') { checkout(state.token); return; }
-            if (packState.step === 'authenticating') { walkPending(state.token); }
-        }
-
         /**
          * Start Over throws the attempt away. It refuses while a money-moving call is in flight:
          * the charge would carry on with nothing left to record it against.
          */
         function startOver() {
-            if (settling) return;
+            if (settling || (packRunner && packRunner.isSettling())) return;
 
             attempt.registered = false;
             attempt.loggedIn = false;
@@ -1547,8 +1143,7 @@
             tokenGrant = null;
             paymentIds = { transactionId: null, externalId: null };
             selectedPacks = parseIdList(data.wwAddons);
-            packQuote = null;
-            packState = machines.initialPackCheckoutState({ appId: appId });
+            if (packRunner) { packRunner.destroy(); packRunner = null; }
             runs = {};
 
             paintTokenPlan();
@@ -1616,10 +1211,7 @@
              */
             destroy: function () {
                 detached = true;
-                if (stripeCard) {
-                    try { stripeCard.destroy(); } catch (e) { /* already gone */ }
-                    stripeCard = null;
-                }
+                if (packRunner) packRunner.destroy();
                 delete instances[cid];
             }
         };

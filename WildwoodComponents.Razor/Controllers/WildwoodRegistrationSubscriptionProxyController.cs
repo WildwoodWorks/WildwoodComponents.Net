@@ -265,6 +265,35 @@ public class WildwoodRegistrationSubscriptionProxyController : ControllerBase
     #region Plan change
 
     /// <summary>
+    /// POST /api/wildwood-regsub/tier-change/preview — what the change would cost today and what
+    /// it gains or loses, for the confirmation every layout shows before anyone is billed. Body:
+    /// <c>{ "NewAppTierId", "NewAppTierPricingId" }</c>.
+    /// </summary>
+    /// <remarks>
+    /// The caller's OWN subscription. The admin- and company-scoped previews stay on the host's
+    /// app-tier proxy, as the changes themselves do: the shipped proxy acts as the signed-in user
+    /// and has no admin scope. An unreadable preview is 200 with <c>success:false</c> and the
+    /// server's own words — a change that cannot be priced is a refusal to show the customer, not
+    /// a transport error.
+    /// </remarks>
+    [HttpPost("tier-change/preview")]
+    public async Task<IActionResult> PreviewTierChange(
+        [FromBody] TierChangePreviewProxyRequest? request, [FromQuery] string? appId)
+    {
+        if (!TryBegin(appId, out var resolvedAppId, out var failure)) return failure!;
+        if (request is null) return MissingBody();
+
+        var preview = await _appTiers.PreviewTierChangeAsync(
+            resolvedAppId, request.NewAppTierId ?? string.Empty, request.NewAppTierPricingId);
+
+        return Ok(preview ?? new TierChangePreviewModel
+        {
+            Success = false,
+            ErrorMessage = "The plan change could not be priced."
+        });
+    }
+
+    /// <summary>
     /// POST /api/wildwood-regsub/tier-change — the self-service plan change. Body keys are the
     /// ones WildwoodAPI binds: <c>NewAppTierId</c>, <c>NewAppTierPricingId</c>, <c>Immediate</c>,
     /// <c>PaymentTransactionId</c>, <c>SupportsPaymentAction</c>. Send

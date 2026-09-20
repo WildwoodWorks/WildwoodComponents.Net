@@ -188,6 +188,7 @@ builder.Services.AddControllers()
 | `POST /addons/subscribe` | session | `SubscribeToAddOnDetailedAsync` — body `{ "AddOnId", "PricingId", "PaymentTransactionId" }` |
 | `POST /addons/{subscriptionId}/cancel?immediate=false` | session | `CancelAddOnDetailedAsync` |
 | `POST /addons/{subscriptionId}/reactivate` | session | `ReactivateAddOnAsync` |
+| `POST /tier-change/preview` | session | `PreviewTierChangeAsync` — body `{ "NewAppTierId", "NewAppTierPricingId" }`. The caller's OWN subscription; the admin- and company-scoped previews stay on your app-tier proxy |
 | `POST /tier-change` | session | `ChangeTierAsync(options)` — body `{ "NewAppTierId", "NewAppTierPricingId", "Immediate", "PaymentTransactionId", "SupportsPaymentAction" }` |
 | `POST /tier-change/{pendingChangeId}/complete` | session | `CompleteTierChangeAsync` |
 | `GET  /catalog?currency=` | anonymous | `GetPublicCatalogAsync` — public data the pricing page already renders |
@@ -612,6 +613,322 @@ at `WildwoodComponents.Tests/Razor/js/regsub-machines.selftest.mjs`, which repla
 representative subset of the TypeScript suite. `RegSubMachineSelfTestRunnerTests` shells out to
 `node` to run it as part of `dotnet test`, and **skips** (rather than fails) when `node` is not on
 PATH.
+---
+
+## Registration & Subscription — manage
+
+`<vc:registration-subscription-manage />` is the Razor port of React's `ManageView` (and of the
+Blazor view of the same name): what a customer already pays for, and every way of changing it.
+
+```html
+@* Minimal: the signed-in user's own subscription, tabbed *@
+<vc:registration-subscription-manage />
+
+@* Everything on *@
+<vc:registration-subscription-manage
+    app-id="my-app"
+    layout="stacked"
+    sections="subscription,plans,addOns,usage"
+    show-status-above-tabs="true"
+    allow-pack-self-service="true"
+    allow-cancel="true"
+    show-add-ons="true"
+    currency="USD"
+    contact-url="/contact"
+    return-url="/account" />
+
+@* An admin managing one user's subscription *@
+<vc:registration-subscription-manage is-admin="true" user-id="@userId" />
+```
+
+Add the assets once, in your layout. **Order matters** — the three shared scripts come first, and
+`subscription-admin.js` is what wires the panels' own actions:
+
+```html
+<link rel="stylesheet" href="~/_content/WildwoodComponents.Razor/css/wildwood-razor-themes.css" />
+<link rel="stylesheet" href="~/_content/WildwoodComponents.Razor/css/regsub.css" />
+<link rel="stylesheet" href="~/_content/WildwoodComponents.Razor/css/subscription-admin.css" />
+<script src="~/_content/WildwoodComponents.Razor/js/regsub-machines.js"></script>
+<script src="~/_content/WildwoodComponents.Razor/js/regsub-packcheckout.js"></script>
+<script src="~/_content/WildwoodComponents.Razor/js/regsub-planchange.js"></script>
+<script src="~/_content/WildwoodComponents.Razor/js/subscription-admin.js"></script>
+<script src="~/_content/WildwoodComponents.Razor/js/regsub-manage.js"></script>
+```
+
+### It is a composition, not a new surface
+
+The six panels are the platform's own — `<vc:subscription-status-panel />`,
+`<vc:tier-plans-panel />`, `<vc:features-panel />`, `<vc:add-ons-panel />`,
+`<vc:usage-limits-panel />`, `<vc:overrides-panel />` — so a site swapping a hand-built plan page
+for this keeps its markup and its locators. The root carries the `ww-subscription-admin-component`
+class as well as `data-ww-view="manage"`, which is why every action `subscription-admin.js`
+already wires keeps working unchanged: cancelling, feature overrides, usage limits, and the pack
+rows' subscribe / cancel / reactivate, each still raising `ww-subscription-admin-changed` and
+`ww-entitlements-changed` with its own reason.
+
+What is new is the middle.
+
+### The plan change, and the parked 3-D Secure change
+
+```
+plan clicked -> preview -> confirmation (EVERY layout) -> change
+             -> [bank challenge on the card ON FILE -> complete the parked change] -> done
+```
+
+The change is posted to the shipped proxy with `SupportsPaymentAction: true` **for the signed-in
+user's own subscription only**, which tells the server it may PARK a change on a bank challenge
+rather than refusing it. The parked change comes back as `requiresAction` with a `clientSecret`
+and a `pendingChangeId` — with `success: false`, which is **not** a failure — and the driver
+confirms the charge with `stripe.confirmCardPayment(clientSecret)` against the card already on
+file, then finishes the change at `tier-change/{id}/complete`. A `processing` answer means the
+money is in and the server is still applying the change, so the completion is asked again (up to
+five times, then it says so) rather than being reported as a refusal.
+
+**Once the bank has been asked, the completion runs even if the component is torn down inside the
+page.** The alternative is a customer who paid a proration and never got the plan.
+
+Admin- and company-scoped changes are unchanged: they go to your app-tier proxy exactly as they
+always did and never send `SupportsPaymentAction`, because only the signed-in user's own session
+can answer a challenge and finish the parked change.
+
+### There is no plan-change payment form
+
+**Standing decision, and it is not an oversight.** React solves "this change needs a card" with a
+built-in payment modal; Razor does not collect a card for a plan change.
+
+So a confirmed change is **always posted**, whatever it costs. The money is settled server-side —
+by the admin bypass, or by the card already on file, which is how a priced upgrade is normally
+paid for. A preview saying `paymentRequired` means "this change costs money" (it is what draws the
+"Today's charge" line), **not** "this account has no card", and it never stops the change being
+attempted.
+
+Only the server can say there is nothing to charge, and only once the change has been put to it.
+When it refuses for that reason — recognised by the error **code** `PaymentMethodRequired`
+(Shared `AddOnCheckoutErrorCodes`, the JS `AddOnCheckoutErrorCode` union), never by reading the
+message — the view:
+
+- shows the server's own message plus "This change needs a payment method."
+  (replace it with `payment-required-text`), and does **not** offer Try Again — the same click
+  would ask the same question; and
+- raises **`ww-regsub-payment-required`**, whose `detail` carries everything a host needs to
+  collect one itself: `{ tierId, tierName, pricingId, pricingModelId, price, priceText, trialDays,
+  currency }`.
+
+Any other refusal — including today's uncoded `Payment is required to upgrade…` from the
+tier-change route — is an ordinary failure: the server's sentence, with Try Again.
+
+```js
+document.addEventListener('ww-regsub-payment-required', function (e) {
+    // Mount <vc:payment /> yourself with e.detail.pricingModelId / price / trialDays,
+    // then send the visitor back here once it succeeds.
+});
+```
+
+A change that needs the card **already on file** authenticated is a different thing, and that one
+the component finishes by itself — no card form is involved in a 3-D Secure confirmation.
+
+### Pack self-service
+
+`allow-pack-self-service="true"` puts **Add packs** on the packs panel and renders the picker: a
+server-rendered grid of the packs the account can still buy — everything on sale **minus** the
+ones it owns, the ones the plan bundles and the ones a registration token granted, decided by the
+same `AddOnRowRules` the rows above are decided by. Prices are formatted on the server. Choosing
+packs runs the same card-once checkout the signup uses (one quote, one card for a basket of any
+size, each pack the bank wants authenticated walked in order), and the page reloads afterwards.
+
+Cancel, reactivate and the "Included with your registration" rows stay where they are — on the
+packs panel, unchanged.
+
+The picker is the **signed-in user's own** action. An admin managing someone else gets no picker
+and no publishable key: the shipped proxy acts as the signed-in user and has no admin scope.
+
+### Parameters
+
+| Tag-helper attribute | Type | Default | Meaning |
+|---|---|---|---|
+| `app-id` | string | the configured `AppId` | Which app is being managed |
+| `layout` | `"tabs"` \| `"stacked"` | `"tabs"` | One tab bar, or every section down the page |
+| `sections` | string (comma-separated) | all | `subscription,plans,features,addOns,usage,overrides`, **in order**. A section left out is gone, not hidden |
+| `show-status-above-tabs` | bool | `false` | Lift the subscription card out of the section list |
+| `is-admin` | bool | `false` | Admin controls, and the overrides panel |
+| `user-id` | string | — | An admin managing ONE user's subscription |
+| `company-id` | string | — | An admin managing a COMPANY's (company tracking only) |
+| `allow-pack-self-service` | bool | `false` | "Add packs" and the picker |
+| `allow-cancel` | bool | `true` | Offer cancelling the plan and its packs |
+| `show-add-ons` | bool | `true` | Show the packs section at all |
+| `currency` | string | the catalog's own, else USD | Display override |
+| `labels` | `RegistrationSubscriptionLabels` | shipped copy | Copy overrides; unset strings keep the shipped word |
+| `contact-url` | string | — | Where a plan with no price sends the visitor |
+| `return-url` | string | — | Carried on the root; never navigated to |
+| `payment-required-text` | string | — | Replaces "This change needs a payment method." |
+| `proxy-base-url` | string | `/api/wildwood-app-tiers` | YOUR app-tier proxy, for the admin-scoped writes |
+| `reg-sub-proxy-url` | string | `/api/wildwood-regsub` | Where the shipped proxy is mounted |
+| `show-billing-toggle` | bool | `true` | The plans panel's monthly/annual toggle |
+| `component-id` | string | generated | A stable id, for two instances on one page |
+
+`layout` and `sections` are **strings** in the JS union's own spelling, for the same reason the
+other two views' are: a Razor tag-helper attribute whose property is not a string compiles as a C#
+expression, so an enum would force every host to write `layout="@ManageLayout.Stacked"`. An
+unknown section name is dropped — a typo costs the section, not the page.
+
+### Test hooks
+
+Root `data-ww-view="manage"`, classes `ww-regsub ww-regsub-manage ww-subscription-admin-component`.
+`data-ww-step` on the root is the plan change's step, spelled exactly as React spells it:
+`idle | previewing | confirm | collectingPayment | changing | authenticating | completing | done |
+failed`. Each section carries `data-ww-section="<section>"` (`addOns`, not `addons`) on its
+`<section>` in the stacked layout and on its tab button in the tabbed one; the pack picker is
+`data-ww-modal="packs"` and the confirmation `data-ww-modal="tier-change"`; pack cards and outcome
+rows carry `data-ww-pack="<addOnId>"`. Every panel's own locators are untouched.
+
+---
+
+## Registration & Subscription — the shell
+
+`<vc:registration-and-subscription view="pricing|signup|manage" />` is one tag helper over the
+three views — React's `RegistrationAndSubscriptionComponent`, which is a `view` switch and nothing
+else. It holds no state and reads nothing; it renders whichever view the attribute names and
+forwards the parameters that apply to it.
+
+```html
+@* A page that decides at run time *@
+<vc:registration-and-subscription view="@(User.Identity!.IsAuthenticated ? "manage" : "pricing")"
+                                  allow-pack-self-service="true"
+                                  include-json-ld="true" />
+```
+
+Writing `<vc:registration-subscription-pricing />`, `<vc:registration-subscription-signup />` or
+`<vc:registration-subscription-manage />` directly is equally correct and one fewer indirection.
+The shell earns its keep on the page that switches.
+
+Which parameter belongs to which view:
+
+| Parameters | Views |
+|---|---|
+| `app-id`, `currency`, `labels`, `contact-url`, `component-id` | all three |
+| `return-url` | signup, manage |
+| `reg-sub-proxy-url` | signup, manage |
+| `show-add-ons` | pricing (pack grid, default off), manage (packs section, default on) |
+| `pack-selection` | pricing (`none`/`multi`), signup (`none`/`choose`) |
+| `show-billing-toggle` | pricing, manage (its plans panel) |
+| `show-feature-comparison`, `show-limits` | pricing, signup |
+| `show-plans`, `offer-free-tier-choice`, `add-on-groups`, `default-billing`, `highlight-tier-id`, `include-json-ld`, `json-ld-url`, `select-url`, `unavailable-text` | pricing |
+| `pre-selected-tier-id`, `pre-selected-pricing-id`, `pre-selected-add-on-ids`, `registration-token`, `prefill-email`, `plan-selection`, `token-mode`, `require-billing-address`, `complete-url`, `already-signed-in-url`, `closed-text` | signup |
+| `layout`, `sections`, `show-status-above-tabs`, `is-admin`, `user-id`, `company-id`, `allow-pack-self-service`, `allow-cancel`, `payment-required-text`, `proxy-base-url` | manage |
+
+**An unknown `view` is a developer mistake and is reported as one**: in Development the page says
+which three names it takes, anywhere else it renders nothing at all, and either way a warning is
+logged. It does not guess — rendering the signup for an unknown word would offer a second account
+to a signed-in customer.
+
+---
+
+## Registration & Subscription — the whole set
+
+Three ViewComponents and a shell:
+
+| Tag helper | ViewComponent | What it is |
+|---|---|---|
+| `<vc:registration-subscription-pricing />` | `RegistrationSubscriptionPricingViewComponent` | What the app sells, at the price the server is quoting right now |
+| `<vc:registration-subscription-signup />` | `RegistrationSubscriptionSignupViewComponent` | An account, a plan, packs and a card — pay-first |
+| `<vc:registration-subscription-manage />` | `RegistrationSubscriptionManageViewComponent` | What a customer pays for, and every way of changing it |
+| `<vc:registration-and-subscription view="…" />` | `RegistrationAndSubscriptionViewComponent` | The `view` switch over the three |
+
+### Every event
+
+All of them are **bubbling `CustomEvent`s** on the component root — Razor takes no callbacks.
+
+| Event | `detail` | Raised by | Notes |
+|---|---|---|---|
+| `ww-regsub-select` | `{ tierId, pricingId, billing, addOnIds }` | pricing, signup | **Cancelable.** `preventDefault()` stops the navigation |
+| `ww-regsub-signup-complete` | the `SignupOutcome` | signup | **Cancelable.** Stops the `complete-url` navigation |
+| `ww-regsub-already-signed-in` | `{ appId }` | signup | **Cancelable.** Stops the `already-signed-in-url` navigation |
+| `ww-regsub-cancel` | `{}` | signup | The visitor backed out |
+| `ww-regsub-plan-changed` | `{ appId, tierId, pricingId }` | manage | A plan change landed. The page reloads shortly after |
+| `ww-regsub-payment-required` | `{ tierId, tierName, pricingId, pricingModelId, price, priceText, trialDays, currency }` | manage, subscription-admin | The change was **attempted** and the server refused it (`PaymentMethodRequired`) for want of a card this package does not collect |
+| `ww-regsub-packs-changed` | `{ appId, packs: [{ addOnId, name, status, trialEnd, errorMessage }] }` | manage | The pack picker finished, whatever the outcomes |
+| `ww-entitlements-changed` | `{ appId, reason }` | all | `signup` \| `tierChange` \| `addOn` \| `cancel` \| `reactivate` \| `manual` |
+| `ww-regsub-error` | `{ code, message }` | all | See the codes below |
+| `ww-regsub-step` | `{ step }` | signup, manage | Every step change, for analytics |
+
+Error codes: `catalog_unavailable`, `signup_failed`, `registration_token_rejected`,
+`pack_quote_failed`, `pack_card_failed`, `pack_checkout_failed`, `tier_preview_failed`,
+`tier_change_failed`, `tier_change_authentication_failed`, `tier_change_completion_failed`, or the
+server's own `errorCode` when it sent one (`pending_change_expired`,
+`pending_change_payment_failed`, `pending_change_superseded`, `pending_change_not_found`,
+`tier_change_already_in_progress`).
+
+### Scripts and styles, in load order
+
+```html
+<link rel="stylesheet" href="~/_content/WildwoodComponents.Razor/css/wildwood-razor-themes.css" />
+<link rel="stylesheet" href="~/_content/WildwoodComponents.Razor/css/regsub.css" />
+<link rel="stylesheet" href="~/_content/WildwoodComponents.Razor/css/subscription-admin.css" />  <!-- manage only -->
+
+<script src="~/_content/WildwoodComponents.Razor/js/regsub-machines.js"></script>     <!-- always first -->
+<script src="~/_content/WildwoodComponents.Razor/js/regsub-packcheckout.js"></script> <!-- signup, manage -->
+<script src="~/_content/WildwoodComponents.Razor/js/regsub-planchange.js"></script>   <!-- manage, subscription-admin -->
+<script src="~/_content/WildwoodComponents.Razor/js/payment.js"></script>             <!-- signup -->
+<script src="~/_content/WildwoodComponents.Razor/js/regsub-pricing.js"></script>      <!-- pricing -->
+<script src="~/_content/WildwoodComponents.Razor/js/regsub-signup.js"></script>       <!-- signup -->
+<script src="~/_content/WildwoodComponents.Razor/js/subscription-admin.js"></script>  <!-- manage -->
+<script src="~/_content/WildwoodComponents.Razor/js/regsub-manage.js"></script>       <!-- manage -->
+```
+
+`regsub-machines.js` holds the three state machines (signup, pack checkout, plan change), ported
+table-identical from `@wildwood/react-shared`. `regsub-packcheckout.js` and `regsub-planchange.js`
+are the two **shared drivers**: the signup and the manage view buy packs through the same one, and
+the manage view and `<vc:subscription-admin />` change a plan through the same one. That is not
+tidiness — it is the part that moves money, and a second copy is a second place for "may the
+server park this change" and "is a parked change ever completed" to drift. A source guard fails
+the build if either sequence reappears in a view's own script.
+
+**`<vc:subscription-admin />` now needs `regsub-machines.js` and `regsub-planchange.js` in the
+page.** Without them every other action on the panel still works and a plan click says so in the
+message bar rather than failing silently — but add them. In return the old admin panel gained the
+parked-3-D-Secure completion for free.
+
+### First-paint prices
+
+Every price on all three views was formatted on the server, off the catalog that request read.
+There is no fallback price, no remembered price and no "from" price, and a source guard greps the
+C#, the markup and the scripts for one. The single exception is the plan-change confirmation: its
+figures come from a live preview call, so the browser formats them — through the same
+`en-US`-fixed helper the server uses, so a server-rendered amount and a browser-rendered one read
+the same.
+
+### Differences from React and Blazor, and why
+
+| React / Blazor | Razor | Why |
+|---|---|---|
+| Callbacks (`onSelect`, `onSignupComplete`, `onPaymentRequired`, `onEntitlementsChanged`, …) | bubbling `CustomEvent`s plus URL parameters | A server-rendered stack cannot take a delegate |
+| Markup callbacks (`renderClosed`, `loadingFallback`, `errorFallback`, `describeAddOn`) | string parameters, or the built-in notice | A tag-helper attribute cannot carry markup |
+| A mutation re-renders in place | the page **reloads** | The panels are server-rendered, so the server is the one place that knows what they should say now. That is the established Razor refresh, and it is why every mutation waits ~1.2s before reloading so its message can be read |
+| Choosing a different **paid** plan in signup re-renders the card form | it **navigates** with `tier`/`pricing`/`addons` in the query | Every amount around the card form was formatted for one plan; re-pricing in the browser is the one thing this package does not do |
+| `PaymentModal` collects a card for a plan change | **no payment-collection modal**: the change is posted and the server charges the card on file; `ww-regsub-payment-required` and the server's message only when it refuses for want of one | Standing decision. The 3-D Secure confirmation of a card ALREADY ON FILE is still done here, because it needs no card form |
+| `initialCatalog` SSR snapshot | — | Razor gets it for free |
+
+---
+
+## Migrating from the three deprecated ViewComponents
+
+All three keep working and keep compiling; `[Obsolete]` is a **warning**, never an error.
+
+| Deprecated | Replacement | What changes |
+|---|---|---|
+| `<vc:pricing-display />` | `<vc:registration-subscription-pricing />` | Same price list, plus pack selection, a JSON-LD offers graph, the cross-stack labels and `ww-regsub-select`. Prices come off the public catalog rather than the tier list |
+| `<vc:app-tier />` | `<vc:registration-subscription-manage />` | The plan change is previewed, confirmed and — when the bank asks — authenticated and completed, instead of posting and hoping. Its one-time-charge behaviour is left as it is, exactly as the JS deprecation left React's |
+| `<vc:signup-with-subscription />` | `<vc:registration-subscription-signup />` | **The paid path works.** The old step 3 is a hand-rolled card form whose "Complete Payment" button ships disabled with no handler, so a paid plan dead-ends unless the host mounts a payment component itself. The new view is pay-first on `<vc:payment />` and has no card-number fields anywhere |
+
+Two things to do when you move:
+
+1. **Swap the scripts.** `pricing-display.js` / `apptier.js` / `signup-subscription.js` are
+   replaced by the load order above.
+2. **Swap the routes you wrote.** The new views use the shipped `/api/wildwood-regsub` proxy for
+   registration, login, the plan payment, subscribe, the disclaimer gate, the pack checkout and
+   the plan change — so the `/api/wildwood-auth/register`, `/api/wildwood-subscription/subscribe`
+   and pack routes you wrote for the old components can go. Your app-tier proxy is still needed
+   for the **admin- and company-scoped** writes the manage view's panels make.
 
 ---
 
@@ -634,9 +951,11 @@ and a zero-decimal currency always showed two. A tier or pack price is better ta
 currency over the page's.
 
 Client-side, the four scripts that must format an amount in the browser (`payment.js`,
-`payment-form.js`, `token-registration.js`, `subscription-admin.js`) each carry the same
+`payment-form.js`, `token-registration.js`, `regsub-planchange.js`) each carry the same
 `wwFormatMoney(amount, currency)` helper. The copies are deliberate — no shared script is loaded
-on every page — and must stay identical; a test asserts they are.
+on every page — and must stay identical; a test asserts they are. `subscription-admin.js` used to
+be the fourth; it formats no money at all now that the tier-change confirmation lives in
+`regsub-planchange.js`, and the copy went with the modal rather than being left behind unused.
 
 ---
 

@@ -121,7 +121,18 @@
     }
 
     @* Available Add-Ons *@
-    <h6 class="text-muted mb-3"><i class="bi bi-puzzle me-1"></i> Available Add-Ons</h6>
+    <div class="d-flex justify-content-between align-items-center mb-3 ww-addons-available-header">
+        <h6 class="text-muted mb-0"><i class="bi bi-puzzle me-1"></i> Available Add-Ons</h6>
+        @if (Model.ShowAddPacks)
+        {
+            @* The picker this opens belongs to the surface around the panel; the click is answered
+               by regsub-manage.js, which is why nothing here knows what a pack costs. *@
+            <button type="button" class="btn btn-outline-primary btn-sm ww-addons-add-packs"
+                    data-ww-action="add-packs">
+                <i class="bi bi-plus-circle me-1"></i> @labels.AddPacks
+            </button>
+        }
+    </div>
     @if (Model.Offers.Count == 0)
     {
         <div class="text-center text-muted p-3">

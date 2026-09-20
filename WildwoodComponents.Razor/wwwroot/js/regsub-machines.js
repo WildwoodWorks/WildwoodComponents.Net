@@ -2,15 +2,19 @@
  * WildwoodComponents.Razor - Registration & Subscription: the state machines
  *
  * Classic script, no modules, no build step, matching every other file in this folder. Load it
- * BEFORE regsub-signup.js, which is the only thing that drives it:
+ * BEFORE everything that drives it - the two shared drivers and the three views:
  *
  *   <script src="~/_content/WildwoodComponents.Razor/js/regsub-machines.js"></script>
+ *   <script src="~/_content/WildwoodComponents.Razor/js/regsub-packcheckout.js"></script>
+ *   <script src="~/_content/WildwoodComponents.Razor/js/regsub-planchange.js"></script>
  *   <script src="~/_content/WildwoodComponents.Razor/js/regsub-signup.js"></script>
+ *   <script src="~/_content/WildwoodComponents.Razor/js/regsub-manage.js"></script>
  *
  * This file is PURE. No DOM, no fetch, no timers, no English a visitor ever reads. It is the
  * line-by-line port of
  *   packages/wildwood-react-shared/src/registrationSubscription/signupMachine.ts
  *   packages/wildwood-react-shared/src/registrationSubscription/packCheckoutMachine.ts
+ *   packages/wildwood-react-shared/src/registrationSubscription/planChangeMachine.ts
  *   packages/wildwood-react-shared/src/registrationSubscription/stepTokens.ts
  * and of the C# twins in WildwoodComponents.Shared/RegistrationSubscription. The transition tables
  * are identical on purpose: the same signup that runs in React runs here, so a rule fixed in one
@@ -815,6 +819,255 @@
         }
     }
 
+    // ===== Plan-change machine ===================================================================
+    //
+    //   idle -> previewing -> confirm -> [collectingPayment] -> changing
+    //        -> [authenticating -> completing] -> done
+    //
+    // Every layout confirms: the preview says what the change costs today and what it gains or
+    // loses, and nobody is billed without seeing it. From there the change either applies straight
+    // away, or the processor wants the prorated charge authenticated (3-D Secure) - which is a
+    // "not yet", not a refusal: confirm the clientSecret, then complete the parked change by its
+    // pendingChangeId. `processing` means the money is in and the server is still applying the
+    // change, so completion is re-asked rather than reported as a failure.
+
+    /** How many times a `processing` answer is re-asked before the flow gives up and says so. */
+    var MAX_PLAN_CHANGE_COMPLETE_ATTEMPTS = 5;
+
+    function initialPlanChangeState(options) {
+        var source = options || {};
+        return {
+            step: 'idle',
+            token: null,
+            appId: source.appId || '',
+            tierId: source.tierId || '',
+            pricingId: source.pricingId,
+            immediate: source.immediate === undefined ? true : source.immediate,
+            preview: null,
+            paymentTransactionId: undefined,
+            clientSecret: undefined,
+            pendingChangeId: undefined,
+            result: null,
+            completeAttempts: 0,
+            error: null,
+            errorCode: undefined,
+            retryFrom: null
+        };
+    }
+
+    function planEnter(state, step) {
+        var startsWork = step === 'previewing'
+            || step === 'changing'
+            || step === 'authenticating'
+            || step === 'completing';
+
+        var next = copy(state);
+        next.step = step;
+        next.token = startsWork ? issueStepToken() : null;
+        next.error = null;
+        next.errorCode = undefined;
+        next.retryFrom = null;
+        return next;
+    }
+
+    function planFail(state, message, retryFrom, errorCode) {
+        var next = copy(state);
+        next.step = 'failed';
+        next.token = null;
+        next.error = message;
+        next.errorCode = errorCode;
+        next.retryFrom = retryFrom;
+        return next;
+    }
+
+    /** Whether the change has to be paid for up front rather than through the 3-D Secure path. */
+    function planNeedsPaymentFirst(state) {
+        if (state.paymentTransactionId) return false;
+        var preview = state.preview;
+        if (!preview) return false;
+        return preview.paymentRequired === true && preview.paymentBypassAllowed !== true;
+    }
+
+    /** Read the server's answer to a change or a completion and route on it. */
+    function applyChangeResult(state, result, from) {
+        var next = copy(state);
+        next.result = result;
+
+        if (result && result.success) {
+            next.step = 'done';
+            next.token = null;
+            next.error = null;
+            next.errorCode = undefined;
+            next.retryFrom = null;
+            return next;
+        }
+
+        // "Not yet", not "no": the processor accepted the change and is waiting on the customer.
+        if (result && result.requiresAction && result.clientSecret && result.pendingChangeId) {
+            next.clientSecret = result.clientSecret;
+            next.pendingChangeId = result.pendingChangeId;
+            next.completeAttempts = 0;
+            return planEnter(next, 'authenticating');
+        }
+
+        // The money is in; the server is still applying the change. Ask again shortly.
+        if (result && result.processing) {
+            var attempts = state.completeAttempts + 1;
+            next.completeAttempts = attempts;
+
+            if (attempts >= MAX_PLAN_CHANGE_COMPLETE_ATTEMPTS) {
+                return planFail(
+                    next,
+                    (result.errorMessage)
+                        || 'The payment went through but the plan change is still being applied. Refresh in a moment.',
+                    'completing',
+                    result.errorCode);
+            }
+
+            if (result.pendingChangeId) next.pendingChangeId = result.pendingChangeId;
+            return planEnter(next, 'completing');
+        }
+
+        return planFail(
+            next,
+            (result && result.errorMessage) || 'The plan change was refused.',
+            from,
+            result ? result.errorCode : undefined);
+    }
+
+    /**
+     * The plan-change reducer. Pure apart from issuing step tokens, and it returns the SAME state
+     * object for an event it ignores.
+     */
+    function planChangeTransition(state, event) {
+        var next;
+
+        switch (event.type) {
+            case 'PREVIEW_REQUESTED':
+                // Re-previewing while one is in flight supersedes it (the customer flipping the
+                // billing frequency, or a doubled click); the older answer is dropped as stale.
+                if (state.step !== 'idle'
+                    && state.step !== 'failed'
+                    && state.step !== 'done'
+                    && state.step !== 'confirm'
+                    && state.step !== 'previewing') {
+                    return state;
+                }
+
+                next = copy(state);
+                next.appId = event.appId;
+                next.tierId = event.tierId;
+                next.pricingId = event.pricingId;
+                next.immediate = event.immediate === undefined ? state.immediate : event.immediate;
+                next.preview = null;
+                next.result = null;
+                next.completeAttempts = 0;
+                next.clientSecret = undefined;
+                next.pendingChangeId = undefined;
+                return planEnter(next, 'previewing');
+
+            case 'PREVIEW_RECEIVED':
+                if (state.step !== 'previewing' || !isCurrentStep(state.token, event.token)) return state;
+
+                if (!event.preview || !event.preview.success) {
+                    next = copy(state);
+                    next.preview = event.preview || null;
+                    return planFail(
+                        next,
+                        (event.preview && event.preview.errorMessage) || 'The plan change could not be priced.',
+                        'previewing');
+                }
+
+                next = copy(state);
+                next.preview = event.preview;
+                return planEnter(next, 'confirm');
+
+            case 'PREVIEW_FAILED':
+                if (state.step !== 'previewing' || !isCurrentStep(state.token, event.token)) return state;
+                return planFail(state, event.message, 'previewing');
+
+            case 'CONFIRMED': {
+                if (state.step !== 'confirm') return state;
+
+                var collect = event.collectPayment === undefined
+                    ? planNeedsPaymentFirst(state)
+                    : event.collectPayment;
+
+                var confirmed = state;
+                if (event.immediate !== undefined) {
+                    confirmed = copy(state);
+                    confirmed.immediate = event.immediate;
+                }
+
+                return planEnter(confirmed, collect ? 'collectingPayment' : 'changing');
+            }
+
+            case 'PAYMENT_COMPLETED':
+                if (state.step !== 'collectingPayment') return state;
+                next = copy(state);
+                next.paymentTransactionId = event.paymentTransactionId;
+                return planEnter(next, 'changing');
+
+            case 'PAYMENT_FAILED':
+                if (state.step !== 'collectingPayment') return state;
+                return planFail(state, event.message, 'collectingPayment');
+
+            case 'PAYMENT_CANCELLED':
+                if (state.step !== 'collectingPayment') return state;
+                return planEnter(state, 'confirm');
+
+            case 'CHANGE_RESULT':
+                if (state.step !== 'changing' || !isCurrentStep(state.token, event.token)) return state;
+                next = copy(state);
+                next.token = null;
+                return applyChangeResult(next, event.result, 'changing');
+
+            case 'CHANGE_FAILED':
+                if (state.step !== 'changing' || !isCurrentStep(state.token, event.token)) return state;
+                return planFail(state, event.message, 'changing');
+
+            case 'AUTHENTICATED':
+                if (state.step !== 'authenticating' || !isCurrentStep(state.token, event.token)) return state;
+                next = copy(state);
+                next.completeAttempts = 0;
+                return planEnter(next, 'completing');
+
+            case 'AUTH_FAILED':
+                if (state.step !== 'authenticating' || !isCurrentStep(state.token, event.token)) return state;
+                return planFail(state, event.message, 'authenticating');
+
+            case 'COMPLETE_RESULT':
+                if (state.step !== 'completing' || !isCurrentStep(state.token, event.token)) return state;
+                next = copy(state);
+                next.token = null;
+                return applyChangeResult(next, event.result, 'completing');
+
+            case 'COMPLETE_FAILED':
+                if (state.step !== 'completing' || !isCurrentStep(state.token, event.token)) return state;
+                return planFail(state, event.message, 'completing');
+
+            case 'RETRY':
+                if (state.step !== 'failed' || !state.retryFrom) return state;
+                // The completion budget belongs to one automatic run of retries, not to the
+                // customer: a manual "Try Again" that inherited an exhausted count would give up
+                // on its first answer.
+                next = copy(state);
+                next.completeAttempts = 0;
+                return planEnter(next, state.retryFrom);
+
+            case 'RESET':
+                return initialPlanChangeState({
+                    appId: state.appId,
+                    tierId: state.tierId,
+                    pricingId: state.pricingId,
+                    immediate: state.immediate
+                });
+
+            default:
+                return state;
+        }
+    }
+
     // ===== Exports ===============================================================================
 
     var api = {
@@ -829,7 +1082,11 @@
 
         initialPackCheckoutState: initialPackCheckoutState,
         packCheckoutTransition: packCheckoutTransition,
-        currentPackCheckoutItem: currentPackCheckoutItem
+        currentPackCheckoutItem: currentPackCheckoutItem,
+
+        MAX_PLAN_CHANGE_COMPLETE_ATTEMPTS: MAX_PLAN_CHANGE_COMPLETE_ATTEMPTS,
+        initialPlanChangeState: initialPlanChangeState,
+        planChangeTransition: planChangeTransition
     };
 
     if (typeof window !== 'undefined') {

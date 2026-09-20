@@ -339,7 +339,13 @@ public class RegistrationSubscriptionSignupViewComponent : ViewComponent
         }
     }
 
-    private static PaymentProviderDto? PickKeyedProvider(PlatformFilteredProvidersDto providers)
+    /// <summary>
+    /// The app's payment provider with a publishable key: its default, else one marked default,
+    /// else the first enabled one that has a key. <c>internal</c> rather than private because the
+    /// manage view resolves the SAME key for its 3-D Secure confirmation and its pack card, and a
+    /// second copy of the rule is a second answer to "which Stripe account is this?".
+    /// </summary>
+    internal static PaymentProviderDto? PickKeyedProvider(PlatformFilteredProvidersDto providers)
     {
         var fallbackDefault = providers.DefaultProvider;
         if (fallbackDefault is not null

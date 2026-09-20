@@ -10,6 +10,17 @@ namespace WildwoodComponents.Razor.Components.AppTier;
 /// Client-side JavaScript handles state transitions, billing cycle toggles, and AJAX calls.
 /// Razor Pages equivalent of WildwoodComponents.Blazor AppTierComponent.
 /// </summary>
+/// <remarks>
+/// <b>Superseded by <c>&lt;vc:registration-subscription-manage /&gt;</c></b>
+/// (<see cref="WildwoodComponents.Razor.Components.RegistrationSubscription.RegistrationSubscriptionManageViewComponent"/>),
+/// which changes a plan through the shared driver - so a preview is confirmed before anyone is
+/// billed, and a prorated charge the bank wants to see is authenticated and the parked change
+/// completed instead of refused. Deprecated rather than removed: its one-time-charge behaviour is
+/// left exactly as it is, as the JS deprecation left React's.
+/// </remarks>
+[Obsolete("Use <vc:registration-subscription-manage /> (RegistrationSubscriptionManageViewComponent) "
+    + "for managing a subscription, or <vc:registration-subscription-pricing /> for a price list. "
+    + "This component keeps working unchanged.", false)]
 public class AppTierViewComponent : ViewComponent
 {
     private readonly IWildwoodAppTierService _appTierService;

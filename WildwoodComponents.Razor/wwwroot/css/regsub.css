@@ -877,3 +877,115 @@
     font-size: 0.9375rem;
     color: var(--ww-text-primary, #212529);
 }
+
+/* ========================================
+   HIDING
+   ======================================== */
+
+/* A class that sets `display` outranks the browser's own [hidden] rule, and this surface hides
+   nearly everything with the `hidden` attribute - steps, the card form, the pack picker. One rule
+   settles it for all of them, so a new flex container can never become a panel that will not go
+   away. */
+.ww-regsub [hidden],
+.ww-regsub[hidden] {
+    display: none !important;
+}
+
+/* ========================================
+   MANAGE VIEW
+   ========================================
+
+   The panels are the platform's own and keep subscription-admin.css - load it too. What is here is
+   only what the manage view adds around them: the section headings of the stacked layout, the
+   plan-change notice, and the pack picker. */
+
+.ww-regsub-manage {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.ww-regsub-manage-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.ww-regsub-manage-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ww-regsub-manage-section-title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+/* React's own active-tab class, alongside whatever the host's CSS framework marks the tab with. */
+.ww-sub-admin-tab-active {
+    font-weight: 600;
+}
+
+/* ---------- The plan-change notice ---------- */
+
+.ww-regsub-plan-change-notice {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.ww-regsub-plan-change-status {
+    margin: 0;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-regsub-plan-change-alert {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.ww-regsub-plan-change-title {
+    color: var(--ww-danger, #dc3545);
+}
+
+.ww-regsub-plan-change-message {
+    flex: 1 1 12rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ---------- The pack picker ---------- */
+
+/* Wider than the confirmation modal: it holds a grid of pack cards. */
+.ww-regsub-pack-picker {
+    max-width: 44rem;
+}
+
+.ww-regsub-pack-picker .ww-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.ww-regsub-pack-picker .ww-modal-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.ww-regsub-pack-status {
+    margin: 0;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-regsub-pack-retry {
+    display: flex;
+    gap: 0.5rem;
+    margin-right: auto;
+}

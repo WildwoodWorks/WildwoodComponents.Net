@@ -198,6 +198,13 @@ public class AddOnsPanelViewModel
     public bool AllowReactivate { get; set; } = true;
 
     /// <summary>
+    /// Whether the panel offers "Add packs". The BUTTON is here; the picker it opens is the
+    /// caller's — <c>&lt;vc:registration-subscription-manage /&gt;</c> renders one and
+    /// <c>regsub-manage.js</c> answers the click, which is why this is off by default.
+    /// </summary>
+    public bool ShowAddPacks { get; set; }
+
+    /// <summary>
     /// The packs the account still holds — the "Active Add-Ons" list. A Cancelled or Expired row
     /// grants nothing, so it is not listed and its pack goes back on offer.
     /// </summary>

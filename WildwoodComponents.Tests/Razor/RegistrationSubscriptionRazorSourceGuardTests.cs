@@ -59,15 +59,27 @@ public class RegistrationSubscriptionRazorSourceGuardTests
             Path.Combine("Components", "RegistrationSubscription", "RegistrationSubscriptionPricingDecisions.cs"),
             Path.Combine("Components", "RegistrationSubscription", "RegistrationSubscriptionSignupViewComponent.cs"),
             Path.Combine("Components", "RegistrationSubscription", "RegistrationSubscriptionSignupDecisions.cs"),
+            Path.Combine("Components", "RegistrationSubscription", "RegistrationSubscriptionManageViewComponent.cs"),
+            Path.Combine("Components", "RegistrationSubscription", "RegistrationSubscriptionManageDecisions.cs"),
+            Path.Combine("Components", "RegistrationSubscription", "RegistrationAndSubscriptionViewComponent.cs"),
+            Path.Combine("Components", "RegistrationSubscription", "RegistrationAndSubscriptionShell.cs"),
             Path.Combine("Models", "RegistrationSubscriptionPricingModels.cs"),
             Path.Combine("Models", "RegistrationSubscriptionSignupModels.cs"),
+            Path.Combine("Models", "RegistrationSubscriptionManageModels.cs"),
+            Path.Combine("Models", "RegistrationAndSubscriptionModels.cs"),
             Path.Combine("Views", "Shared", "Components", "RegistrationSubscriptionPricing", "Default.cshtml"),
             Path.Combine("Views", "Shared", "Components", "RegistrationSubscriptionSignup", "Default.cshtml"),
+            Path.Combine("Views", "Shared", "Components", "RegistrationSubscriptionManage", "Default.cshtml"),
+            Path.Combine("Views", "Shared", "Components", "RegistrationAndSubscription", "Default.cshtml"),
             Path.Combine("Views", "Shared", "_RegSubPackCardBody.cshtml"),
             Path.Combine("Views", "Shared", "_RegSubPlanGrid.cshtml"),
+            Path.Combine("Views", "Shared", "_RegSubManageSection.cshtml"),
             Path.Combine("wwwroot", "js", "regsub-pricing.js"),
             Path.Combine("wwwroot", "js", "regsub-machines.js"),
-            Path.Combine("wwwroot", "js", "regsub-signup.js")
+            Path.Combine("wwwroot", "js", "regsub-signup.js"),
+            Path.Combine("wwwroot", "js", "regsub-packcheckout.js"),
+            Path.Combine("wwwroot", "js", "regsub-planchange.js"),
+            Path.Combine("wwwroot", "js", "regsub-manage.js")
         ];
     }
 
@@ -78,7 +90,10 @@ public class RegistrationSubscriptionRazorSourceGuardTests
         [
             Path.Combine("wwwroot", "js", "regsub-pricing.js"),
             Path.Combine("wwwroot", "js", "regsub-machines.js"),
-            Path.Combine("wwwroot", "js", "regsub-signup.js")
+            Path.Combine("wwwroot", "js", "regsub-signup.js"),
+            Path.Combine("wwwroot", "js", "regsub-packcheckout.js"),
+            Path.Combine("wwwroot", "js", "regsub-planchange.js"),
+            Path.Combine("wwwroot", "js", "regsub-manage.js")
         ];
     }
 
@@ -89,8 +104,11 @@ public class RegistrationSubscriptionRazorSourceGuardTests
         [
             Path.Combine("Views", "Shared", "Components", "RegistrationSubscriptionPricing", "Default.cshtml"),
             Path.Combine("Views", "Shared", "Components", "RegistrationSubscriptionSignup", "Default.cshtml"),
+            Path.Combine("Views", "Shared", "Components", "RegistrationSubscriptionManage", "Default.cshtml"),
+            Path.Combine("Views", "Shared", "Components", "RegistrationAndSubscription", "Default.cshtml"),
             Path.Combine("Views", "Shared", "_RegSubPackCardBody.cshtml"),
-            Path.Combine("Views", "Shared", "_RegSubPlanGrid.cshtml")
+            Path.Combine("Views", "Shared", "_RegSubPlanGrid.cshtml"),
+            Path.Combine("Views", "Shared", "_RegSubManageSection.cshtml")
         ];
     }
 
@@ -200,6 +218,56 @@ public class RegistrationSubscriptionRazorSourceGuardTests
                     !tag.Contains(smell, StringComparison.OrdinalIgnoreCase),
                     $"{relativePath} has an <input> naming '{smell}': cards are Stripe Elements, never fields of ours.\n{tag}");
             }
+        }
+    }
+
+    /// <summary>
+    /// The two surfaces that change a plan run the SAME driver.
+    /// </summary>
+    /// <remarks>
+    /// <c>&lt;vc:registration-subscription-manage /&gt;</c> and the older
+    /// <c>&lt;vc:subscription-admin /&gt;</c> both change a plan, and the part that could drift is
+    /// the part that moves money: whether <c>SupportsPaymentAction</c> is sent, whether a 3-D
+    /// Secure challenge is put to the customer, and whether the parked change is ever completed.
+    /// So neither script may carry a copy — both call <c>regsub-planchange.js</c>, and the manage
+    /// root's <c>data-ww-view="manage"</c> is what stops one root getting two drivers.
+    /// </remarks>
+    [Theory]
+    [InlineData("regsub-manage.js")]
+    [InlineData("subscription-admin.js")]
+    public void Both_plan_change_surfaces_call_the_one_shared_driver(string script)
+    {
+        var source = File.ReadAllText(Path.Combine(PackageRoot(), "wwwroot", "js", script));
+
+        Assert.Contains("wwRegSubPlanChange", source);
+
+        // The sequence itself belongs to the driver. A copy would start with these.
+        foreach (var owned in new[] { "confirmCardPayment", "planChangeTransition", "SupportsPaymentAction" })
+        {
+            Assert.True(
+                !source.Contains(owned, StringComparison.Ordinal),
+                $"{script} carries '{owned}': the plan-change sequence lives in regsub-planchange.js only.");
+        }
+    }
+
+    /// <summary>
+    /// The two surfaces that buy packs run the SAME driver, for the same reason: one quote, one
+    /// card for the whole basket, and an item the bank has authenticated is always completed.
+    /// </summary>
+    [Theory]
+    [InlineData("regsub-manage.js")]
+    [InlineData("regsub-signup.js")]
+    public void Both_pack_buying_surfaces_call_the_one_shared_driver(string script)
+    {
+        var source = File.ReadAllText(Path.Combine(PackageRoot(), "wwwroot", "js", script));
+
+        Assert.Contains("wwRegSubPackCheckout", source);
+
+        foreach (var owned in new[] { "confirmCardSetup", "packCheckoutTransition", "checkout/quote" })
+        {
+            Assert.True(
+                !source.Contains(owned, StringComparison.Ordinal),
+                $"{script} carries '{owned}': the pack checkout lives in regsub-packcheckout.js only.");
         }
     }
 

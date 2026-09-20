@@ -235,3 +235,20 @@ public class SignupRegistrationModeModel
     /// </summary>
     public string Source { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// The body of <c>POST /api/wildwood-regsub/tier-change/preview</c>: which plan the caller is
+/// asking to be priced on.
+/// </summary>
+/// <remarks>
+/// The PascalCase names WildwoodAPI itself binds, so the browser posts one shape whether the
+/// preview goes through this proxy or the host's app-tier one.
+/// </remarks>
+public class TierChangePreviewProxyRequest
+{
+    /// <summary>The plan being moved to.</summary>
+    public string? NewAppTierId { get; set; }
+
+    /// <summary>Its pricing option, when the plan sells more than one.</summary>
+    public string? NewAppTierPricingId { get; set; }
+}

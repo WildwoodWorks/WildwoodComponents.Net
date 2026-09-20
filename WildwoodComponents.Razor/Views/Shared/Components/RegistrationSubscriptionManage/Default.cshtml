@@ -1,0 +1,217 @@
+@using WildwoodComponents.Razor.Models
+@model RegistrationSubscriptionManageViewModel
+
+@*
+    The manage view: what a customer already pays for, and every way of changing it.
+
+    It is a COMPOSITION. The six panels are the platform's own, so a site swapping a hand-built
+    plan page for this keeps its markup and its locators - and because the root carries the
+    .ww-subscription-admin-component class and the data attributes that script reads, every panel
+    action subscription-admin.js already wires (cancel, feature overrides, usage limits, the pack
+    rows) keeps working with no second copy of any of it.
+
+    data-ww-view="manage" does two things: it is the hook an end-to-end suite locates the view by,
+    and it is what tells subscription-admin.js to leave the PLAN CHANGE alone here - regsub-manage.js
+    attaches the shared driver instead, so one root never gets two drivers.
+
+    Nothing here formats money except through the server: the pack cards' prices were formatted by
+    the view model, and the only amounts the browser writes are the live preview's, through the one
+    shared formatter.
+*@
+@{
+    var cid = Model.ComponentId;
+    var labels = Model.Labels;
+}
+
+<div id="ww-regsub-manage-@cid"
+     class="ww-regsub ww-regsub-manage ww-subscription-admin-component"
+     data-ww-view="manage"
+     data-ww-step="idle"
+     data-ww-layout="@Model.LayoutCode"
+     data-component-id="@cid"
+     data-app-id="@Model.AppId"
+     data-ww-app-id="@Model.AppId"
+     data-proxy-url="@Model.ProxyBaseUrl"
+     data-ww-proxy="@Model.RegSubProxyUrl"
+     data-company-id="@(Model.CompanyId ?? "")"
+     data-user-id="@(Model.UserId ?? "")"
+     data-is-admin="@Model.IsAdmin.ToString().ToLowerInvariant()"
+     data-is-company-mode="@Model.IsCompanyMode.ToString().ToLowerInvariant()"
+     data-currency="@Model.Currency"
+     data-publishable-key="@Model.PublishableKey"
+     data-ww-publishable-key="@Model.PublishableKey"
+     data-ww-payment-provider="@Model.PaymentProviderId"
+     data-ww-allow-packs="@Model.ShowPackPicker.ToString().ToLowerInvariant()"
+     data-ww-pack-order="@Model.PackOrderAttribute"
+     data-ww-pack-max="@Model.MaxPackSelection"
+     data-ww-return-url="@Model.ReturnUrl"
+     data-ww-pack-names="@Model.PackNamesJson"
+     data-ww-labels="@Model.LabelsJson">
+
+@if (!Model.HasApp)
+{
+    <div class="ww-alert ww-alert-warning" role="alert">@Model.AppIdRequiredMessage</div>
+}
+else
+{
+    @* The panels' own message bar and loading overlay, which subscription-admin.js writes into. *@
+    <div class="ww-sub-admin-message alert" style="display:none;" id="ww-sub-admin-msg-@cid"></div>
+    <div class="ww-sub-admin-loading" style="display:none;" id="ww-sub-admin-loading-@cid">
+        <div class="d-flex align-items-center justify-content-center p-4">
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            <span class="ww-sub-admin-loading-msg"></span>
+        </div>
+    </div>
+
+    @* ── The plan-change notice ─────────────────────────────────────────────
+       React's PlanChangeNotice: what the bank is being asked, what the server is still applying,
+       and - if it stops - why, with a Try Again where one can honestly be offered. A change that
+       needs a card this package does not collect is NOT retryable: the same click would ask the
+       same question. *@
+    <div class="ww-regsub-plan-change-notice" data-ww-plan-change-notice hidden>
+        <p class="ww-regsub-plan-change-status" role="status" data-ww-plan-change-status hidden></p>
+        <div class="ww-alert ww-alert-danger ww-regsub-plan-change-alert" role="alert"
+             data-ww-plan-change-error hidden>
+            <strong class="ww-regsub-plan-change-title">@labels.PlanChangeFailed</strong>
+            <span class="ww-regsub-plan-change-message" data-ww-plan-change-message></span>
+            <button type="button" class="ww-btn ww-btn-outline ww-btn-sm"
+                    data-ww-action="retry-change" hidden>@labels.TryAgain</button>
+            <button type="button" class="ww-alert-dismiss" aria-label="@labels.Cancel"
+                    data-ww-action="dismiss-change">&times;</button>
+        </div>
+    </div>
+
+    @if (Model.StatusAbove)
+    {
+        <div class="ww-sub-status-card ww-sub-admin-status-above mb-3">
+            @await Component.InvokeAsync("SubscriptionStatusPanel", new
+            {
+                componentId = cid + "-status",
+                appId = Model.AppId,
+                proxyBaseUrl = Model.ProxyBaseUrl,
+                isAdmin = Model.IsAdmin,
+                subscription = Model.Subscription
+            })
+        </div>
+    }
+
+    @if (Model.Layout == ManageLayout.Tabs)
+    {
+        <ul class="nav nav-tabs ww-sub-admin-tabs mb-3" role="tablist">
+            @for (var i = 0; i < Model.BodySections.Count; i++)
+            {
+                var section = Model.BodySections[i];
+                var active = i == 0;
+
+                <li class="nav-item" role="presentation">
+                    <button type="button" role="tab"
+                            class="nav-link ww-sub-admin-tab @(active ? "active ww-sub-admin-tab-active" : "")"
+                            data-tab="@Model.SectionName(section)"
+                            data-ww-section="@Model.SectionName(section)"
+                            data-ww-action="select-section">
+                        @Model.SectionTitle(section)
+                        @if (section == ManageSection.Overrides && Model.OverrideCount > 0)
+                        {
+                            <span class="badge bg-warning text-dark ms-1 ww-override-count">@Model.OverrideCount</span>
+                        }
+                    </button>
+                </li>
+            }
+        </ul>
+
+        <div class="ww-sub-admin-panels">
+            @for (var i = 0; i < Model.BodySections.Count; i++)
+            {
+                var section = Model.BodySections[i];
+
+                <div class="ww-sub-admin-panel @(i == 0 ? "" : "d-none")"
+                     data-panel="@Model.SectionName(section)">
+                    @await Html.PartialAsync("_RegSubManageSection", new RegSubManageSectionViewModel(Model, section))
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="ww-regsub-manage-sections">
+            @foreach (var section in Model.BodySections)
+            {
+                <section class="ww-regsub-manage-section" data-ww-section="@Model.SectionName(section)">
+                    <h3 class="ww-regsub-manage-section-title">@Model.SectionTitle(section)</h3>
+                    @await Html.PartialAsync("_RegSubManageSection", new RegSubManageSectionViewModel(Model, section))
+                </section>
+            }
+        </div>
+    }
+
+    @if (Model.ShowPackPicker)
+    {
+        @* ── The pack picker ────────────────────────────────────────────────
+           Server-rendered: every price on a card was formatted here, off the same add-on list the
+           rows above were decided from, and packs the account already holds or the plan bundles
+           are not on it. The checkout itself is the shared driver - one quote, one card for a
+           basket of any size, and each pack the bank wants authenticated walked in order. *@
+        <div class="ww-modal-overlay ww-regsub-pack-picker-overlay" data-ww-modal="packs" data-ww-pack-picker hidden>
+            <div class="ww-modal ww-regsub-pack-picker">
+                <div class="ww-modal-header">
+                    <h3 class="ww-modal-title">@labels.AddPacksTitle</h3>
+                    <button type="button" class="ww-modal-close" aria-label="@labels.Cancel"
+                            data-ww-action="close-packs">&times;</button>
+                </div>
+
+                <div class="ww-modal-body">
+                    <div class="ww-pack-grid" data-ww-pack-grid>
+                        @foreach (var addOn in Model.PickerPacks)
+                        {
+                            <button type="button"
+                                    class="ww-pack-card"
+                                    aria-pressed="false"
+                                    data-ww-pack="@addOn.Id"
+                                    data-ww-action="toggle-pack">
+                                @await Html.PartialAsync("_RegSubPackCardBody", Model.PackCard(addOn))
+                            </button>
+                        }
+                    </div>
+
+                    @* What is being bought, and the card it is being bought with. NO money total:
+                       the quote's due-today amount is only known once the quote comes back, and
+                       formatting it would be the browser stating a price. *@
+                    <div class="ww-payment-summary" data-ww-pack-summary hidden>
+                        <div class="ww-payment-summary-header"><h4>@labels.OrderSummary</h4></div>
+                        <div data-ww-pack-summary-lines></div>
+                        <div class="ww-payment-summary-card" data-ww-pack-saved-card hidden></div>
+                    </div>
+
+                    @* The card, entered ONCE for a basket of any size. A SetupIntent, not a charge:
+                       Stripe Elements mounts here and nothing in this package sees a card number. *@
+                    <div class="ww-pack-card-form" data-ww-pack-card-form hidden>
+                        <h4>@labels.CardDetails</h4>
+                        <div id="ww-regsub-manage-card-@cid" class="ww-stripe-card-element" data-ww-pack-card-host></div>
+                        <div class="ww-alert ww-alert-danger" role="alert" data-ww-pack-card-error hidden></div>
+                        <button type="button" class="ww-btn ww-btn-primary ww-btn-block"
+                                data-ww-action="confirm-card">@labels.SaveCard</button>
+                    </div>
+
+                    <p class="ww-regsub-pack-status" role="status" data-ww-pack-status></p>
+                    <div class="ww-alert ww-alert-danger" role="alert" data-ww-pack-error hidden></div>
+                    <ul class="ww-pack-outcome-list" data-ww-pack-outcomes hidden></ul>
+                </div>
+
+                <div class="ww-modal-footer">
+                    <div class="ww-regsub-pack-retry" data-ww-pack-actions hidden>
+                        <button type="button" class="ww-btn ww-btn-primary"
+                                data-ww-action="retry-packs">@labels.TryAgain</button>
+                        <button type="button" class="ww-btn ww-btn-link"
+                                data-ww-action="skip-packs">@labels.SkipForNow</button>
+                    </div>
+                    <button type="button" class="ww-btn ww-btn-primary" disabled
+                            data-ww-pack-continue
+                            data-ww-action="continue-packs">@Model.ContinuePacksInitialLabel</button>
+                    <button type="button" class="ww-btn ww-btn-outline"
+                            data-ww-action="close-packs">@labels.Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+}
+</div>

@@ -22,9 +22,9 @@ Solution file: `WildwoodComponents.Net.slnx`
 Counts, with the rule that produces them so they stay reproducible (2026-09-19): **Blazor = 53**
 (`.razor` files under `WildwoodComponents.Blazor/Components/`, 56, minus the three `*Demo.razor`
 host samples — the Registration & Subscription shell, its three views and their `Parts/` are
-included). **Razor = 32** (`*ViewComponent.cs` under `WildwoodComponents.Razor/Components/`; the
-Registration & Subscription pricing and signup ViewComponents are the newest).
-**Test suite = 26** unique `@page` routes.
+included). **Razor = 34** (`*ViewComponent.cs` under `WildwoodComponents.Razor/Components/`; the
+newest are the Registration & Subscription pricing, signup and manage ViewComponents and the
+`RegistrationAndSubscription` shell). **Test suite = 26** unique `@page` routes.
 
 ### Dependency Graph
 
@@ -130,14 +130,17 @@ WildwoodComponents.Razor/
         AIChat/              # AIChatViewComponent
         AIFlow/              # AIFlowViewComponent
         AIProxy/             # AIProxyViewComponent
-        AppTier/             # AppTierViewComponent, PricingDisplayViewComponent
+        AppTier/             # AppTierViewComponent ([Obsolete] -> RegistrationSubscriptionManage),
+                             #   PricingDisplayViewComponent ([Obsolete] -> RegistrationSubscriptionPricing)
         Authentication/      # AuthenticationViewComponent
         Disclaimer/          # DisclaimerViewComponent
         Messaging/           # SecureMessagingViewComponent
         Notification/        # NotificationViewComponent, NotificationToastViewComponent
         Payment/             # PaymentViewComponent, PaymentFormViewComponent
-        Registration/        # TokenRegistrationViewComponent, SignupWithSubscriptionViewComponent
-        RegistrationSubscription/  # RegistrationSubscriptionPricing + Signup ViewComponents (+ pure decisions)
+        Registration/        # TokenRegistrationViewComponent,
+                             #   SignupWithSubscriptionViewComponent ([Obsolete] -> RegistrationSubscriptionSignup)
+        RegistrationSubscription/  # RegistrationSubscriptionPricing + Signup + Manage ViewComponents,
+                             #   the RegistrationAndSubscription shell (view= switch), and their pure decisions
         Security/            # TwoFactorSettingsViewComponent
         Subscription/Admin/  # SubscriptionAdmin ViewComponents (status, tiers, features, add-ons, limits, overrides)
         Usage/               # UsageDashboardViewComponent, OverageSummaryViewComponent
