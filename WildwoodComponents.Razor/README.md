@@ -1195,3 +1195,98 @@ JWT, but your cookie needs a name and the session stores tokens only.
 > The WebForms package's `WildwoodProxyHandlerBase.ResolveReturnUrl` shows the shape: anything not
 > rooted-and-local falls back to `/`, including protocol-relative targets and ones hiding a
 > tab/CR/LF.
+
+---
+
+## AI chat: voice input (ships with the library)
+
+`<vc:ai-chat />` has one mic button with **two mechanisms** behind it, picked once per component,
+the same pair Blazor's `AIChatComponent` has had since the speech recorder landed:
+
+| Mode | When | What happens |
+|---|---|---|
+| `native` | the browser has the Web Speech API (Chrome, Edge, Safari with dictation on) | live recognition with interim results. No server call; no audio leaves the machine. |
+| `recorder` | it does not (Firefox, Brave/Opera/Vivaldi, WebView2, Safari with dictation off) | the clip is captured with `MediaRecorder` and POSTed to the shipped route below, which forwards it to WildwoodAPI's `stt/transcribe`. One server call per clip, so it records only on an explicit tap. |
+| `none` | neither is available, or the recorder has nowhere to upload | **no mic button is rendered at all.** |
+
+A native session can also fail at *runtime* in an engine that exposes the Web Speech API without
+a recognition backend. `network`, `service-not-allowed` and `language-not-supported` mean "this
+will never work here": they downgrade the component to `recorder` for the rest of its life and
+carry straight on into a recording, so the tap that hit the dead button still records what the
+user is saying. Every other code (`no-speech`, `aborted`, …) is an ordinary end of a session and
+downgrades nothing.
+
+**Caps.** A clip auto-stops at **60 seconds** and is refused past **25 MB** — the server's
+transcription limit — with a message, rather than being uploaded for the server to reject. Both
+are the constants in `WildwoodComponents.Shared/Utilities/SpeechAudioFormats.cs`, which is also
+where the media-type table and the failure wording live, so the two .NET stacks and the proxy
+cannot drift apart.
+
+**With `enable-stt="false"` nothing speech-related runs**: no capability detection, no mic
+button, no microphone request, no `SpeechRecognition`. The root element carries no `data-stt-*`
+attributes at all in that case.
+
+### The shipped route
+
+`WildwoodSpeechProxyController` is part of the package and mounts at
+**`POST /api/wildwood-stt/transcribe`**. A Razor app keeps the user's JWT in the server session,
+so the browser cannot call WildwoodAPI itself.
+
+Host wiring is the same as for the notifications, attribution and registration/subscription
+proxies — MVC controllers plus server-side session:
+
+```csharp
+builder.Services.AddControllers();
+builder.Services.AddSession();
+// ...
+app.UseSession();
+app.MapControllers();
+```
+
+If your host restricts controller discovery, add the assembly explicitly:
+
+```csharp
+builder.Services.AddControllers()
+    .AddApplicationPart(typeof(WildwoodComponents.Razor.Controllers.WildwoodSpeechProxyController).Assembly);
+```
+
+Its rules, all of them deliberate:
+
+| Situation | Answer |
+|---|---|
+| No signed-in session | **401**, and nothing is forwarded — no empty bearer ever reaches WildwoodAPI |
+| Body is not `multipart/form-data` | **415** |
+| Not exactly one file part | **400** |
+| The part is not recorded audio on the allow-list | **415** — this route must not become a generic file relay |
+| Past the 25 MB cap | **413**, as a structured refusal rather than an exception; the request-size and multipart-length limits stop an oversize body before it is buffered, and an explicit length check catches the rest |
+| The transcription itself failed | **200** with `success:false` and the provider's message — a refusal is data, and "speech-to-text is not configured" has to read differently from "that route is gone" |
+| It worked | **200** with `success:true` and the text |
+
+Every one of those answers is a `SpeechTranscriptionResult`, so the script parses one shape
+whatever the status. There is **no anti-forgery token**, matching the other three shipped
+proxies; a host that wants CSRF protection should apply its own filter uniformly across all four.
+
+### Parameters
+
+| Parameter | Default | Purpose |
+|---|---|---|
+| `enable-stt` | `true` | the one gate — see above |
+| `speech-proxy-url` | `/api/wildwood-stt/transcribe` | move the route if you mount it elsewhere |
+| `speech-language` | *(none)* | BCP-47 tag for recognition and for the provider; the script falls back to `en-US` |
+
+### Calling it from your own code
+
+`IWildwoodAIChatService.TranscribeAudioAsync(audio, contentType, configurationId, language)` is
+the client half, and is wire-identical to Blazor's `IAIService.TranscribeAudioAsync`: one
+multipart POST to `stt/transcribe`, the audio in a part named `file` called `speech.<ext>`
+carrying the bare media type, optional fields omitted when empty. It **never throws** — every
+failure comes back as `Success = false` with a presentable `ErrorMessage` — and it puts the
+session bearer on the request rather than on the shared `HttpClient`.
+
+### Parity
+
+Recorded voice input was Blazor-only. Razor now matches it: the same mode detection, the same
+three downgrade codes, the same mime preference order, the same 60 s / 25 MB caps and the same
+`stt/transcribe` call. What stays different is only the shape a server-rendered stack forces —
+the browser posts through a same-origin proxy instead of holding a JWT, and the clip is
+transcribed by the server rather than streamed over a circuit.

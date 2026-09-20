@@ -175,6 +175,56 @@
 }
 
 /* ========================================
+   VOICE INPUT (mic button, status, errors)
+   ======================================== */
+
+/* Recording: the button is the stop control, so it reads as "live", not as "go". */
+.ww-ai-chat-component .ww-stt-btn.ww-recording {
+    background: var(--ww-danger, #dc3545);
+    border-color: var(--ww-danger, #dc3545);
+    color: var(--ww-danger-contrast, #ffffff);
+}
+
+.ww-ai-chat-component .ww-stt-btn.ww-recording .ww-stt-idle {
+    display: none;
+}
+
+.ww-ai-chat-component .ww-stt-btn[disabled] {
+    opacity: 0.65;
+    cursor: default;
+}
+
+/* The one-second pulse says the microphone is open even where colour alone would not. */
+.ww-ai-chat-component .ww-stt-btn.ww-recording {
+    animation: ww-stt-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes ww-stt-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.72; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ww-ai-chat-component .ww-stt-btn.ww-recording {
+        animation: none;
+    }
+}
+
+.ww-ai-chat-component .ww-stt-status {
+    font-size: 0.85rem;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-ai-chat-component .ww-stt-error {
+    border-radius: var(--ww-border-radius, 0.375rem);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    background-color: var(--ww-danger-bg, #f8d7da);
+    color: var(--ww-danger, #dc3545);
+    border: 1px solid var(--ww-danger, #dc3545);
+}
+
+/* ========================================
    RESPONSIVE
    ======================================== */
 

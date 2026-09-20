@@ -26,6 +26,7 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 |-----------|--------|-------|----------------|-----------------|------------------------|----------------|
 | Authentication | AuthenticationComponent | AuthenticationViewComponent | authService | AuthenticationComponent | AuthenticationComponent | authMiddleware |
 | AI Chat | AIChatComponent | AIChatViewComponent | aiService | AIChatComponent | -- | -- |
+| AI Chat: voice input | Web Speech + MediaRecorder fallback (AIChatComponent.SpeechToText.cs / .SpeechRecorder.cs); `IAIService.TranscribeAudioAsync` | Web Speech + MediaRecorder fallback (ai-chat.js) + `WildwoodSpeechProxyController` (`api/wildwood-stt/transcribe`); `IWildwoodAIChatService.TranscribeAudioAsync` | `transcribeAudio` | useSpeechInput (native + recorder) | -- | -- |
 | AI Flow | AIFlowComponent | AIFlowViewComponent | aiFlowService | AIFlowComponent + useAIFlow | AIFlowComponent + useAIFlow | -- |
 | AI Proxy | AIProxyComponent | AIProxyViewComponent | (via aiService) | AIProxyComponent | -- | -- |
 | Feature Gate | FeatureGateComponent | (IWildwoodAppTierService.HasFeatureAsync) | (via appTierService) | FeatureGate + useFeatures | FeatureGate + useFeatures | -- |
@@ -207,8 +208,26 @@ WildwoodComponents.Razor/
         TokenRegistrationModels.cs
         TwoFactorSettingsModels.cs
         UsageModels.cs
+    Controllers/
+        WildwoodAttributionProxyController.cs
+        WildwoodNotificationsProxyController.cs
+        WildwoodRegistrationSubscriptionProxyController.cs
+        WildwoodSpeechProxyController.cs   # api/wildwood-stt/transcribe: the same-origin upload
+                                    #   for recorded voice input. Every answer is a
+                                    #   SpeechTranscriptionResult; 4xx only for its own
+                                    #   preconditions (401 signed out, 415 not audio, 400 not one
+                                    #   file part, 413 past 25 MB), 200 for a transcription
+                                    #   refusal. No antiforgery, matching the other three.
     wwwroot/
         css/wildwood-razor-themes.css
+        js/ai-chat.js               # chat + TTS + voice input. The speech DECISIONS
+                                    #   (speechEnabled, detectSpeechMode, shouldDowngrade,
+                                    #   pickMimeType, exceedsCap, extensionFor, bareMediaType) are
+                                    #   pure and exported through a guarded module.exports;
+                                    #   WildwoodComponents.Tests/Razor/js/ai-chat-speech.selftest.mjs
+                                    #   runs them under node via AIChatSpeechSelfTestRunnerTests.
+                                    #   The auto-init is guarded by `typeof document` so the file
+                                    #   can be required with no DOM - do not remove that guard.
         css/regsub.css              # Registration & Subscription: pricing, signup and manage
         js/regsub-pricing.js        # billing toggle, pack basket, ww-regsub-select
         js/regsub-machines.js       # signup + pack-checkout + plan-change reducers, ported

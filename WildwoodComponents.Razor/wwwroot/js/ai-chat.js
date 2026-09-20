@@ -3,13 +3,187 @@
  * Handles message sending, session management, file uploads, TTS playback,
  * and speech-to-text input.
  * Razor Pages equivalent of the Blazor AIChatComponent interactivity.
+ *
+ * Voice input has TWO mechanisms behind one mic button, picked once per component, exactly as
+ * Blazor's AIChatComponent.SpeechRecorder.cs and @wildwood/react's useSpeechInput.ts do:
+ *
+ *   'native'    the Web Speech API (Chrome, Edge, Safari with dictation on). Live interim
+ *               results, no server call, no audio leaves the machine.
+ *   'recorder'  MediaRecorder + a clip POSTed to WildwoodSpeechProxyController, which forwards it
+ *               to stt/transcribe (Firefox, Brave/Opera/Vivaldi, WebView2, Safari with dictation
+ *               off). One server call per clip, so it only ever records on an explicit tap.
+ *   'none'      neither is available; no mic button is rendered at all.
+ *
+ * A native session can also fail at RUNTIME in an engine that merely EXPOSES the Web Speech API
+ * without a recognition backend. `network`, `service-not-allowed` and `language-not-supported`
+ * all mean "this will never work here", so they downgrade to the recorder for the rest of the
+ * component's life and carry straight on into a recording; every other code (`no-speech`,
+ * `aborted`, ...) is an ordinary end of a session and downgrades nothing.
+ *
+ * The decisions the two mechanisms turn on are pure functions at the top of this file, exported
+ * through a guarded `module.exports` and covered by
+ * WildwoodComponents.Tests/Razor/js/ai-chat-speech.selftest.mjs.
  */
 (function () {
     'use strict';
 
-    var roots = document.querySelectorAll('.ww-ai-chat-component');
-    for (var r = 0; r < roots.length; r++) {
-        initAIChat(roots[r]);
+    // ===== SPEECH: CONSTANTS =====
+
+    /** Longest clip the recorder captures before it stops itself and transcribes. */
+    var MAX_RECORDING_SECONDS = 60;
+
+    /** Largest clip that is uploaded at all - the server's transcription limit. */
+    var MAX_RECORDING_BYTES = 25 * 1024 * 1024;
+
+    /**
+     * First container the browser can record, most to least preferred:
+     * Chrome/Edge -> webm/opus, Firefox -> webm or ogg, Safari -> mp4.
+     */
+    var RECORDING_MIME_PREFERENCE = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm'];
+
+    /** Web Speech error codes that mean "recognition will never run here" - see the file header. */
+    var DOWNGRADE_ERROR_CODES = ['network', 'service-not-allowed', 'language-not-supported'];
+
+    /** Ordinary ends of a session, not failures: nothing was said, or we stopped it ourselves. */
+    var SILENT_ERROR_CODES = ['no-speech', 'aborted'];
+
+    /** Upload extension per recorded format. Mirrors Shared/Utilities/SpeechAudioFormats.cs. */
+    var AUDIO_EXTENSIONS = {
+        'audio/webm': '.webm',
+        'audio/ogg': '.ogg',
+        'audio/mp4': '.mp4',
+        'audio/x-m4a': '.m4a',
+        'audio/m4a': '.m4a',
+        'audio/mpeg': '.mp3',
+        'audio/mp3': '.mp3',
+        'audio/wav': '.wav',
+        'audio/x-wav': '.wav',
+        'audio/wave': '.wav'
+    };
+
+    /** 'stop' normally follows within milliseconds; this only exists so a caller never hangs. */
+    var STOP_EVENT_TIMEOUT_MS = 3000;
+
+    /** Chunking is what lets the size cap be enforced DURING a recording. */
+    var RECORDER_TIMESLICE_MS = 1000;
+
+    /**
+     * Every visible string this script produces for voice input, in one place. The wording is
+     * Blazor's, character for character, so the two stacks say the same thing (the ellipsis is
+     * written as an escape so an encoding change cannot quietly rewrite it).
+     */
+    var MESSAGES = {
+        unsupported: "Voice input isn't supported in this browser.",
+        recordingUnsupported: 'Voice recording is not supported in this browser.',
+        permissionDenied: 'Microphone permission was denied. Please enable microphone access to use voice input.',
+        noMicrophone: 'No microphone was found on this device.',
+        microphoneBusy: 'The microphone is in use by another application. Close it and try again.',
+        couldNotStart: 'Voice recording could not start: ',
+        tooLarge: 'Voice input is limited to 25 MB. Please record a shorter clip.',
+        transcriptionFailed: 'Transcription failed. Please try again.',
+        processingFailed: 'Voice input could not be processed. Please try again.',
+        recording: 'Recording… tap the mic to stop',
+        transcribing: 'Transcribing…',
+        listening: 'Listening... '
+    };
+
+    // ===== SPEECH: PURE DECISIONS =====
+    //
+    // No DOM, no globals, no I/O. The self-test drives these directly.
+
+    /**
+     * The ONE voice-input gate. Nothing speech-related - no capability detection, no mic button,
+     * no getUserMedia, no SpeechRecognition - happens unless this returns true. `enableStt` is the
+     * component's data-enable-stt, which the ViewComponent renders from its enableSTT parameter.
+     */
+    function speechEnabled(config) {
+        return !!config && config.enableStt === true;
+    }
+
+    /**
+     * Which voice input this browser can do. `canUpload` is Razor-specific: the recorder needs a
+     * same-origin route to POST the clip to, and a mic button whose only mechanism cannot reach a
+     * server is worse than no button.
+     */
+    function detectSpeechMode(env) {
+        if (!env) return 'none';
+        if (env.speechRecognition) return 'native';
+        if (env.getUserMedia && env.mediaRecorder && env.canUpload) return 'recorder';
+        return 'none';
+    }
+
+    /** Whether a Web Speech error code means "give up on recognition and record instead". */
+    function shouldDowngrade(errorCode) {
+        return DOWNGRADE_ERROR_CODES.indexOf(errorCode) !== -1;
+    }
+
+    /** Whether a Web Speech error code is an ordinary end of a session, shown to nobody. */
+    function isSilentSpeechError(errorCode) {
+        return SILENT_ERROR_CODES.indexOf(errorCode) !== -1;
+    }
+
+    /**
+     * The first container in RECORDING_MIME_PREFERENCE the browser will record, or '' to let
+     * MediaRecorder choose (older implementations have no isTypeSupported).
+     */
+    function pickMimeType(isTypeSupported) {
+        if (typeof isTypeSupported !== 'function') return '';
+        for (var i = 0; i < RECORDING_MIME_PREFERENCE.length; i++) {
+            if (isTypeSupported(RECORDING_MIME_PREFERENCE[i])) return RECORDING_MIME_PREFERENCE[i];
+        }
+        return '';
+    }
+
+    /** Whether a clip is past the upload cap. A non-numeric size is never "too large". */
+    function exceedsCap(bytes, cap) {
+        if (typeof bytes !== 'number' || !isFinite(bytes)) return false;
+        var limit = (typeof cap === 'number' && isFinite(cap) && cap > 0) ? cap : MAX_RECORDING_BYTES;
+        return bytes > limit;
+    }
+
+    /** 'audio/webm;codecs=opus' -> 'audio/webm'. '' for a blank input. */
+    function bareMediaType(type) {
+        if (typeof type !== 'string') return '';
+        var separator = type.indexOf(';');
+        return (separator >= 0 ? type.slice(0, separator) : type).trim().toLowerCase();
+    }
+
+    /** The upload's extension, including the dot, or '' for a format this library does not send. */
+    function extensionFor(mediaType) {
+        var bare = bareMediaType(mediaType);
+        return Object.prototype.hasOwnProperty.call(AUDIO_EXTENSIONS, bare) ? AUDIO_EXTENSIONS[bare] : '';
+    }
+
+    /** 'speech.webm', 'speech.mp4', ... - the name the transcription provider reads the container from. */
+    function fileNameFor(mediaType) {
+        return 'speech' + extensionFor(mediaType);
+    }
+
+    /** What to show for a Web Speech error code that is neither silent nor a downgrade. */
+    function speechErrorMessage(code) {
+        if (code === 'not-allowed') return MESSAGES.permissionDenied;
+        if (code === 'audio-capture') return MESSAGES.noMicrophone;
+        return code ? 'Voice input failed (' + code + '). Please try again.' : MESSAGES.processingFailed;
+    }
+
+    /** What to show for a getUserMedia rejection, by DOMException name. */
+    function microphoneErrorMessage(errorName) {
+        if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') return MESSAGES.noMicrophone;
+        // The device exists and permission was given, but something else holds it (a call,
+        // another tab). TrackStartError is the legacy Chrome spelling of the same condition.
+        if (errorName === 'NotReadableError' || errorName === 'TrackStartError') return MESSAGES.microphoneBusy;
+        return MESSAGES.permissionDenied;
+    }
+
+    /** The message for a non-2xx transcription answer that carried no message of its own. */
+    function transcriptionStatusMessage(status) {
+        return 'Transcription failed (' + status + ').';
+    }
+
+    /** A data attribute read as a positive number, falling back when it is missing or junk. */
+    function positiveNumber(value, fallback) {
+        var parsed = parseInt(value, 10);
+        return (isFinite(parsed) && parsed > 0) ? parsed : fallback;
     }
 
     function initAIChat(root) {
@@ -354,57 +528,582 @@
                 .catch(function () { /* non-critical: TTS playback failed */ });
         }
 
+        function stopPlayback() {
+            if (currentAudio) {
+                try { currentAudio.pause(); } catch (error) { /* already stopped */ }
+            }
+        }
+
         // ===== SPEECH-TO-TEXT =====
+        //
+        // The gate below was `enableSTT && A || B`, which && binds tighter than ||: the block ran
+        // whenever window.SpeechRecognition existed, speech-to-text off or not. It is one call to
+        // speechEnabled() now, and every speech entry point lives inside setupSpeechInput.
 
-        if (enableSTT && 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        var speechConfig = {
+            enableStt: enableSTT,
+            sttUrl: root.dataset.sttUrl || '',
+            language: root.dataset.sttLanguage || '',
+            maxSeconds: positiveNumber(root.dataset.sttMaxSeconds, MAX_RECORDING_SECONDS),
+            maxBytes: positiveNumber(root.dataset.sttMaxBytes, MAX_RECORDING_BYTES)
+        };
+
+        if (speechEnabled(speechConfig)) {
+            setupSpeechInput(speechConfig);
+        }
+
+        function setupSpeechInput(config) {
             var sttBtn = root.querySelector('.ww-stt-btn');
-            var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!sttBtn) return;
+
+            var statusEl = root.querySelector('.ww-stt-status');
+            var errorEl = root.querySelector('.ww-stt-error');
+
+            var mode = detectSpeechMode({
+                speechRecognition: ('SpeechRecognition' in window) || ('webkitSpeechRecognition' in window),
+                getUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+                mediaRecorder: typeof window.MediaRecorder !== 'undefined',
+                canUpload: config.sttUrl.length > 0
+            });
+            if (mode === 'none') return;
+
+            // Rendered hidden: the button appears only once a mechanism is known to exist.
+            sttBtn.style.display = '';
+
             var recognition = null;
+            var session = null;
             var isListening = false;
+            var isTranscribing = false;
+            /**
+             * Raised SYNCHRONOUSLY before the getUserMedia await. Without it a double tap during
+             * the browser's permission prompt runs startRecording twice, and the second session
+             * overwrites the first - an open microphone with no timer, no UI and no way to stop it.
+             */
+            var starting = false;
+            /** Set when a stop lands during that window: the stream that arrives late is released. */
+            var cancelStart = false;
+            var finalizing = null;
+            var tornDown = false;
+            var interim = '';
 
-            if (sttBtn) {
-                sttBtn.addEventListener('click', function () {
-                    if (isListening) {
-                        if (recognition) recognition.stop();
-                        return;
-                    }
-                    recognition = new SpeechRecognition();
-                    recognition.continuous = false;
-                    recognition.interimResults = false;
-                    recognition.lang = 'en-US';
+            // --- surface ---------------------------------------------------------------------
 
-                    recognition.onstart = function () {
-                        isListening = true;
-                        sttBtn.classList.add('btn-danger');
-                        sttBtn.classList.remove('btn-outline-secondary');
-                    };
+            function show(el, visible) {
+                if (el) el.style.display = visible ? '' : 'none';
+            }
 
-                    recognition.onresult = function (e) {
-                        var transcript = e.results[0][0].transcript;
-                        if (chatInput) {
-                            chatInput.value += (chatInput.value ? ' ' : '') + transcript;
-                            updateSendButton();
-                        }
-                    };
+            function showError(message) {
+                if (!errorEl || !message) return;
+                errorEl.textContent = message;
+                errorEl.style.display = '';
+            }
 
-                    recognition.onend = function () {
-                        isListening = false;
-                        sttBtn.classList.remove('btn-danger');
-                        sttBtn.classList.add('btn-outline-secondary');
-                    };
+            function hideError() {
+                if (!errorEl) return;
+                errorEl.textContent = '';
+                errorEl.style.display = 'none';
+            }
 
-                    recognition.onerror = function () {
-                        isListening = false;
-                        sttBtn.classList.remove('btn-danger');
-                        sttBtn.classList.add('btn-outline-secondary');
-                    };
+            function render() {
+                var busy = isTranscribing || starting;
+                sttBtn.disabled = busy;
+                sttBtn.setAttribute('aria-pressed', isListening ? 'true' : 'false');
+                sttBtn.classList.toggle('ww-recording', isListening);
+                show(sttBtn.querySelector('.ww-stt-busy'), busy);
+                show(sttBtn.querySelector('.ww-stt-recording'), !busy && isListening);
+                show(sttBtn.querySelector('.ww-stt-idle'), !busy && !isListening);
 
-                    recognition.start();
+                if (!statusEl) return;
+                var status = '';
+                if (isTranscribing) status = MESSAGES.transcribing;
+                else if (isListening) status = (mode === 'recorder') ? MESSAGES.recording : (MESSAGES.listening + interim);
+                statusEl.textContent = status;
+                show(statusEl, status.length > 0);
+            }
+
+            function appendTranscript(text) {
+                var trimmed = (text || '').trim();
+                if (!trimmed || !chatInput) return;
+                chatInput.value += (chatInput.value ? ' ' : '') + trimmed;
+                updateSendButton();
+            }
+
+            // --- recorder --------------------------------------------------------------------
+
+            function stopTracks(stream) {
+                if (!stream) return;
+                var tracks = stream.getTracks();
+                for (var i = 0; i < tracks.length; i++) {
+                    try { tracks[i].stop(); } catch (error) { /* already ended */ }
+                }
+            }
+
+            /** The microphone is released here and nowhere else, so every path can call it. */
+            function releaseStream(target) {
+                if (!target || !target.stream) return;
+                var stream = target.stream;
+                target.stream = null;
+                stopTracks(stream);
+            }
+
+            function stopRecorder(target) {
+                try {
+                    if (target.recorder.state !== 'inactive') target.recorder.stop();
+                } catch (error) { /* already inactive */ }
+            }
+
+            /** Resolves on the recorder's 'stop', or on STOP_EVENT_TIMEOUT_MS - never hangs. */
+            function awaitStop(target) {
+                return new Promise(function (resolve) {
+                    var settled = false;
+                    var timer = setTimeout(function () {
+                        if (settled) return;
+                        settled = true;
+                        resolve();
+                    }, STOP_EVENT_TIMEOUT_MS);
+                    target.stopped.then(function () {
+                        if (settled) return;
+                        settled = true;
+                        clearTimeout(timer);
+                        resolve();
+                    });
                 });
             }
+
+            function uploadClip(blob) {
+                var form = new FormData();
+                form.append('file', blob, fileNameFor(blob.type));
+                var activeConfig = getActiveConfigId();
+                if (activeConfig) form.append('configurationId', activeConfig);
+                if (config.language) form.append('language', config.language);
+
+                return fetch(config.sttUrl, {
+                    method: 'POST',
+                    body: form,
+                    credentials: 'same-origin'
+                }).then(function (response) {
+                    return response.json().catch(function () { return null; }).then(function (data) {
+                        if (response.ok && data && data.success) {
+                            return { success: true, text: data.text || '' };
+                        }
+                        return {
+                            success: false,
+                            errorMessage: (data && data.errorMessage) ||
+                                (response.ok ? MESSAGES.transcriptionFailed : transcriptionStatusMessage(response.status))
+                        };
+                    });
+                });
+            }
+
+            function finalizeCore(target) {
+                if (target.timer) {
+                    clearTimeout(target.timer);
+                    target.timer = null;
+                }
+                stopRecorder(target);
+
+                return awaitStop(target).then(function () {
+                    releaseStream(target);
+                    isListening = false;
+
+                    if (target.oversize) {
+                        render();
+                        showError(MESSAGES.tooLarge);
+                        return null;
+                    }
+
+                    var mimeType = target.recorder.mimeType ||
+                        (target.chunks.length > 0 ? target.chunks[0].type : '') ||
+                        target.requestedMimeType || 'audio/webm';
+                    var blob = new Blob(target.chunks, { type: mimeType });
+                    target.chunks = [];
+
+                    // A stop with nothing recorded is a mis-tap, not a failure - Blazor is silent too.
+                    if (blob.size === 0) {
+                        render();
+                        return null;
+                    }
+                    if (exceedsCap(blob.size, config.maxBytes)) {
+                        render();
+                        showError(MESSAGES.tooLarge);
+                        return null;
+                    }
+
+                    isTranscribing = true;
+                    render();
+                    return uploadClip(blob).then(function (result) {
+                        if (result.success) appendTranscript(result.text);
+                        else showError(result.errorMessage || MESSAGES.transcriptionFailed);
+                        return null;
+                    });
+                }).catch(function () {
+                    showError(MESSAGES.processingFailed);
+                }).then(function () {
+                    releaseStream(target);
+                    isTranscribing = false;
+                    isListening = false;
+                    render();
+                });
+            }
+
+            /**
+             * Stops the active recording, transcribes it and appends the text. Safe to call from
+             * several places at once (mic tap, the auto-stop, the size cap): concurrent callers
+             * share the single in-flight finalize, as Blazor's _finalizeRecordingTask does.
+             */
+            function finalizeRecording() {
+                if (finalizing) return finalizing;
+                var target = session;
+                if (!target) return Promise.resolve();
+                session = null;
+
+                finalizing = finalizeCore(target).then(function () {
+                    finalizing = null;
+                }, function () {
+                    finalizing = null;
+                });
+                return finalizing;
+            }
+
+            function startRecording() {
+                // The guard goes up before anything can await - see `starting` above.
+                if (starting) return Promise.resolve();
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia ||
+                    typeof window.MediaRecorder === 'undefined') {
+                    showError(MESSAGES.recordingUnsupported);
+                    return Promise.resolve();
+                }
+
+                cancelStart = false;
+                starting = true;
+                hideError();
+                render();
+
+                // Recording while the assistant is talking would capture it; the tap means "my turn".
+                stopPlayback();
+
+                return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+                    .then(function (stream) {
+                        // Nothing left to record into: the page went away, or the user tapped stop,
+                        // while permission was being granted. The microphone goes straight back.
+                        if (tornDown || cancelStart) {
+                            cancelStart = false;
+                            starting = false;
+                            stopTracks(stream);
+                            render();
+                            return;
+                        }
+
+                        var requestedMimeType = pickMimeType(
+                            typeof window.MediaRecorder.isTypeSupported === 'function'
+                                ? function (candidate) { return window.MediaRecorder.isTypeSupported(candidate); }
+                                : null);
+
+                        var recorder;
+                        try {
+                            recorder = requestedMimeType
+                                ? new window.MediaRecorder(stream, { mimeType: requestedMimeType })
+                                : new window.MediaRecorder(stream);
+                        } catch (error) {
+                            starting = false;
+                            stopTracks(stream);
+                            render();
+                            showError(MESSAGES.couldNotStart + (error && error.message ? error.message : 'unknown error'));
+                            return;
+                        }
+
+                        var resolveStopped;
+                        var target = {
+                            recorder: recorder,
+                            stream: stream,
+                            chunks: [],
+                            bytes: 0,
+                            requestedMimeType: requestedMimeType,
+                            timer: null,
+                            oversize: false,
+                            stopped: new Promise(function (resolve) { resolveStopped = resolve; })
+                        };
+
+                        recorder.ondataavailable = function (event) {
+                            var data = event && event.data;
+                            if (!data || data.size === 0 || target.oversize) return;
+                            target.bytes += data.size;
+                            if (exceedsCap(target.bytes, config.maxBytes)) {
+                                // Refuse the clip rather than post what the server will reject.
+                                target.oversize = true;
+                                target.chunks = [];
+                                stopRecorder(target);
+                                finalizeRecording();
+                                return;
+                            }
+                            target.chunks.push(data);
+                        };
+                        recorder.onerror = function () {
+                            // The 'stop' that follows drives the release; finalize reports it.
+                            stopRecorder(target);
+                            finalizeRecording();
+                        };
+                        recorder.addEventListener('stop', function () {
+                            releaseStream(target);
+                            resolveStopped();
+                        });
+
+                        try {
+                            recorder.start(RECORDER_TIMESLICE_MS);
+                        } catch (error) {
+                            starting = false;
+                            stopTracks(stream);
+                            render();
+                            showError(MESSAGES.couldNotStart + (error && error.message ? error.message : 'unknown error'));
+                            return;
+                        }
+
+                        target.timer = setTimeout(function () {
+                            target.timer = null;
+                            if (session !== target) return;
+                            finalizeRecording();
+                        }, config.maxSeconds * 1000);
+
+                        session = target;
+                        isListening = true;
+                        // Last, so there is never a tick in which neither flag is set.
+                        starting = false;
+                        render();
+                    })
+                    .catch(function (error) {
+                        starting = false;
+                        render();
+                        showError(microphoneErrorMessage(error && error.name));
+                    });
+            }
+
+            // --- native ----------------------------------------------------------------------
+
+            /** Drops a recognition's handlers so a trailing onend cannot touch a later session. */
+            function detach(instance) {
+                instance.onresult = null;
+                instance.onerror = null;
+                instance.onend = null;
+                if (recognition === instance) recognition = null;
+            }
+
+            function startNative() {
+                var Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!Recognition) {
+                    showError(MESSAGES.unsupported);
+                    return;
+                }
+
+                var instance;
+                try {
+                    instance = new Recognition();
+                } catch (error) {
+                    showError(MESSAGES.unsupported);
+                    return;
+                }
+
+                instance.continuous = true;
+                instance.interimResults = true;
+                instance.lang = config.language || 'en-US';
+
+                instance.onresult = function (event) {
+                    var finalText = '';
+                    var interimText = '';
+                    for (var i = event.resultIndex; i < event.results.length; i++) {
+                        var result = event.results[i];
+                        var transcript = (result && result[0] && result[0].transcript) || '';
+                        if (result && result.isFinal) finalText += transcript;
+                        else interimText += transcript;
+                    }
+                    if (finalText.trim()) {
+                        appendTranscript(finalText);
+                        interim = '';
+                    } else {
+                        interim = interimText;
+                    }
+                    render();
+                };
+
+                instance.onerror = function (event) {
+                    var code = (event && event.error) || '';
+
+                    if (shouldDowngrade(code)) {
+                        // The engine exposes recognition but cannot run it here. Detach first so
+                        // the trailing onend never lands on the recording that follows.
+                        detach(instance);
+                        try {
+                            if (instance.abort) instance.abort(); else instance.stop();
+                        } catch (error) { /* nothing to abort */ }
+                        isListening = false;
+                        interim = '';
+
+                        var next = detectSpeechMode({
+                            speechRecognition: false,
+                            getUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+                            mediaRecorder: typeof window.MediaRecorder !== 'undefined',
+                            canUpload: config.sttUrl.length > 0
+                        });
+                        if (next !== 'recorder') {
+                            // Nothing left to downgrade TO: hide the button rather than leave one
+                            // that can only ever say "unsupported".
+                            mode = 'none';
+                            render();
+                            sttBtn.style.display = 'none';
+                            showError(MESSAGES.unsupported);
+                            return;
+                        }
+
+                        mode = 'recorder';
+                        render();
+                        startRecording();
+                        return;
+                    }
+
+                    detach(instance);
+                    isListening = false;
+                    interim = '';
+                    render();
+                    if (!isSilentSpeechError(code)) showError(speechErrorMessage(code));
+                };
+
+                instance.onend = function () {
+                    if (recognition === instance) recognition = null;
+                    isListening = false;
+                    interim = '';
+                    render();
+                };
+
+                try {
+                    instance.start();
+                } catch (error) {
+                    detach(instance);
+                    showError(MESSAGES.couldNotStart + (error && error.message ? error.message : 'unknown error'));
+                    return;
+                }
+
+                recognition = instance;
+                isListening = true;
+                interim = '';
+                render();
+            }
+
+            function stopNative() {
+                var instance = recognition;
+                if (!instance) return;
+                detach(instance);
+                try { instance.stop(); } catch (error) { /* already stopped */ }
+                isListening = false;
+                interim = '';
+                render();
+            }
+
+            // --- public surface ---------------------------------------------------------------
+
+            function start() {
+                if (isListening || isTranscribing || starting || tornDown) return;
+                hideError();
+                if (mode === 'recorder') {
+                    startRecording();
+                    return;
+                }
+                startNative();
+            }
+
+            function stop() {
+                if (mode === 'recorder') {
+                    // A stop during the permission prompt cancels the pending start: the stream
+                    // that eventually resolves is released without ever reaching a recorder.
+                    if (starting) cancelStart = true;
+                    finalizeRecording();
+                    return;
+                }
+                stopNative();
+            }
+
+            /**
+             * Drops the recognition, stops the recorder and releases the microphone. The clip is
+             * discarded - the page is going away, so there is nothing left to append it to.
+             */
+            function teardown() {
+                if (tornDown) return;
+                tornDown = true;
+                starting = false;
+                cancelStart = false;
+
+                var instance = recognition;
+                if (instance) {
+                    detach(instance);
+                    try {
+                        if (instance.abort) instance.abort(); else instance.stop();
+                    } catch (error) { /* already gone */ }
+                }
+
+                var target = session;
+                session = null;
+                if (target) {
+                    if (target.timer) {
+                        clearTimeout(target.timer);
+                        target.timer = null;
+                    }
+                    target.chunks = [];
+                    stopRecorder(target);
+                    releaseStream(target);
+                }
+            }
+
+            sttBtn.addEventListener('click', function () {
+                if (isListening) stop();
+                else start();
+            });
+
+            // The microphone is released whichever way this page ends: a navigation, a bfcache
+            // suspend, or a host that disposes the component by dispatching ww-ai-chat-teardown.
+            window.addEventListener('pagehide', teardown);
+            root.addEventListener('ww-ai-chat-teardown', teardown);
+
+            render();
         }
 
         // Initialize
         updateSendButton();
+    }
+
+    // Auto-initialize every chat on the page. Guarded so this file can also be required by the
+    // Node self-test, which needs the pure decisions above and no DOM at all.
+    if (typeof document !== 'undefined') {
+        var roots = document.querySelectorAll('.ww-ai-chat-component');
+        for (var r = 0; r < roots.length; r++) {
+            initAIChat(roots[r]);
+        }
+    }
+
+    var api = {
+        MAX_RECORDING_SECONDS: MAX_RECORDING_SECONDS,
+        MAX_RECORDING_BYTES: MAX_RECORDING_BYTES,
+        RECORDING_MIME_PREFERENCE: RECORDING_MIME_PREFERENCE,
+        MESSAGES: MESSAGES,
+
+        speechEnabled: speechEnabled,
+        detectSpeechMode: detectSpeechMode,
+        shouldDowngrade: shouldDowngrade,
+        isSilentSpeechError: isSilentSpeechError,
+        pickMimeType: pickMimeType,
+        exceedsCap: exceedsCap,
+        bareMediaType: bareMediaType,
+        extensionFor: extensionFor,
+        fileNameFor: fileNameFor,
+        speechErrorMessage: speechErrorMessage,
+        microphoneErrorMessage: microphoneErrorMessage,
+        transcriptionStatusMessage: transcriptionStatusMessage
+    };
+
+    if (typeof window !== 'undefined') {
+        window.wwAIChatSpeech = api;
+    }
+
+    // The self-test's hook. Guarded so the browser build never sees it: there is no `module` in a
+    // classic script, and the check costs one typeof.
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = api;
     }
 })();

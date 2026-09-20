@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Blazor.Models;
 using WildwoodComponents.Shared.Models;
+using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Blazor.Services
 {
@@ -762,34 +763,18 @@ namespace WildwoodComponents.Blazor.Services
             }
         }
 
-        // Upload extension per recorded format — the server's transcription provider infers the
-        // container from the file name. Mirrors WildwoodAPI's STTAudioFormats.
-        private static readonly Dictionary<string, string> AudioExtensionByMediaType = new(StringComparer.OrdinalIgnoreCase)
-        {
-            { "audio/webm", ".webm" },
-            { "audio/ogg", ".ogg" },
-            { "audio/mp4", ".mp4" },
-            { "audio/x-m4a", ".m4a" },
-            { "audio/m4a", ".m4a" },
-            { "audio/mpeg", ".mp3" },
-            { "audio/mp3", ".mp3" },
-            { "audio/wav", ".wav" },
-            { "audio/x-wav", ".wav" },
-            { "audio/wave", ".wav" }
-        };
-
         /// <inheritdoc/>
         public async Task<SpeechTranscriptionResult> TranscribeAudioAsync(byte[] audio, string contentType, string? configurationId = null, string? language = null)
         {
             if (audio == null || audio.Length == 0)
             {
-                return TranscriptionFailure("No audio was recorded.");
+                return TranscriptionFailure(SpeechAudioFormats.NoAudioMessage);
             }
 
             try
             {
                 var url = $"{_apiBaseUrl}/stt/transcribe";
-                var mediaType = GetBareMediaType(contentType);
+                var mediaType = SpeechAudioFormats.BareMediaType(contentType);
                 _logger.LogInformation("?? AIService: Transcribing {Size} bytes of {MediaType}", audio.Length, mediaType ?? "unknown audio");
 
                 // No manual request Content-Type: MultipartFormDataContent sets multipart/form-data with
@@ -802,12 +787,7 @@ namespace WildwoodComponents.Blazor.Services
                     filePart.Headers.ContentType = partType;
                 }
 
-                var extension = string.Empty;
-                if (mediaType != null && AudioExtensionByMediaType.TryGetValue(mediaType, out var found))
-                {
-                    extension = found;
-                }
-                form.Add(filePart, "file", "speech" + extension);
+                form.Add(filePart, "file", SpeechAudioFormats.FileNameFor(mediaType));
 
                 if (!string.IsNullOrEmpty(configurationId))
                 {
@@ -839,7 +819,7 @@ namespace WildwoodComponents.Blazor.Services
 
                 var message = !string.IsNullOrEmpty(parsed?.ErrorMessage)
                     ? parsed!.ErrorMessage!
-                    : $"Transcription failed ({(int)response.StatusCode}).";
+                    : SpeechAudioFormats.FailureMessageForStatus((int)response.StatusCode);
                 _logger.LogWarning("?? AIService: Transcription unsuccessful. Status: {StatusCode}, Error: {Error}",
                     response.StatusCode, message);
                 return TranscriptionFailure(message);
@@ -847,30 +827,14 @@ namespace WildwoodComponents.Blazor.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "?? AIService: Error transcribing audio");
-                return TranscriptionFailure("Transcription failed. Please try again.");
+                return TranscriptionFailure(SpeechAudioFormats.GenericFailureMessage);
             }
         }
 
-        private static SpeechTranscriptionResult TranscriptionFailure(string message) => new()
-        {
-            Success = false,
-            ErrorMessage = message
-        };
-
-        /// <summary>
-        /// "audio/webm;codecs=opus" → "audio/webm". Null for a blank input.
-        /// </summary>
-        private static string? GetBareMediaType(string? contentType)
-        {
-            if (string.IsNullOrWhiteSpace(contentType))
-            {
-                return null;
-            }
-
-            var separator = contentType.IndexOf(';');
-            var bare = (separator >= 0 ? contentType.Substring(0, separator) : contentType).Trim().ToLowerInvariant();
-            return bare.Length == 0 ? null : bare;
-        }
+        // The extension map, the bare-media-type rule and these messages are shared with the Razor
+        // client and the Razor speech proxy — see WildwoodComponents.Shared/Utilities/SpeechAudioFormats.cs.
+        private static SpeechTranscriptionResult TranscriptionFailure(string message)
+            => SpeechAudioFormats.Failure(message);
     }
 
     /// <summary>
