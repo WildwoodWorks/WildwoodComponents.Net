@@ -199,8 +199,8 @@ builder.Services.AddControllers()
 | `POST /login` | anonymous | `IWildwoodRegistrationService.LoginAsync` — puts the tokens in the **server session** |
 | `POST /link-transaction` | session | `LinkTransactionToUserAsync` — attaches the plan's payment to the new account |
 | `POST /subscribe` | session | `SubscribeToTierAsync` — body `{ "TierId", "PricingId", "PaymentTransactionId" }` |
-| `GET  /disclaimers/pending` | session | `GetPendingDisclaimersAsync(appId, null, "registration")` |
-| `POST /disclaimers/accept` | session | `AcceptDisclaimersAsync` — body `{ "Acceptances": [{ "CompanyDisclaimerId", "CompanyDisclaimerVersionId" }] }` |
+| `GET  /disclaimer-gate/pending` | session | `GetPendingDisclaimersAsync(appId, null, "registration")` |
+| `POST /disclaimer-gate/accept` | session | `AcceptDisclaimersAsync` — body `{ "Acceptances": [{ "CompanyDisclaimerId", "CompanyDisclaimerVersionId" }] }` |
 | `POST /payment/initiate` | anonymous | `InitiatePaymentAsync` — the shape `payment.js` posts to `{proxy}/initiate` |
 | `POST /payment/confirm` | anonymous | `ConfirmPaymentAsync` — `{ "paymentIntentId", "providerType" }` |
 

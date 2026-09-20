@@ -185,7 +185,7 @@ public class SignupSubscribeProxyRequest
 }
 
 /// <summary>
-/// Body of <c>POST /api/wildwood-regsub/disclaimers/accept</c>.
+/// Body of <c>POST /api/wildwood-regsub/disclaimer-gate/accept</c>.
 /// </summary>
 public class SignupDisclaimerAcceptProxyRequest
 {

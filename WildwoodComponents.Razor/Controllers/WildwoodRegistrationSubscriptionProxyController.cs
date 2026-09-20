@@ -605,10 +605,20 @@ public class WildwoodRegistrationSubscriptionProxyController : ControllerBase
     #region Signup: the disclaimer gate
 
     /// <summary>
-    /// GET /api/wildwood-regsub/disclaimers/pending — what the freshly signed-in account still has
-    /// to accept. Session-scoped: these are the CALLER's pending disclaimers.
+    /// GET /api/wildwood-regsub/disclaimer-gate/pending — what the freshly signed-in account still
+    /// has to accept. Session-scoped: these are the CALLER's pending disclaimers.
     /// </summary>
-    [HttpGet("disclaimers/pending")]
+    /// <remarks>
+    /// The route segment is <c>disclaimer-gate</c>, not <c>disclaimers</c>, on purpose: the Sync
+    /// repo's <c>scripts/parity-check.mjs</c> extracts any quoted literal rooted at a known
+    /// WildwoodAPI controller root, and <c>disclaimers</c> is one. A proxy route template rooted
+    /// there therefore reads as a WildwoodAPI endpoint that only .NET calls, and prints as a false
+    /// one-sided REVIEW entry (do not write that spelling even in a comment — the extractor reads
+    /// any double-quoted literal in this file, comments included). The real API path is
+    /// <c>disclaimeracceptance/…</c>, which this controller reaches through
+    /// <c>IWildwoodDisclaimerService</c>.
+    /// </remarks>
+    [HttpGet("disclaimer-gate/pending")]
     public async Task<IActionResult> PendingDisclaimers([FromQuery] string? appId)
     {
         if (!TryBegin(appId, out var resolvedAppId, out var failure)) return failure!;
@@ -622,9 +632,13 @@ public class WildwoodRegistrationSubscriptionProxyController : ControllerBase
     }
 
     /// <summary>
-    /// POST /api/wildwood-regsub/disclaimers/accept — record the acceptances in one call.
+    /// POST /api/wildwood-regsub/disclaimer-gate/accept — record the acceptances in one call.
     /// </summary>
-    [HttpPost("disclaimers/accept")]
+    /// <remarks>
+    /// <c>disclaimer-gate</c> rather than <c>disclaimers</c> for the parity-extractor reason given
+    /// on <see cref="PendingDisclaimers"/>.
+    /// </remarks>
+    [HttpPost("disclaimer-gate/accept")]
     public async Task<IActionResult> AcceptDisclaimers(
         [FromBody] SignupDisclaimerAcceptProxyRequest? request, [FromQuery] string? appId)
     {

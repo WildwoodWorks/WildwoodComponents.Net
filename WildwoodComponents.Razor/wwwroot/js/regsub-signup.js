@@ -789,7 +789,7 @@
                 return;
             }
 
-            proxyGet(appQuery('/disclaimers/pending'))
+            proxyGet(appQuery('/disclaimer-gate/pending'))
                 .catch(function () { return null; })
                 .then(function (pending) {
                     if (detached) return;
@@ -851,7 +851,7 @@
             var error = q('[data-ww-disclaimer-error]');
             show(error, false);
 
-            proxyPost(appQuery('/disclaimers/accept'), { Acceptances: acceptances })
+            proxyPost(appQuery('/disclaimer-gate/accept'), { Acceptances: acceptances })
                 .then(function (result) {
                     if (detached) return;
                     if (!result || result.success !== true) {
