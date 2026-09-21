@@ -98,6 +98,17 @@ public class RegistrationSubscriptionSignupRenderTests
                     text.Append(frame.MarkupContent).Append(' ');
                     break;
                 case RenderTreeFrameType.Attribute:
+                    // A minimized attribute (`data-ww-error-message`, no value) is a boxed bool, not
+                    // a string: Blazor renders `true` as a bare present attribute and `false` as
+                    // nothing. Reading it as a string collapses both to empty, so a regression to
+                    // `false` would still read as present here while the real selector found
+                    // nothing. See the same note in TestingContractRenderTests.
+                    if (frame.AttributeValue is bool present)
+                    {
+                        if (present) text.Append(frame.AttributeName).Append(' ');
+                        break;
+                    }
+
                     text.Append(frame.AttributeName)
                         .Append("=\"")
                         .Append(frame.AttributeValue as string ?? string.Empty)
@@ -515,6 +526,26 @@ public class RegistrationSubscriptionSignupRenderTests
         Assert.Contains("Login failed after registration. Please try logging in manually.", markup);
     }
 
+    /// <summary>
+    /// The failed panel's contract hooks. The error text needs its own name because the class it
+    /// shares, <c>.ww-text-muted</c>, is the processing steps' "please wait" as well - the helper
+    /// prefers the hook and only falls back to the class, or it would report boilerplate as the
+    /// cause of a genuine failure.
+    /// </summary>
+    [Fact]
+    public async Task The_failed_step_names_its_error_text_and_both_ways_out()
+    {
+        var flow = Driver(Routes(login: "{}"), settings => settings.PreSelectedTierId = "tier-free");
+        await flow.StartAsync();
+        await flow.SubmitFormAsync(Form());
+
+        var markup = RenderAll(View(flow));
+
+        Assert.Contains("data-ww-error-message", markup);
+        Assert.Contains("data-ww-action=\"signup-retry\"", markup);
+        Assert.Contains("data-ww-action=\"signup-start-over\"", markup);
+    }
+
     [Fact]
     public async Task The_success_panel_names_the_plan_and_offers_the_way_on()
     {
@@ -534,6 +565,23 @@ public class RegistrationSubscriptionSignupRenderTests
         Assert.Contains("Your account has been created and your plan is active.", markup);
         Assert.Contains("Get Started", markup);
         Assert.Contains(typeof(PackOutcomeList), ChildComponents(view));
+    }
+
+    /// <summary>
+    /// The success panel's final button, by hook rather than by copy: it renders
+    /// <c>labels.GetStarted</c>, which hosts reword.
+    /// </summary>
+    [Fact]
+    public async Task The_success_panel_names_its_final_button()
+    {
+        var flow = Driver(Routes(), settings => settings.PreSelectedTierId = "tier-free");
+        await flow.StartAsync();
+        await flow.SubmitFormAsync(Form());
+
+        var markup = RenderAll(View(flow));
+
+        Assert.Contains("ww-signup-success", markup);
+        Assert.Contains("data-ww-action=\"signup-get-started\"", markup);
     }
 
     /// <summary>

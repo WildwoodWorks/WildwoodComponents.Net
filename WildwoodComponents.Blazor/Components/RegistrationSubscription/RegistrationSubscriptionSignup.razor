@@ -18,7 +18,10 @@
    "Continue" / "Create Account", .ww-tier-grid, PaymentComponent's own pay button and success
    panel, .ww-signup-processing with "Something Went Wrong" / "Try Again" / "Start Over",
    .ww-signup-disclaimers, and the "All Set" success panel with "Get Started". A data-ww-step
-   attribute on the step container names the step for anything that would rather not rely on copy. *@
+   attribute on the step container names the step for anything that would rather not rely on copy,
+   data-ww-action="signup-retry|signup-start-over|signup-get-started" names the controls those
+   panels offer, and data-ww-error-message names the failure text - the vocabulary the shared
+   Playwright helpers ship as their selector contract. *@
 <div class="ww-regsub ww-regsub-signup @CssClass" data-ww-view="signup" @attributes="AdditionalAttributes">
     @if (Flow is null)
     {
@@ -232,10 +235,13 @@
                     </svg>
                 </div>
                 <h3>@ResolvedLabels.SignupFailed</h3>
-                <p class="ww-text-muted">@Flow.State.Error</p>
+                @* data-ww-error-message names the failure text: .ww-text-muted is shared with the
+                   processing steps' "please wait", which a stack that keeps every panel in the DOM
+                   would report as the cause of the failure. *@
+                <p class="ww-text-muted" data-ww-error-message>@Flow.State.Error</p>
                 <div class="ww-signup-processing-actions">
-                    <button type="button" class="ww-btn ww-btn-primary" @onclick="HandleRetryAsync">@ResolvedLabels.TryAgain</button>
-                    <button type="button" class="ww-btn ww-btn-link" @onclick="HandleStartOverAsync">@ResolvedLabels.StartOver</button>
+                    <button type="button" class="ww-btn ww-btn-primary" data-ww-action="signup-retry" @onclick="HandleRetryAsync">@ResolvedLabels.TryAgain</button>
+                    <button type="button" class="ww-btn ww-btn-link" data-ww-action="signup-start-over" @onclick="HandleStartOverAsync">@ResolvedLabels.StartOver</button>
                 </div>
             </div>
         }
@@ -252,7 +258,7 @@
                 <h3>@ResolvedLabels.SignupCompleteTitle</h3>
                 <p class="ww-text-muted">@SuccessMessage</p>
                 <PackOutcomeList Packs="OutcomePacks" Labels="ResolvedLabels" />
-                <button type="button" class="ww-btn ww-btn-primary ww-btn-lg" @onclick="HandleCompleteAsync">@ResolvedLabels.GetStarted</button>
+                <button type="button" class="ww-btn ww-btn-primary ww-btn-lg" data-ww-action="signup-get-started" @onclick="HandleCompleteAsync">@ResolvedLabels.GetStarted</button>
             </div>
         }
         else
