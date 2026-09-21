@@ -103,6 +103,13 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
         [Parameter] public SignupPlanSelection PlanSelection { get; set; } = SignupPlanSelection.Choose;
 
         /// <summary>
+        /// <see cref="SignupPlanDefault.Free"/> opens the plan step on the app's free plan — a
+        /// suggestion the visitor still confirms, not a choice already made. Ignored once a link
+        /// or a token's grant has chosen.
+        /// </summary>
+        [Parameter] public SignupPlanDefault PlanDefault { get; set; } = SignupPlanDefault.None;
+
+        /// <summary>
         /// Whether the visitor may pick packs on the way in. Default
         /// <see cref="PricingPackSelection.None"/>, which only removes the STEP: packs a signup
         /// link chose are still bought.
@@ -210,13 +217,17 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
             }
         }
 
-        /// <summary>The plan the flow is carrying, else the one the link asked for.</summary>
+        /// <summary>
+        /// The plan the flow is carrying, else the host's default, else the one the link asked
+        /// for. The default sits AHEAD of the link's plan on purpose — see
+        /// <see cref="SignupViewDecisions.HighlightTierId"/>.
+        /// </summary>
         private string? HighlightedTierId
         {
             get
             {
-                var chosen = _flow?.State.Selection.TierId;
-                return chosen is { Length: > 0 } ? chosen : PreSelectedTierId;
+                return SignupViewDecisions.HighlightTierId(
+                    _flow?.State.Selection.TierId, _flow?.DefaultTierId, PreSelectedTierId);
             }
         }
 
@@ -337,6 +348,7 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
                     RegistrationToken = RegistrationToken,
                     PrefillEmail = PrefillEmail,
                     PlanSelection = PlanSelection,
+                    PlanDefault = PlanDefault,
                     PackSelection = PackSelection == PricingPackSelection.Multi
                         ? SignupPackSelection.Choose
                         : SignupPackSelection.None,

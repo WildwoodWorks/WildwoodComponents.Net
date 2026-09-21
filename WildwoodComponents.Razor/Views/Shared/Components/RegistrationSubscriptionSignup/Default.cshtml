@@ -209,7 +209,12 @@ else
         <h3>@labels.CheckingToken</h3>
     </div>
 
-    @* ── Plan ──────────────────────────────────────────────────────────────── *@
+    @* ── Plan ──────────────────────────────────────────────────────────────────
+       Which card opens highlighted was decided on the SERVER (PlanGrid is built from
+       Model.HighlightedTierId), so `plan-default="free"` needs no script and no data attribute:
+       the grid is painted once, a paid choice reloads the page with ?tier= and is highlighted by
+       the same rule on the way back, and a free choice leaves the plan step for good. The default
+       is never written into the machine's seed selection - it is a highlight, not a choice. *@
     <div class="ww-signup-step" data-ww-step="plan" hidden>
         <h3 class="ww-regsub-step-title">@labels.ChoosePlan</h3>
         @if (Model.PlanGrid is not null)
@@ -335,7 +340,11 @@ else
         </div>
         <div class="ww-alert ww-alert-danger" role="alert" data-ww-disclaimer-error hidden></div>
         <div class="ww-signup-step-nav">
-            <button type="button" class="ww-btn ww-btn-primary" disabled data-ww-action="accept-disclaimers">@labels.ContinueLabel</button>
+            @* data-ww-disclaimer-action: the cross-stack hook a live suite clicks the gate by.
+               This one button accepts every pending disclaimer at once, so it is "accept-all". *@
+            <button type="button" class="ww-btn ww-btn-primary" disabled
+                    data-ww-action="accept-disclaimers"
+                    data-ww-disclaimer-action="accept-all">@labels.ContinueLabel</button>
         </div>
     </div>
 

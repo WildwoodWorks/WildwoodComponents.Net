@@ -349,6 +349,44 @@ public class RegistrationSubscriptionSignupRenderTests
         Assert.Contains("Back", markup);
     }
 
+    /// <summary>
+    /// <c>PlanDefault.Free</c> opens the grid ON the app's free plan — and on nothing else: the
+    /// machine's selection is still empty and the plan step is still ahead, because a suggestion
+    /// is not a choice. The JS twin is "planDefault 'free' opens the grid on the free plan without
+    /// choosing it for them".
+    /// </summary>
+    [Fact]
+    public async Task PlanDefault_Free_opens_the_plan_step_on_the_free_plan_without_choosing_it()
+    {
+        var flow = Driver(Routes(), settings => settings.PlanDefault = SignupPlanDefault.Free);
+        await flow.StartAsync();
+        await flow.SubmitFormAsync(Form());
+
+        var view = View(flow, v => v.PlanDefault = SignupPlanDefault.Free);
+        var markup = RenderAll(view);
+
+        Assert.Contains("data-ww-step=\"plan\"", markup);
+        Assert.Contains("HighlightTierId=\"tier-free\"", markup);
+
+        // A suggestion, not a choice: nothing is selected, and the plan step is where the flow is.
+        Assert.Null(flow.State.Selection.TierId);
+        Assert.Null(flow.Plan);
+        Assert.Equal(SignupStep.Plan, flow.State.Step);
+    }
+
+    [Fact]
+    public async Task Without_a_default_the_plan_step_opens_on_nothing()
+    {
+        var flow = Driver(Routes());
+        await flow.StartAsync();
+        await flow.SubmitFormAsync(Form());
+
+        var markup = RenderAll(View(flow));
+
+        Assert.Contains("data-ww-step=\"plan\"", markup);
+        Assert.DoesNotContain("HighlightTierId=\"tier-", markup);
+    }
+
     [Fact]
     public async Task The_pack_step_shows_the_grid_its_heading_and_a_way_past_it()
     {

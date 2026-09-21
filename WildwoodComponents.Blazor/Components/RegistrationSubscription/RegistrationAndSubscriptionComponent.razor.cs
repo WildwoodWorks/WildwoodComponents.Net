@@ -199,6 +199,12 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
         [Parameter] public SignupPlanSelection PlanSelection { get; set; } = SignupPlanSelection.Choose;
 
         /// <summary>
+        /// <see cref="SignupPlanDefault.Free"/> opens the plan step on the app's free plan — a
+        /// suggestion, not a choice. <b>Signup only.</b>
+        /// </summary>
+        [Parameter] public SignupPlanDefault PlanDefault { get; set; } = SignupPlanDefault.None;
+
+        /// <summary>
         /// <see cref="SignupTokenMode.Required"/> is invite redemption. <b>Signup only.</b>
         /// </summary>
         [Parameter] public SignupTokenMode TokenMode { get; set; } = SignupTokenMode.Auto;

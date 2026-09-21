@@ -153,6 +153,12 @@ public class RegistrationSubscriptionSignupViewModel
 
     public SignupPlanSelection PlanSelection { get; set; } = SignupPlanSelection.Choose;
 
+    /// <summary>
+    /// The plan the grid OPENS on when nothing has chosen one. A highlight only: it is never
+    /// written into the machine's seed selection, so the visitor still confirms with a click.
+    /// </summary>
+    public SignupPlanDefault PlanDefault { get; set; } = SignupPlanDefault.None;
+
     public SignupPackSelection PackSelection { get; set; } = SignupPackSelection.None;
 
     /// <summary>What the link and the parameters asked for, vetted against the catalog.</summary>
@@ -252,6 +258,40 @@ public class RegistrationSubscriptionSignupViewModel
             if (IsCatalogUnavailable) return "failed";
             if (Mode.Closed) return "closed";
             return "register";
+        }
+    }
+
+    /// <summary>
+    /// The plan the grid opens on when nothing has chosen one, or null when nothing is suggested.
+    /// </summary>
+    public string? DefaultTierId
+    {
+        get
+        {
+            return RegistrationSubscriptionSignupDecisions.DefaultTierId(PlanDefault, IsInvite, Catalog);
+        }
+    }
+
+    /// <summary>
+    /// Which plan the grid marks: the one already chosen, else the host's default, else the one
+    /// the link asked for.
+    /// </summary>
+    /// <remarks>
+    /// Decided HERE and rendered into the markup, because the plan step is server-rendered. The
+    /// chosen plan on this surface is <c>Params.TierId</c> — the vetted <c>?tier=</c> the browser
+    /// seeds the machine's selection with — so the same precedence React applies in the browser
+    /// applies here before the first byte.
+    /// </remarks>
+    public string? HighlightedTierId
+    {
+        get
+        {
+            // The chosen plan and the link's plan are the same thing before the first byte: the
+            // browser seeds the machine's selection from this vetted `?tier=`, and an id the
+            // catalog refused was dropped in ResolveParams — it could never mark a card. So the
+            // default fills the gap between them, which is exactly where React puts it.
+            return RegistrationSubscriptionSignupDecisions.HighlightTierId(
+                Params.TierId, DefaultTierId, Params.TierId);
         }
     }
 
@@ -415,7 +455,7 @@ public class RegistrationSubscriptionSignupViewModel
         var cards = new List<PricingPlanCardViewModel>(tiers.Count);
         foreach (var tier in tiers)
         {
-            cards.Add(new PricingPlanCardViewModel(tier, Currency, ContactUrl, Params.TierId));
+            cards.Add(new PricingPlanCardViewModel(tier, Currency, ContactUrl, HighlightedTierId));
         }
 
         var best = RegistrationSubscriptionPricingDecisions.BestAnnualDiscount(tiers);

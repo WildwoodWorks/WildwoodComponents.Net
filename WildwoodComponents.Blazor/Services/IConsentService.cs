@@ -31,5 +31,37 @@ namespace WildwoodComponents.Blazor.Services
 
         /// <summary>Release the focus trap and restore focus to the trigger.</summary>
         Task ReleaseFocusAsync();
+
+        /// <summary>
+        /// Publish the banner's measured height as <c>--ww-consent-height</c> and, unless the host
+        /// opts out, reserve that much room at the edge the banner is anchored to, so the fixed
+        /// banner cannot cover the page's own bottom- or top-anchored UI.
+        /// </summary>
+        /// <param name="element">The banner element to measure and observe.</param>
+        /// <param name="reserve">False publishes the height and leaves the page's padding alone.</param>
+        /// <param name="key">
+        /// A token identifying THIS banner's reservation. Every live banner holds its own, so two
+        /// components sharing this scoped service - and so one cached copy of the JS engine -
+        /// never release or double-count each other's. Calling this again with the same key
+        /// re-measures that one reservation rather than adding a second.
+        /// </param>
+        /// <remarks>
+        /// Only the two bar positions reserve padding. A <c>corner</c> card is a small inset box,
+        /// so padding the whole page for it would leave a full-width blank strip under the
+        /// content; it publishes the height and pads nothing.
+        /// </remarks>
+        Task ReserveBannerSpaceAsync(ElementReference element, bool reserve, string key);
+
+        /// <summary>
+        /// Give one banner's reserved room back, and - when it was the last one up - the published
+        /// height and the page's own inline padding, restored exactly as found.
+        /// </summary>
+        /// <param name="key">
+        /// The token the reservation was taken under. A key that holds nothing is a no-op, so
+        /// releasing twice cannot strand or steal another banner's padding. Taken by key rather
+        /// than by element because this is also called from <c>Dispose</c>, by which time the
+        /// banner's DOM node is gone and an <see cref="ElementReference"/> no longer resolves.
+        /// </param>
+        Task ReleaseBannerSpaceAsync(string key);
     }
 }

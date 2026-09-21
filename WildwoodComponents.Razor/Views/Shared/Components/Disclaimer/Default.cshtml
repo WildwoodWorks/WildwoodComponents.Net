@@ -140,9 +140,14 @@
 
             @* Action Buttons *@
             <div class="ww-disclaimer-actions d-flex gap-2 mt-3">
+                @* data-ww-disclaimer-action: the cross-stack hook a live suite clicks by. This
+                   surface has one button and it accepts every ticked disclaimer at once, so
+                   "accept-all" is the only value it can carry; there is no per-disclaimer accept
+                   button and no retry button here to hang the other two on. *@
                 <button type="button"
                         class="btn btn-primary ww-disclaimer-accept-all-btn"
                         disabled
+                        data-ww-disclaimer-action="accept-all"
                         data-required-count="@requiredCount">
                     <span class="ww-btn-text">Accept &amp; Continue</span>
                     <span class="ww-btn-spinner" style="display:none;">

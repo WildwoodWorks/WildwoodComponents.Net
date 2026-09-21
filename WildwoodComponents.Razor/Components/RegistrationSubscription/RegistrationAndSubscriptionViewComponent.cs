@@ -88,6 +88,10 @@ public class RegistrationAndSubscriptionViewComponent : ViewComponent
     /// <param name="registrationToken"><c>signup</c>. A token to redeem.</param>
     /// <param name="prefillEmail"><c>signup</c>. Fills the email and the username.</param>
     /// <param name="planSelection"><c>signup</c>. <c>choose</c> or <c>skip</c>.</param>
+    /// <param name="planDefault">
+    /// <c>signup</c>. <c>free</c> opens the plan grid on the app's free plan — a suggestion, not a
+    /// choice; <c>none</c> (default) opens it on nothing.
+    /// </param>
     /// <param name="tokenMode"><c>signup</c>. <c>auto</c> or <c>required</c> (invite redemption).</param>
     /// <param name="requireBillingAddress"><c>signup</c>. Collect an address with the card.</param>
     /// <param name="completeUrl"><c>signup</c>. Where "Get Started" goes.</param>
@@ -140,6 +144,7 @@ public class RegistrationAndSubscriptionViewComponent : ViewComponent
         string? registrationToken = null,
         string? prefillEmail = null,
         string planSelection = "choose",
+        string planDefault = "none",
         string tokenMode = "auto",
         bool requireBillingAddress = false,
         string? completeUrl = null,
@@ -207,6 +212,7 @@ public class RegistrationAndSubscriptionViewComponent : ViewComponent
             RegistrationToken = registrationToken,
             PrefillEmail = prefillEmail,
             PlanSelection = planSelection,
+            PlanDefault = planDefault,
             TokenMode = tokenMode,
             RequireBillingAddress = requireBillingAddress,
             CompleteUrl = completeUrl,

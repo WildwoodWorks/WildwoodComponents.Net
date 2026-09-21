@@ -63,6 +63,7 @@ public class RegistrationAndSubscriptionViewModel
     public string? RegistrationToken { get; set; }
     public string? PrefillEmail { get; set; }
     public string PlanSelection { get; set; } = "choose";
+    public string PlanDefault { get; set; } = "none";
     public string TokenMode { get; set; } = "auto";
     public bool RequireBillingAddress { get; set; }
     public string? CompleteUrl { get; set; }

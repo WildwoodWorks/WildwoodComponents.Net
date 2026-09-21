@@ -512,6 +512,7 @@ visible string** are read and rendered on the server. So:
 | `registration-token` | string | `?token=`, then `?invite=` | A token to redeem |
 | `prefill-email` | string | `?email=` | Fills BOTH the email and the username |
 | `plan-selection` | `"choose"` \| `"skip"` | `"choose"` | `skip` takes the app's default plan and removes the step |
+| `plan-default` | `"none"` \| `"free"` | `"none"` | `free` opens the plan grid **highlighted on the app's free plan** — a suggestion the visitor still confirms with a click, not a choice already made. Decided on the server and rendered into the grid; the machine never sees it. Ignored for an invite and when the app sells no free plan, and beaten by a plan the visitor has chosen |
 | `pack-selection` | `"choose"` \| `"none"` | `"none"` | `none` removes the **step only** — a link's packs are still bought |
 | `token-mode` | `"auto"` \| `"required"` | `"auto"` | `required` is invite redemption: token first, no plan, no packs, **overrides a closed config** |
 | `require-billing-address` | bool | `false` | Collect a billing address with the plan's card |
@@ -529,7 +530,7 @@ visible string** are read and rendered on the server. So:
 **Precedence: an explicit attribute always wins over the query string**, key by key. A host that
 wrote `pre-selected-tier-id` meant it, and an address bar must not override the page's own
 decision — but a page may hard-code the plan and still read the packs and the email out of the
-link. `plan-selection`, `pack-selection` and `token-mode` are **strings** in the JS union's own
+link. `plan-selection`, `plan-default`, `pack-selection` and `token-mode` are **strings** in the JS union's own
 spelling, for the same reason the pricing view's are: an enum would force every host to write
 `plan-selection="@SignupPlanSelection.Skip"`. `pack-selection="multi"` is accepted as a synonym of
 `choose`, because that is what React calls it.
@@ -586,7 +587,9 @@ packCheckout | success | failed` — note the machine's `done` is **`success`** 
 already-signed-in visitor gets a `.ww-regsub-notice` and no step. The legacy locators are
 preserved: `.ww-tier-grid` / `.ww-tier-card`, `.ww-signup-processing`, `.ww-signup-disclaimers`,
 `.ww-signup-success`, `.ww-plan-summary-card`, the register form's "Continue" / "Create Account",
-and `<vc:payment />`'s own button and success panel.
+and `<vc:payment />`'s own button and success panel. The disclaimer gate's button carries
+`data-ww-disclaimer-action="accept-all"`, the same hook `<vc:disclaimer />` and the other stacks
+put on their accept button — see [Disclaimer test hooks](#disclaimer-test-hooks).
 
 ### What differs from React, and why
 
@@ -813,7 +816,7 @@ Which parameter belongs to which view:
 | `show-billing-toggle` | pricing, manage (its plans panel) |
 | `show-feature-comparison`, `show-limits` | pricing, signup |
 | `show-plans`, `offer-free-tier-choice`, `add-on-groups`, `default-billing`, `highlight-tier-id`, `include-json-ld`, `json-ld-url`, `select-url`, `unavailable-text` | pricing |
-| `pre-selected-tier-id`, `pre-selected-pricing-id`, `pre-selected-add-on-ids`, `registration-token`, `prefill-email`, `plan-selection`, `token-mode`, `require-billing-address`, `complete-url`, `already-signed-in-url`, `closed-text` | signup |
+| `pre-selected-tier-id`, `pre-selected-pricing-id`, `pre-selected-add-on-ids`, `registration-token`, `prefill-email`, `plan-selection`, `plan-default`, `token-mode`, `require-billing-address`, `complete-url`, `already-signed-in-url`, `closed-text` | signup |
 | `layout`, `sections`, `show-status-above-tabs`, `is-admin`, `user-id`, `company-id`, `allow-pack-self-service`, `allow-cancel`, `payment-required-text`, `proxy-base-url` | manage |
 
 **An unknown `view` is a developer mistake and is reported as one**: in Development the page says
@@ -929,6 +932,21 @@ Two things to do when you move:
    the plan change — so the `/api/wildwood-auth/register`, `/api/wildwood-subscription/subscribe`
    and pack routes you wrote for the old components can go. Your app-tier proxy is still needed
    for the **admin- and company-scoped** writes the manage view's panels make.
+
+---
+
+## Disclaimer test hooks
+
+`<vc:disclaimer />`'s accept button carries `data-ww-disclaimer-action="accept-all"`, the
+cross-stack hook a live end-to-end suite clicks the gate by (React's `DisclaimerComponent` carries
+the same attribute). The signup view's own disclaimer gate carries it too, so the step is located
+the same way wherever it appears.
+
+React also has `data-ww-disclaimer-action="accept"` on a per-disclaimer button and `="retry"` on
+the "Try again" button of a failed load. **This stack renders neither button** — one button accepts
+every ticked disclaimer at once, and an unreadable list is reported in the message area rather than
+behind a retry — so those two values do not appear here. That is a difference in the surface, not a
+missing hook.
 
 ---
 

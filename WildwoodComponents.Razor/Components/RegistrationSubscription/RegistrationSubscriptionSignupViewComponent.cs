@@ -98,6 +98,12 @@ public class RegistrationSubscriptionSignupViewComponent : ViewComponent
     /// a string is compiled as a C# expression, so an enum would force every host to write
     /// <c>plan-selection="@SignupPlanSelection.Skip"</c>.
     /// </param>
+    /// <param name="planDefault">
+    /// <c>free</c> opens the plan grid highlighted on the app's free plan — a suggestion the
+    /// visitor still confirms, not a choice already made; <c>none</c> (default) opens it on
+    /// nothing. Ignored once a link or an invite has chosen. A string, not an enum, for the same
+    /// reason the other mode attributes are strings.
+    /// </param>
     /// <param name="packSelection">
     /// <c>choose</c> offers the pack step; <c>none</c> (default) removes it. <b>It removes the
     /// STEP only</b> — packs a signup link chose are still bought, because the visitor picked them
@@ -149,6 +155,7 @@ public class RegistrationSubscriptionSignupViewComponent : ViewComponent
         string? registrationToken = null,
         string? prefillEmail = null,
         string planSelection = "choose",
+        string planDefault = "none",
         string packSelection = "none",
         string tokenMode = "auto",
         bool requireBillingAddress = false,
@@ -174,6 +181,7 @@ public class RegistrationSubscriptionSignupViewComponent : ViewComponent
             Labels = RegistrationSubscriptionLabels.Resolve(labels),
             TokenMode = resolvedTokenMode,
             PlanSelection = RegistrationSubscriptionSignupDecisions.ParsePlanSelection(planSelection),
+            PlanDefault = RegistrationSubscriptionSignupDecisions.ParsePlanDefault(planDefault),
             PackSelection = RegistrationSubscriptionSignupDecisions.ParsePackSelection(packSelection),
             RequireBillingAddress = requireBillingAddress,
             ReturnUrl = returnUrl,

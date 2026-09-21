@@ -141,6 +141,50 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
             return new SignupPlanView(tier, CatalogHelpers.ResolvePriceOption(tier, pricingId));
         }
 
+        /// <summary>
+        /// The plan the grid opens on when nothing has chosen one. TS <c>defaultTierId</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A HIGHLIGHT and nothing more: the machine never sees it, no plan is selected, and the
+        /// visitor still confirms with a click. <see cref="SignupPlanDefault.Free"/> names the
+        /// app's first free plan; an app that sells none has nothing to suggest, which is not a
+        /// failure.
+        /// </para>
+        /// <para>
+        /// Invite redemption suggests nothing either: an invite's plan comes from its token, so
+        /// there is no grid for a default to open on.
+        /// </para>
+        /// </remarks>
+        public static string? DefaultTierId(SignupPlanDefault planDefault, bool invite, PublicCatalog? catalog)
+        {
+            if (planDefault != SignupPlanDefault.Free || invite || catalog is null) return null;
+
+            foreach (var tier in catalog.Tiers)
+            {
+                if (tier is not null && tier.IsFreeTier) return tier.Id;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Which plan the grid marks. TS
+        /// <c>state.selection.tierId ?? flow.defaultTierId ?? props.preSelectedTierId</c>.
+        /// </summary>
+        /// <remarks>
+        /// The default sits AHEAD of the link's plan on purpose: a <c>preSelectedTierId</c> still
+        /// showing at this point is an id the flow already refused (stale, or hand-edited), so the
+        /// grid opens on the host's default rather than on nothing at all. A plan the visitor has
+        /// actually chosen beats both.
+        /// </remarks>
+        public static string? HighlightTierId(string? selectionTierId, string? defaultTierId, string? preSelectedTierId)
+        {
+            if (selectionTierId is { Length: > 0 }) return selectionTierId;
+            if (defaultTierId is { Length: > 0 }) return defaultTierId;
+            return preSelectedTierId;
+        }
+
         /// <summary>A plan matched case-insensitively — the server's casing for a GUID is not the link's.</summary>
         public static AppTierModel? FindTier(PublicCatalog? catalog, string? tierId)
         {

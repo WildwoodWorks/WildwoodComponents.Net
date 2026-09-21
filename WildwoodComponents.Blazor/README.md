@@ -194,6 +194,7 @@ The whole way in, in the order that keeps an account and its money consistent.
 | `RegistrationToken` | `null` | An invitation token from the signup link. |
 | `PrefillEmail` | `null` | Pre-fills the username and email fields. |
 | `PlanSelection` | `Choose` | `Skip` takes the app's default plan and leaves the plan step out. |
+| `PlanDefault` | `None` | `Free` opens the plan step **highlighted on the app's free plan** — a suggestion the visitor still confirms with a click, not a choice already made. The state machine never sees it: nothing is selected and the plan step still runs. Ignored while an invite is being redeemed, and when the app sells no free plan. A plan the visitor has chosen wins over it, and it wins over `PreSelectedTierId` — an id still showing at that point is one the flow already refused. |
 | `PackSelection` | `None` | `None` only removes the STEP where packs are picked — packs a link already chose are still bought. |
 | `TokenMode` | `Auto` | `Auto` follows the app's live registration settings; `Required` is invite redemption. |
 | `RequireBillingAddress` | `false` | Collect a billing address with the card. |
@@ -333,6 +334,14 @@ groups `data-ww-group="<groupId>"` (the trailing catch-all group is `more`); in 
 `data-ww-section="<section>"` is on each panel in the stacked layout and on each tab button in the
 tabbed one. The copy and class locators live sites' end-to-end suites already use are deliberately
 unchanged.
+
+`DisclaimerComponent`'s accept button carries `data-ww-disclaimer-action="accept-all"` — the
+cross-stack hook a live suite clicks the gate by, and the same one React's `DisclaimerComponent`
+carries. It reaches the signup view's disclaimers step too, which mounts that component. React
+also has `="accept"` on a per-disclaimer button and `="retry"` on the "Try again" button of a
+failed load; **this component renders neither** — one button accepts every ticked disclaimer at
+once, and a failed load is reported in its error line — so those two values do not appear here.
+That is a difference in the surface, not a missing hook.
 
 A harness for all four surfaces — the three views plus the invite preset — is in the test-suite app
 at `/test/registration-subscription`, with `?view=`, `?appId=`, `?token=` (or `?invite=`) and

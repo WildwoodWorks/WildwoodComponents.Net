@@ -220,6 +220,7 @@ public class RegistrationSubscriptionSignupViewComponentTests
         string? registrationToken = null,
         string? prefillEmail = null,
         string planSelection = "choose",
+        string planDefault = "none",
         string packSelection = "none",
         string tokenMode = "auto",
         string? contactUrl = null,
@@ -260,6 +261,7 @@ public class RegistrationSubscriptionSignupViewComponentTests
             registrationToken: registrationToken,
             prefillEmail: prefillEmail,
             planSelection: planSelection,
+            planDefault: planDefault,
             packSelection: packSelection,
             tokenMode: tokenMode,
             contactUrl: contactUrl,
@@ -590,6 +592,129 @@ public class RegistrationSubscriptionSignupViewComponentTests
         var invite = await InvokeAsync(tokenMode: "required");
         Assert.False(invite.PlanStepAhead);
         Assert.Equal("Create Account", invite.SubmitButtonText);
+    }
+
+    // ── The plan the grid opens on ──────────────────────────────────────────────
+
+    /// <summary>
+    /// The pure rules, ported from the JS suites that cover them
+    /// (<c>regsubSignupFlowDefault.test.tsx</c> and the <c>planDefault</c> cases in
+    /// <c>RegistrationAndSubscription.signup.test.tsx</c>).
+    /// </summary>
+    [Theory]
+    [InlineData("free", SignupPlanDefault.Free)]
+    [InlineData("Free", SignupPlanDefault.Free)]
+    [InlineData("  free  ", SignupPlanDefault.Free)]
+    [InlineData("none", SignupPlanDefault.None)]
+    [InlineData("", SignupPlanDefault.None)]
+    [InlineData(null, SignupPlanDefault.None)]
+    [InlineData("freeish", SignupPlanDefault.None)]
+    public void The_plan_default_attribute_is_parsed_leniently(string? value, SignupPlanDefault expected)
+    {
+        Assert.Equal(expected, RegistrationSubscriptionSignupDecisions.ParsePlanDefault(value));
+    }
+
+    [Fact]
+    public void The_default_tier_is_the_apps_first_free_plan_and_only_when_asked_for()
+    {
+        var catalog = Catalog([PaidTier(), Tier(id: "tier-free", name: "Starter", isFreeTier: true)]);
+
+        Assert.Equal(
+            "tier-free",
+            RegistrationSubscriptionSignupDecisions.DefaultTierId(SignupPlanDefault.Free, false, catalog));
+
+        // Not asked for, no free plan to suggest, an invite, or no catalog at all: nothing.
+        Assert.Null(RegistrationSubscriptionSignupDecisions.DefaultTierId(SignupPlanDefault.None, false, catalog));
+        Assert.Null(RegistrationSubscriptionSignupDecisions.DefaultTierId(
+            SignupPlanDefault.Free, false, Catalog([PaidTier()])));
+        Assert.Null(RegistrationSubscriptionSignupDecisions.DefaultTierId(SignupPlanDefault.Free, true, catalog));
+        Assert.Null(RegistrationSubscriptionSignupDecisions.DefaultTierId(SignupPlanDefault.Free, false, null));
+    }
+
+    /// <summary>
+    /// A chosen plan wins; the default beats the link's plan, because a preselected id still
+    /// showing here is one the flow already refused; the link's plan applies when there is no
+    /// default.
+    /// </summary>
+    [Fact]
+    public void The_grid_marks_the_chosen_plan_then_the_default_then_the_links_plan()
+    {
+        Assert.Equal(
+            "tier-chosen",
+            RegistrationSubscriptionSignupDecisions.HighlightTierId("tier-chosen", "tier-free", "tier-pro"));
+        Assert.Equal(
+            "tier-free", RegistrationSubscriptionSignupDecisions.HighlightTierId(null, "tier-free", "tier-pro"));
+        Assert.Equal("tier-pro", RegistrationSubscriptionSignupDecisions.HighlightTierId(null, null, "tier-pro"));
+        Assert.Null(RegistrationSubscriptionSignupDecisions.HighlightTierId(null, null, null));
+    }
+
+    /// <summary>
+    /// And what the surface actually renders: the free plan's card opens marked, with the
+    /// call-to-action a marked card carries — while nothing has been chosen, so the plan step is
+    /// still ahead of the visitor.
+    /// </summary>
+    [Fact]
+    public async Task Plan_default_free_opens_the_grid_on_the_free_plan_without_choosing_it()
+    {
+        var catalog = Catalog([PaidTier(), Tier(id: "tier-free", name: "Starter", isFreeTier: true)]);
+
+        var model = await InvokeAsync(catalog: catalog, planDefault: "free");
+
+        Assert.Equal("tier-free", model.DefaultTierId);
+        Assert.Equal("tier-free", model.HighlightedTierId);
+        Assert.True(model.PlanStepAhead);
+        Assert.Null(model.PresetPlan);
+        Assert.Null(model.Params.TierId);
+
+        var marked = model.PlanGrid!.Cards.Single(card => card.IsHighlighted);
+        Assert.Equal("tier-free", marked.Tier.Id);
+    }
+
+    [Fact]
+    public async Task Without_a_default_the_grid_opens_on_nothing()
+    {
+        var catalog = Catalog([PaidTier(), Tier(id: "tier-free", name: "Starter", isFreeTier: true)]);
+
+        var model = await InvokeAsync(catalog: catalog);
+
+        Assert.Null(model.DefaultTierId);
+        Assert.Null(model.HighlightedTierId);
+        Assert.DoesNotContain(model.PlanGrid!.Cards, card => card.IsHighlighted);
+    }
+
+    /// <summary>A link's plan is the visitor's own choice, and it still skips the step entirely.</summary>
+    [Fact]
+    public async Task A_links_plan_beats_the_default_and_still_skips_the_plan_step()
+    {
+        var catalog = Catalog([PaidTier(), Tier(id: "tier-free", name: "Starter", isFreeTier: true)]);
+
+        var model = await InvokeAsync(catalog: catalog, planDefault: "free", preSelectedTierId: "tier-pro");
+
+        Assert.Equal("tier-pro", model.HighlightedTierId);
+        Assert.Equal("tier-pro", model.PresetPlan!.Tier.Id);
+        Assert.False(model.PlanStepAhead);
+    }
+
+    /// <summary>An invite's plan comes from its token, so there is no grid for a default to open on.</summary>
+    [Fact]
+    public async Task An_invite_is_suggested_nothing()
+    {
+        var catalog = Catalog([PaidTier(), Tier(id: "tier-free", name: "Starter", isFreeTier: true)]);
+
+        var model = await InvokeAsync(catalog: catalog, planDefault: "free", tokenMode: "required");
+
+        Assert.Null(model.DefaultTierId);
+        Assert.Null(model.HighlightedTierId);
+    }
+
+    /// <summary>Nothing to suggest is not a failure: the grid is the one it would have been anyway.</summary>
+    [Fact]
+    public async Task An_app_with_no_free_plan_is_suggested_nothing()
+    {
+        var model = await InvokeAsync(catalog: Catalog([PaidTier()]), planDefault: "free");
+
+        Assert.Null(model.DefaultTierId);
+        Assert.Null(model.HighlightedTierId);
     }
 
     // ── The pack step ───────────────────────────────────────────────────────────

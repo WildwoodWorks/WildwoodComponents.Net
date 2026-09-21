@@ -30,6 +30,12 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
         public SignupPlanSelection PlanSelection { get; set; } = SignupPlanSelection.Choose;
 
         /// <summary>
+        /// The plan the grid OPENS on when nothing has chosen one. A highlight only: the machine
+        /// never sees it, and the visitor still confirms with a click.
+        /// </summary>
+        public SignupPlanDefault PlanDefault { get; set; } = SignupPlanDefault.None;
+
+        /// <summary>
         /// Whether the pack step is offered. Default <see cref="SignupPackSelection.None"/>, which
         /// is React's default too — and which only removes the STEP: packs a signup link chose are
         /// still bought.
@@ -271,6 +277,21 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
             {
                 if (_chosenPlan is not null) return _chosenPlan;
                 return SignupViewDecisions.ResolvePlan(_catalog, _state.Selection.TierId, _state.Selection.PricingId);
+            }
+        }
+
+        /// <summary>
+        /// The plan the grid opens on when nothing has chosen one. A highlight only: the machine
+        /// never sees it. TS <c>flow.defaultTierId</c>.
+        /// </summary>
+        public string? DefaultTierId
+        {
+            get
+            {
+                return SignupViewDecisions.DefaultTierId(
+                    Settings.PlanDefault,
+                    Settings.TokenMode == SignupTokenMode.Required,
+                    _catalog);
             }
         }
 
