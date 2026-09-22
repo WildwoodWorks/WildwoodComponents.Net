@@ -3,6 +3,7 @@
   <Project Path="WildwoodComponents.Razor/WildwoodComponents.Razor.csproj" />
   <Project Path="WildwoodComponents.Shared/WildwoodComponents.Shared.csproj" />
   <Project Path="WildwoodComponents.Testing/WildwoodComponents.Testing.csproj" />
+  <Project Path="WildwoodComponents.Testing.Smoke/WildwoodComponents.Testing.Smoke.csproj" />
   <Project Path="WildwoodComponents.Tests/WildwoodComponents.Tests.csproj" />
   <Project Path="WildwoodComponents.WebForms/WildwoodComponents.WebForms.csproj" />
   <Project Path="WildwoodComponents.WebForms.Tests/WildwoodComponents.WebForms.Tests.csproj" />

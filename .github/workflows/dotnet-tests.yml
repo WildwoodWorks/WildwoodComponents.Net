@@ -57,6 +57,15 @@ jobs:
           dotnet test WildwoodComponents.Tests/WildwoodComponents.Tests.csproj -c Release --no-restore
           --logger "trx;LogFileName=unit.trx" --results-directory TestResults
 
+      # The smoke runner drives a real browser, so it does not run here. It is COMPILED here
+      # because nothing else in this workflow would: the test project must not reference it (the
+      # package boundary forbids anything shipped from reaching Playwright, and a test asserts
+      # that), so it is absent from the only build graph CI touches. Left uncompiled, a rename in
+      # WildwoodComponents.Testing would break it on main with every required check still green -
+      # which is precisely the silent rot it was put in the solution to avoid.
+      - name: Smoke runner compiles
+        run: dotnet build WildwoodComponents.Testing.Smoke/WildwoodComponents.Testing.Smoke.csproj -c Release
+
       - name: Upload test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4

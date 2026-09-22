@@ -86,6 +86,38 @@ public class TestingPackageBoundaryTests
         Assert.DoesNotContain("WildwoodComponents.Razor", references);
     }
 
+    /// <summary>
+    /// The browser smoke runner is in the solution, and nothing ships it.
+    /// </summary>
+    /// <remarks>
+    /// It is a console runner rather than a test project - it needs a browser, which a build machine
+    /// does not have - so <c>dotnet test</c> never runs it and only the COMPILER stands between it
+    /// and bit rot. This pins the half of that arrangement the solution file owns; the other half is
+    /// the explicit build step in <c>dotnet-tests.yml</c>, which exists because CI builds the two
+    /// test projects rather than the solution, and neither may reference this one. See its README for
+    /// what it proves and what it does not.
+    /// </remarks>
+    [Fact]
+    public void The_browser_smoke_runner_is_in_the_solution_and_shipped_by_nobody()
+    {
+        var solution = File.ReadAllText(
+            Path.Combine(NodeSelfTest.RepoRoot(), "WildwoodComponents.Net.slnx"));
+
+        Assert.Contains(
+            "WildwoodComponents.Testing.Smoke/WildwoodComponents.Testing.Smoke.csproj",
+            solution,
+            StringComparison.Ordinal);
+
+        foreach (var package in new[]
+                 {
+                     "WildwoodComponents.Blazor", "WildwoodComponents.Razor",
+                     "WildwoodComponents.Shared", "WildwoodComponents.WebForms"
+                 })
+        {
+            Assert.DoesNotContain("WildwoodComponents.Testing.Smoke", References(package));
+        }
+    }
+
     /// <summary>The helpers are in the solution, so the build and the suite see them.</summary>
     [Fact]
     public void The_helpers_are_in_the_solution()
