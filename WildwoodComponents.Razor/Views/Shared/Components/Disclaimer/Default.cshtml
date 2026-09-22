@@ -116,10 +116,16 @@
                             Read Full Document
                         </button>
 
+                        @* data-ww-disclaimer-check names the gate in front of Accept: the button
+                           below ships disabled until the required boxes are ticked, so a suite
+                           that cannot find the boxes waits on a button that will never enable.
+                           disclaimer.js reads these by .ww-disclaimer-checkbox, so the attribute
+                           is a marker only. *@
                         <div class="form-check">
                             <input type="checkbox"
                                    class="form-check-input ww-disclaimer-checkbox"
                                    id="ww-disclaimer-accept-@cid-@disclaimer.DisclaimerId"
+                                   data-ww-disclaimer-check
                                    data-disclaimer-id="@disclaimer.DisclaimerId"
                                    data-version-id="@disclaimer.VersionId"
                                    data-is-required="@disclaimer.IsRequired.ToString().ToLower()" />

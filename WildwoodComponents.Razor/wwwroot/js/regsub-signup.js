@@ -459,6 +459,17 @@
             if (detached) return;
 
             var name = machines.signupStepName(state.step);
+
+            // The active step, MIRRORED onto the root - the same one line regsub-manage.js's
+            // paintFlow() writes, and for the same reason: every step's panel is in the DOM at
+            // once here, so the root is the only place a single readable value can live. A reader
+            // that takes the first [data-ww-step] under [data-ww-view="signup"] resolves it in
+            // document order, and the root precedes every panel.
+            //
+            // The root is NOT one of the panels below: `qa` is root.querySelectorAll, which never
+            // returns its own context node, so this attribute cannot make the root hide itself.
+            root.setAttribute('data-ww-step', name);
+
             var panels = qa('[data-ww-step]');
             for (var i = 0; i < panels.length; i++) {
                 panels[i].hidden = panels[i].getAttribute('data-ww-step') !== name;
@@ -1090,15 +1101,18 @@
                     if (packRunner) packRunner.skip();
                     break;
 
-                case 'retry':
+                // The three below carry the CROSS-STACK vocabulary rather than this package's
+                // own, because a shared browser suite clicks them by name in React, Blazor and
+                // here. Everything else in this switch is Razor's own wiring.
+                case 'signup-retry':
                     dispatch({ type: 'RETRY' });
                     break;
 
-                case 'start-over':
+                case 'signup-start-over':
                     startOver();
                     break;
 
-                case 'complete':
+                case 'signup-get-started':
                     completeSignup();
                     break;
 

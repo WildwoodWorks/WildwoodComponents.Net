@@ -16,6 +16,13 @@
     what keeps English, money and server-supplied HTML out of the browser script: regsub-signup.js
     writes text with textContent and never builds markup.
 
+    Which is also why the ROOT carries data-ww-step, as the manage root does: with twelve panels
+    in the DOM at once, the root is the only place a single readable step can live, and it
+    precedes every panel in document order. The script mirrors the machine's step onto it from
+    its first render; the value shipped here is the machine's own starting state, so it is true
+    of a page whose script has not run - and of a visitor who is already signed in, whom the
+    machine leaves on `loading` while the notice below says so.
+
     The disclaimers are rendered server-side for the same reason: one whose content format is HTML
     has to be rendered as HTML, and only a Razor view may do that safely.
 *@
@@ -29,6 +36,7 @@
 <div id="ww-regsub-signup-@cid"
      class="ww-regsub ww-regsub-signup"
      data-ww-view="signup"
+     data-ww-step="loading"
      data-component-id="@cid"
      data-ww-app-id="@Model.AppId"
      data-ww-proxy="@Model.ProxyUrl"
@@ -391,8 +399,11 @@ else
         <h3>@labels.SignupFailed</h3>
         <p class="ww-text-muted" data-ww-error-message></p>
         <div class="ww-signup-processing-actions">
-            <button type="button" class="ww-btn ww-btn-primary" data-ww-action="retry">@labels.TryAgain</button>
-            <button type="button" class="ww-btn ww-btn-link" data-ww-action="start-over">@labels.StartOver</button>
+            @* signup-retry / signup-start-over: the cross-stack action vocabulary, not Razor's
+               own. The signup prefix is what keeps them apart from the pricing view's plain
+               "retry", which is this package's own name for reloading a catalog. *@
+            <button type="button" class="ww-btn ww-btn-primary" data-ww-action="signup-retry">@labels.TryAgain</button>
+            <button type="button" class="ww-btn ww-btn-link" data-ww-action="signup-start-over">@labels.StartOver</button>
         </div>
     </div>
 
@@ -408,7 +419,9 @@ else
         <h3>@labels.SignupCompleteTitle</h3>
         <p class="ww-text-muted" data-ww-success-message></p>
         <ul class="ww-pack-outcome-list" data-ww-pack-outcomes hidden></ul>
-        <button type="button" class="ww-btn ww-btn-primary ww-btn-lg" data-ww-action="complete">@labels.GetStarted</button>
+        @* signup-get-started, the contract's name for this button, on the panel the contract
+           finds by .ww-signup-success. *@
+        <button type="button" class="ww-btn ww-btn-primary ww-btn-lg" data-ww-action="signup-get-started">@labels.GetStarted</button>
     </div>
 }
 </div>
