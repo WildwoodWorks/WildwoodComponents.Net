@@ -53,19 +53,16 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
         #endregion
 
         /// <summary>
-        /// The <c>data-ww-step</c> name for a machine step. The machine's <c>Done</c> is spelled
-        /// <c>success</c> in the DOM, exactly as JS spells it, because that is the hook live
-        /// end-to-end suites locate the finished signup by.
+        /// The <c>data-ww-step</c> name for a machine step.
         /// </summary>
+        /// <remarks>
+        /// The table itself is <see cref="StepNames.ForSignup"/>, in Shared: Razor's signup view
+        /// publishes the same names, and the Playwright helpers in WildwoodComponents.Testing wait
+        /// on them, so a copy here would be a name that could drift in one stack only.
+        /// </remarks>
         public static string StepName(SignupStep step)
         {
-            if (step == SignupStep.Done) return "success";
-            if (step == SignupStep.PackCheckout) return "packCheckout";
-
-            // Every other step's name is its enum name, lower-cased first letter — the machine's
-            // members were named after the TS union members precisely so this holds.
-            var name = step.ToString();
-            return char.ToLowerInvariant(name[0]) + name.Substring(1);
+            return StepNames.ForSignup(step);
         }
 
         /// <summary>

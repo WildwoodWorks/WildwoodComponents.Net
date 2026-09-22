@@ -252,15 +252,11 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
 
         /// <summary>
         /// The <c>data-ww-step</c> value: the machine's step with a lower-cased first letter, the
-        /// vocabulary JS's test-hook table pins.
+        /// vocabulary JS's test-hook table pins. The table is <see cref="StepNames.ForPlanChange"/>.
         /// </summary>
         public string StepName
         {
-            get
-            {
-                var name = _state.Step.ToString();
-                return char.ToLowerInvariant(name[0]) + name.Substring(1);
-            }
+            get { return StepNames.ForPlanChange(_state.Step); }
         }
 
         /// <summary>The preview to confirm, or null when nothing is waiting on the customer.</summary>
