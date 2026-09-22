@@ -204,13 +204,23 @@ internal sealed class PlaywrightFlowSurface : IFlowSurface
     /// Whether this failure is the driver ANSWERING - nothing matched, or nothing matched in time.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Both types are caught because Playwright for .NET raises the two separately: its own
     /// <see cref="PlaywrightException"/> for a selector that matched nothing or an element that went
     /// away mid-read, and <see cref="System.TimeoutException"/> when a wait runs out - there is no
     /// <c>Microsoft.Playwright.TimeoutException</c> to cover both. Anything else is left to throw,
     /// so a browser that crashed is not reported as a component that rendered nothing.
+    /// </para>
+    /// <para>
+    /// <c>internal</c> rather than private so <see cref="WildwoodSignupSteps"/> reads the step
+    /// through the same rule. It used to catch <see cref="PlaywrightException"/> alone, which let a
+    /// locator timeout - the "the view never mounted" case its own remarks describe - escape as a
+    /// raw <see cref="System.TimeoutException"/> and pre-empt the caller's budget with the timeout
+    /// this package exists to replace. Two files disagreeing about which failures are ANSWERS is
+    /// exactly the kind of thing that stays wrong, so there is one rule.
+    /// </para>
     /// </remarks>
-    private static bool IsDriverAnswer(Exception error)
+    internal static bool IsDriverAnswer(Exception error)
     {
         return error is PlaywrightException or System.TimeoutException;
     }

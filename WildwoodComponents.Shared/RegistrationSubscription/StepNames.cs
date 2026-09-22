@@ -25,8 +25,9 @@ public static class StepNames
     /// </remarks>
     public static string ForSignup(SignupStep step)
     {
+        // The ONE rename. `packCheckout` used to be spelled out here beside it, which read as if
+        // there were two - there are not: LowerFirst("PackCheckout") already yields exactly that.
         if (step == SignupStep.Done) return "success";
-        if (step == SignupStep.PackCheckout) return "packCheckout";
 
         // Every other step's name is its enum name, lower-cased first letter - the machine's
         // members were named after the TS union members precisely so this holds.

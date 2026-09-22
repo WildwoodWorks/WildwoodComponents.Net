@@ -79,12 +79,19 @@ public static class WildwoodSignupSteps
                 .GetAttributeAsync(WildwoodTestSelectors.StepAttribute)
                 .ConfigureAwait(false);
         }
-        catch (PlaywrightException)
+        catch (Exception error) when (PlaywrightFlowSurface.IsDriverAnswer(error))
         {
-            // Nothing matched, or what matched went away mid-read. Both mean "not painted yet",
-            // which is an answer rather than a failure while a component is still mounting - so
-            // this swallows exactly what JS's `.catch(() => null)` swallows. The wait that called
-            // it is what eventually fails, and it fails saying what it was waiting for.
+            // Nothing matched, nothing matched IN TIME, or what matched went away mid-read. All
+            // three mean "not painted yet", which is an answer rather than a failure while a
+            // component is still mounting - so this swallows exactly what JS's `.catch(() => null)`
+            // swallows. The wait that called it is what eventually fails, and it fails saying what
+            // it was waiting for.
+            //
+            // The timeout half matters more than it looks: `GetAttributeAsync` auto-waits, so a page
+            // where the view never mounts at all - a routing or render regression, the case this
+            // reader is most useful for - reaches the locator's own deadline rather than returning
+            // empty. Catching only PlaywrightException let that escape as a raw TimeoutException and
+            // pre-empt the caller's budget with precisely the bare timeout this package replaces.
             return null;
         }
     }
