@@ -9,5 +9,6 @@ public static class AuthErrorCodes
     public const string InvalidCredentials = "InvalidCredentials";
     public const string NotAuthorizedForApplication = "NotAuthorizedForApplication";
     public const string AccountDeactivated = "AccountDeactivated";
+    public const string TemporaryPasswordExpired = "TemporaryPasswordExpired";
     public const string UserExists = "USER_EXISTS";
 }
