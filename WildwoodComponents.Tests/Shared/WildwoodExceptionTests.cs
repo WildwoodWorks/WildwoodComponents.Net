@@ -82,4 +82,61 @@ public class WildwoodExceptionTests
 
         Assert.Equal("Fallback", ex.Message);
     }
+
+    [Fact]
+    public void FromHttpResponse_JsonBodyWithErrorMessageField_ExtractsMessage()
+    {
+        // The checkout and pack endpoints answer refusals with `errorMessage`, which the factory
+        // ignored before — leaving the caller with "Request failed with status 400".
+        var body = "{\"success\":false,\"errorMessage\":\"You already have that pack.\"}";
+
+        var ex = WildwoodException.FromHttpResponse(400, body);
+
+        Assert.Equal("You already have that pack.", ex.Message);
+    }
+
+    [Fact]
+    public void FromHttpResponse_MessageWinsOverErrorMessage()
+    {
+        var body = "{\"message\":\"First\",\"errorMessage\":\"Second\",\"error\":\"Third\"}";
+
+        var ex = WildwoodException.FromHttpResponse(400, body);
+
+        Assert.Equal("First", ex.Message);
+    }
+
+    [Fact]
+    public void FromHttpResponse_ErrorMessageWinsOverErrorAndTitle()
+    {
+        var body = "{\"errorMessage\":\"Second\",\"error\":\"Third\",\"title\":\"Fourth\"}";
+
+        var ex = WildwoodException.FromHttpResponse(400, body);
+
+        Assert.Equal("Second", ex.Message);
+    }
+
+    [Fact]
+    public void FromHttpResponse_EmptyMessageField_NeverYieldsAnEmptyMessage()
+    {
+        // An empty message reads as "no error" in UI code that branches on the message.
+        var ex = WildwoodException.FromHttpResponse(502, "{\"message\":\"\"}");
+
+        Assert.Equal("Request failed (HTTP 502)", ex.Message);
+    }
+
+    [Fact]
+    public void FromHttpResponse_EmptyFallback_NeverYieldsAnEmptyMessage()
+    {
+        var ex = WildwoodException.FromHttpResponse(500, null, string.Empty);
+
+        Assert.Equal("Request failed (HTTP 500)", ex.Message);
+    }
+
+    [Fact]
+    public void FromHttpResponse_EmptyErrorMessageField_NeverYieldsAnEmptyMessage()
+    {
+        var ex = WildwoodException.FromHttpResponse(400, "{\"errorMessage\":\"\"}");
+
+        Assert.Equal("Request failed (HTTP 400)", ex.Message);
+    }
 }

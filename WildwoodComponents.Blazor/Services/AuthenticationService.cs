@@ -74,6 +74,18 @@ namespace WildwoodComponents.Blazor.Services
         Task<string> GetPasswordRequirementsAsync(string appId);
         Task<bool> HasRegistrationTokensAsync(string appId);
         Task<bool> ValidateRegistrationTokenAsync(string token);
+
+        /// <summary>
+        /// What a registration token grants (tier, pricing, packs and features per app), from
+        /// <c>GET api/registrationtokens/validate-detailed/{token}</c> with an optional
+        /// <c>?appId=</c> scope. Returns <c>null</c> when the details cannot be READ — an older
+        /// server without the route, or a transport failure — which is NOT the same as an invalid
+        /// token: callers fall back to <see cref="ValidateRegistrationTokenAsync"/> instead of
+        /// telling the registrant their token is bad. An invalid token comes back as details with
+        /// <c>IsValid=false</c> and the server's message.
+        /// </summary>
+        Task<WildwoodComponents.Shared.Models.RegistrationTokenDetails?> GetRegistrationTokenDetailsAsync(string token, string? appId = null);
+
         /// <summary>
         /// Completes a password reset. The forced (temporary-password) flow leaves
         /// <paramref name="resetToken"/> null and is authenticated with the stored bearer
@@ -88,6 +100,17 @@ namespace WildwoodComponents.Blazor.Services
         Task<bool> RefreshTokenAsync();
         event Action<AuthenticationResponse>? OnAuthenticationChanged;
         event Action? OnLogout;
+
+        /// <summary>
+        /// Queues a Campaign Attribution claim for the next authentication change that carries a token,
+        /// i.e. once a session exists. <see cref="LoginAsync"/> calls this for a provider sign-in, which
+        /// has no registration request to carry the captured campaign tags; two-factor, a forced password
+        /// reset or pending disclaimers can defer the session, and a claim sent before it exists would
+        /// 401. A sign-out drops the queued claim and it lapses after fifteen minutes. Mirrors
+        /// <c>@wildwood/core</c> <c>authService.queueAttributionClaim</c>.
+        /// </summary>
+        /// <param name="appId">The app the user is signing in to. An empty value queues nothing.</param>
+        void QueueAttributionClaim(string? appId);
 
         // Passkey/WebAuthn methods
         Task<object> GetPasskeyAuthenticationOptionsAsync(string appId);
@@ -123,9 +146,24 @@ namespace WildwoodComponents.Blazor.Services
 
     public class AuthenticationService : IAuthenticationService
     {
+        /// <summary>
+        /// How long a queued attribution claim stays valid, matching <c>@wildwood/core</c>'s
+        /// <c>ATTRIBUTION_CLAIM_WINDOW_MS</c> and the server's claim window.
+        /// </summary>
+        private static readonly TimeSpan AttributionClaimWindow = TimeSpan.FromMinutes(15);
+
         private readonly HttpClient _httpClient;
         private readonly ILocalStorageService _localStorage;
         private readonly ILogger<AuthenticationService> _logger;
+
+        /// <summary>
+        /// The Campaign Attribution engine, when the host registered one. Optional so a host that builds
+        /// this service by hand keeps working; every use is best-effort and never breaks a signup.
+        /// </summary>
+        private readonly IAttributionService? _attribution;
+
+        /// <summary>The claim waiting for a signed-in session, with the moment it was queued.</summary>
+        private (string AppId, DateTimeOffset QueuedAt)? _queuedAttributionClaim;
 
         public event Action<AuthenticationResponse>? OnAuthenticationChanged;
         public event Action? OnLogout;
@@ -133,12 +171,110 @@ namespace WildwoodComponents.Blazor.Services
         public AuthenticationService(
             HttpClient httpClient,
             ILocalStorageService localStorage,
-            ILogger<AuthenticationService> logger)
+            ILogger<AuthenticationService> logger,
+            IAttributionService? attribution = null)
         {
             _httpClient = httpClient;
             _localStorage = localStorage;
             _logger = logger;
+            _attribution = attribution;
         }
+
+        #region Campaign Attribution
+
+        /// <inheritdoc />
+        public void QueueAttributionClaim(string? appId)
+        {
+            _queuedAttributionClaim = string.IsNullOrWhiteSpace(appId)
+                ? null
+                : (appId!, DateTimeOffset.UtcNow);
+        }
+
+        /// <summary>
+        /// The caller's payload when there is one, otherwise the engine's captured payload. Mirrors
+        /// <c>@wildwood/core</c>'s <c>resolveAttribution</c>: an explicit value always wins, so a
+        /// component that attaches the payload itself is not double-resolved here.
+        /// </summary>
+        private async Task<WildwoodComponents.Shared.Models.AttributionPayloadModel?> ResolveAttributionAsync(
+            WildwoodComponents.Shared.Models.AttributionPayloadModel? explicitPayload)
+        {
+            if (explicitPayload is not null || _attribution is null)
+            {
+                return explicitPayload;
+            }
+
+            try
+            {
+                return await _attribution.GetForRegistrationAsync();
+            }
+            catch (Exception ex)
+            {
+                // Attribution is measurement: a failure here must never cost a signup.
+                _logger.LogDebug(ex, "Reading the captured attribution payload failed; registering without it");
+                return null;
+            }
+        }
+
+        /// <summary>Drops the captured touches after a recorded signup. Never throws.</summary>
+        private async Task ClearAttributionAsync()
+        {
+            if (_attribution is null)
+            {
+                return;
+            }
+
+            try
+            {
+                await _attribution.ClearAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Clearing the captured attribution failed");
+            }
+        }
+
+        /// <summary>
+        /// Announces an authentication change and then sends a queued attribution claim if the change
+        /// carries a session. This is the .NET stand-in for the <c>authChanged</c> event
+        /// <c>@wildwood/core</c> subscribes the queued claim to.
+        /// </summary>
+        private async Task RaiseAuthenticationChangedAsync(AuthenticationResponse response)
+        {
+            OnAuthenticationChanged?.Invoke(response);
+            await SendQueuedAttributionClaimAsync(response);
+        }
+
+        /// <summary>
+        /// Sends the queued claim once a session exists. A token-less response (two-factor still pending)
+        /// keeps waiting; a claim older than <see cref="AttributionClaimWindow"/> lapses; and a claim is
+        /// sent at most once per queue. Failures are swallowed by
+        /// <see cref="AttributionServiceExtensions.ClaimAsync"/>.
+        /// </summary>
+        private async Task SendQueuedAttributionClaimAsync(AuthenticationResponse? response)
+        {
+            var queued = _queuedAttributionClaim;
+            if (queued is null)
+            {
+                return;
+            }
+
+            // Not a signed-in session yet (two-factor, or a registration that returned no tokens): keep waiting.
+            if (response is null || string.IsNullOrEmpty(response.JwtToken))
+            {
+                return;
+            }
+
+            _queuedAttributionClaim = null;
+
+            if (_attribution is null || DateTimeOffset.UtcNow - queued.Value.QueuedAt > AttributionClaimWindow)
+            {
+                return;
+            }
+
+            await _attribution.ClaimAsync(_httpClient, queued.Value.AppId, response.JwtToken);
+        }
+
+        #endregion
 
         public async Task<AuthenticationResponse> LoginAsync(LoginRequest request)
         {
@@ -172,6 +308,15 @@ namespace WildwoodComponents.Blazor.Services
                     var authResponse = await response.Content.ReadFromJsonAsync<AuthenticationResponse>();
                     if (authResponse != null)
                     {
+                        // A provider sign-in may have just created the account, and a provider signup has no
+                        // registration request to carry the campaign touches. Queue a claim: it goes out on the
+                        // next signed-in authentication change, which is the one below or, when two-factor
+                        // defers the session, the one verification makes.
+                        if (!string.IsNullOrWhiteSpace(request.ProviderToken))
+                        {
+                            QueueAttributionClaim(request.AppId);
+                        }
+
                         // If 2FA is required, don't store auth yet - return for UI to handle
                         if (authResponse.RequiresTwoFactor)
                         {
@@ -180,7 +325,7 @@ namespace WildwoodComponents.Blazor.Services
                         }
 
                         await StoreAuthenticationAsync(authResponse);
-                        OnAuthenticationChanged?.Invoke(authResponse);
+                        await RaiseAuthenticationChangedAsync(authResponse);
                         return authResponse;
                     }
                 }
@@ -229,6 +374,10 @@ namespace WildwoodComponents.Blazor.Services
                     }
                 }
 
+                // The caller's payload wins; otherwise the captured one is attached here, so a host that
+                // calls the service directly attributes its signups without writing any glue.
+                request.Attribution = await ResolveAttributionAsync(request.Attribution);
+
                 var response = await _httpClient.PostAsJsonAsync("api/auth/register", request);
 
                 if (response.IsSuccessStatusCode)
@@ -237,7 +386,9 @@ namespace WildwoodComponents.Blazor.Services
                     if (authResponse != null)
                     {
                         await StoreAuthenticationAsync(authResponse);
-                        OnAuthenticationChanged?.Invoke(authResponse);
+                        await RaiseAuthenticationChangedAsync(authResponse);
+                        // Recorded with the account: a later signup from this browser must not reuse the same touches.
+                        await ClearAttributionAsync();
                         return authResponse;
                     }
                 }
@@ -290,7 +441,11 @@ namespace WildwoodComponents.Blazor.Services
                 _logger.LogDebug("RegisterWithTokenAsync - Request details: RegistrationToken='{RegistrationToken}', ProviderToken='{ProviderToken}', Email='{Email}', Username='{Username}', AppId='{AppId}'", 
                     request.RegistrationToken ?? "NULL", request.ProviderToken ?? "NULL", request.Email, request.Username ?? "NULL", request.AppId);
                 
-                var tokenRegistrationDto = new 
+                // The caller's payload wins; otherwise the captured one is attached here, exactly as
+                // @wildwood/core's registerWithToken resolves it.
+                var attribution = await ResolveAttributionAsync(request.Attribution);
+
+                var tokenRegistrationDto = new
                 {
                     Token = request.RegistrationToken,
                     Username = request.Username ?? request.Email, // Fall back to email if username not provided
@@ -301,7 +456,7 @@ namespace WildwoodComponents.Blazor.Services
                     AppId = request.AppId,
                     Platform = request.Platform,
                     DeviceInfo = request.DeviceInfo,
-                    Attribution = request.Attribution
+                    Attribution = attribution
                 };                _logger.LogDebug("RegisterWithTokenAsync - Making registration request to api/userregistration/register-with-token with Email: {Email}, Username: {Username}, AppId: {AppId}, Platform: {Platform}", 
                     request.Email, request.Username ?? request.Email, request.AppId, request.Platform);
 
@@ -327,7 +482,8 @@ namespace WildwoodComponents.Blazor.Services
                         {
                             _logger.LogInformation("Successful AuthenticationResponse with JWT token");
                             await StoreAuthenticationAsync(authResponse);
-                            OnAuthenticationChanged?.Invoke(authResponse);
+                            await RaiseAuthenticationChangedAsync(authResponse);
+                            await ClearAttributionAsync();
                             return authResponse;
                         }
                         else
@@ -368,7 +524,9 @@ namespace WildwoodComponents.Blazor.Services
                                 
                                 // Don't store authentication state for registration - only return the response
                                 // The UI should handle this by showing a "registration successful, please login" message
-                                OnAuthenticationChanged?.Invoke(basicResponse);
+                                await RaiseAuthenticationChangedAsync(basicResponse);
+                                // A token-less success is still a recorded signup, so the touches go with it.
+                                await ClearAttributionAsync();
                                 return basicResponse;
                             }
                             else
@@ -416,7 +574,8 @@ namespace WildwoodComponents.Blazor.Services
                     };
                     
                     // Don't store authentication state for registration - only return the response
-                    OnAuthenticationChanged?.Invoke(fallbackResponse);
+                    await RaiseAuthenticationChangedAsync(fallbackResponse);
+                    await ClearAttributionAsync();
                     return fallbackResponse;
                 }
                 else
@@ -740,6 +899,9 @@ namespace WildwoodComponents.Blazor.Services
             finally
             {
                 await ClearAuthenticationAsync();
+                // A sign-out drops a claim that is still waiting for a session, as @wildwood/core does
+                // on its authChanged(null).
+                _queuedAttributionClaim = null;
                 OnLogout?.Invoke();
             }
         }
@@ -778,7 +940,7 @@ namespace WildwoodComponents.Blazor.Services
                         }
 
                         await StoreAuthenticationAsync(authResponse);
-                        OnAuthenticationChanged?.Invoke(authResponse);
+                        await RaiseAuthenticationChangedAsync(authResponse);
                         return true;
                     }
                 }
@@ -1084,6 +1246,37 @@ namespace WildwoodComponents.Blazor.Services
             }
         }
 
+        public async Task<WildwoodComponents.Shared.Models.RegistrationTokenDetails?> GetRegistrationTokenDetailsAsync(
+            string token, string? appId = null)
+        {
+            try
+            {
+                var encodedToken = Uri.EscapeDataString(token ?? string.Empty);
+                var appQuery = string.IsNullOrEmpty(appId) ? string.Empty : $"?appId={Uri.EscapeDataString(appId!)}";
+                var response = await _httpClient.GetAsync($"api/registrationtokens/validate-detailed/{encodedToken}{appQuery}");
+
+                // "Details unreadable" is NOT "token invalid": a server that predates this route,
+                // or a transport failure, must let the caller fall back to the plain validity
+                // check rather than tell the registrant their token is bad.
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Registration token details unavailable: HTTP {StatusCode}", (int)response.StatusCode);
+                    return null;
+                }
+
+                var details = await response.Content.ReadFromJsonAsync<WildwoodComponents.Shared.Models.RegistrationTokenDetails>();
+                if (details is null) return null;
+
+                details.AppGrants ??= new List<WildwoodComponents.Shared.Models.RegistrationTokenAppGrant>();
+                return details;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error reading registration token details");
+                return null;
+            }
+        }
+
         #region Passkey/WebAuthn Methods
 
         public async Task<object> GetPasskeyAuthenticationOptionsAsync(string appId)
@@ -1154,7 +1347,7 @@ namespace WildwoodComponents.Blazor.Services
                     if (authResponse != null)
                     {
                         await StoreAuthenticationAsync(authResponse);
-                        OnAuthenticationChanged?.Invoke(authResponse);
+                        await RaiseAuthenticationChangedAsync(authResponse);
                         return authResponse;
                     }
                     throw new InvalidOperationException("Invalid response from passkey authentication.");
@@ -1322,7 +1515,7 @@ namespace WildwoodComponents.Blazor.Services
                     if (result?.Success == true && result.AuthResponse != null)
                     {
                         await StoreAuthenticationAsync(result.AuthResponse);
-                        OnAuthenticationChanged?.Invoke(result.AuthResponse);
+                        await RaiseAuthenticationChangedAsync(result.AuthResponse);
                     }
                     return result ?? new TwoFactorVerifyResponse { Success = false, ErrorMessage = "Failed to parse response" };
                 }
@@ -1367,7 +1560,7 @@ namespace WildwoodComponents.Blazor.Services
                     if (result?.Success == true && result.AuthResponse != null)
                     {
                         await StoreAuthenticationAsync(result.AuthResponse);
-                        OnAuthenticationChanged?.Invoke(result.AuthResponse);
+                        await RaiseAuthenticationChangedAsync(result.AuthResponse);
                     }
                     return result ?? new TwoFactorVerifyResponse { Success = false, ErrorMessage = "Failed to parse response" };
                 }

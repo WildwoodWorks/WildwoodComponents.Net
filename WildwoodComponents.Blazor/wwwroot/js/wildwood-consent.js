@@ -23,7 +23,19 @@ class ConsentEngine {
     this.injectedIds = new Set();
   }
 
+  /**
+   * Initializes consent and then announces the state, restored or defaulted, exactly once. Without that
+   * announcement a returning visitor with a valid cookie never produces a change event, so a consumer
+   * gated on consent (Campaign Attribution's persistence) would wait forever. Mirrors @wildwood/core
+   * ConsentService.initialize(); later changes emit from _applyCategories and withdraw.
+   */
   async initialize(baseUrl, appId, options) {
+    const result = await this._initializeState(baseUrl, appId, options);
+    this._emitChange();
+    return result;
+  }
+
+  async _initializeState(baseUrl, appId, options) {
     this.baseUrl = (baseUrl || '').replace(/\/$/, '');
     this.appId = appId;
     if (options && options.cookieName) this.cookieName = options.cookieName;
@@ -141,7 +153,7 @@ class ConsentEngine {
     this.state.decided = true;
     this._injectConsented();
     await this._persist(gpcPresent ? 'Gpc' : 'NonTargetDefault');
-    this._emitChange();
+    // No _emitChange here: this runs only inside initialize(), which emits once for every path.
   }
 
   async _applyCategories(cats, method) {
@@ -314,6 +326,253 @@ export function withdraw() {
 }
 export function getState() {
   return engine.getState();
+}
+
+// ---- Keeping the fixed banner off the page's own content ----
+//
+// The banner is `position: fixed` against an edge of the viewport with a very high z-index, so
+// anything the host anchors to that edge sits underneath it. It was found in the React package
+// covering the send button of a host's AI assistant: the button was visible and enabled, and
+// clicking it did nothing, because the banner was taking the pointer events.
+//
+// The host cannot leave room for it on its own - the height depends on the configured copy and on
+// how that copy wraps - so the banner measures itself, publishes `--ww-consent-height`, and by
+// default adds its height to the page's padding on the edge it is anchored to. All of it is undone
+// when the banner goes. Ported from @wildwood/react's ConsentBanner `reserveSpace` effect; which
+// edge - and whether there is one at all - is a decision only .NET has to make, because the
+// Blazor/Razor banner has three positions (bottomBar, topBar, corner) where React's has one.
+//
+// The bookkeeping between those two paragraphs is not one line, so it is kept as pure functions
+// with no DOM in them, LINE FOR LINE IDENTICAL to the copy in
+// WildwoodComponents.Razor/wwwroot/js/consent.js. That copy is the one Node can require, so it
+// carries the self-test (WildwoodComponents.Tests/Razor/js/consent-reserve-space.selftest.mjs)
+// and AttributionConsentGateSourceTests asserts the two are the same text. Change one, change both.
+const CONSENT_HEIGHT_VAR = '--ww-consent-height';
+const SPACE_KEY_ATTR = 'data-ww-consent-space';
+
+// ---- BEGIN shared reserve-space bookkeeping ----
+/**
+ * The padding property a banner in this position occupies, or null when it occupies none.
+ *
+ * Only the two BARS push the page around: each spans the full width against an edge, so anything
+ * the page anchors there ends up underneath it. A `corner` card is a ~420px box inset from the
+ * bottom-right, and padding the whole page for it would leave a full-width blank strip below the
+ * content for as long as the banner is up - a worse bug than the one this fixes. So the corner,
+ * and any position this script does not recognise, is measured and published but never padded. A
+ * host that opted out is in the same place: it asked to place the room itself.
+ */
+function reservedEdge(position, reserve) {
+    if (reserve === false) return null;
+    if (position === 'topBar') return 'paddingTop';
+    if (position === 'bottomBar') return 'paddingBottom';
+    return null;
+}
+
+/** The CSS property behind a style-object edge, for removing the declaration outright. */
+function edgeProperty(edge) {
+    return edge === 'paddingTop' ? 'padding-top' : 'padding-bottom';
+}
+
+/** The position class the banner carries, as the bare position name. */
+function positionOf(el) {
+    var classes = (el && el.classList) || [];
+    for (var i = 0; i < classes.length; i++) {
+        if (classes[i].indexOf('ww-consent-pos-') === 0) return classes[i].slice('ww-consent-pos-'.length);
+    }
+    return 'bottomBar';
+}
+
+/** A page's ledger of what every live banner is asking of it. */
+function createSpaceLedger() {
+    return { banners: [], edges: {} };
+}
+
+/** Where a banner sits in the ledger, or -1 when it holds nothing there. */
+function findBanner(ledger, key) {
+    for (var i = 0; i < ledger.banners.length; i++) {
+        if (ledger.banners[i].key === key) return i;
+    }
+    return -1;
+}
+
+/**
+ * The value for `--ww-consent-height`: the TALLEST live banner, because the variable carries one
+ * number and a host placing the room by hand needs the worst case. null once none is left, which
+ * removes the property rather than leaving a stale height behind.
+ */
+function publishedHeight(ledger) {
+    if (ledger.banners.length === 0) return null;
+    var tallest = 0;
+    for (var i = 0; i < ledger.banners.length; i++) {
+        if (ledger.banners[i].height > tallest) tallest = ledger.banners[i].height;
+    }
+    return tallest + 'px';
+}
+
+/**
+ * What the page's inline padding on one edge should now be, or null for an edge nobody claims.
+ *
+ * Two banners on the same edge overlap rather than stack, so the page reserves the TALLEST of
+ * them and not their sum. When the last one goes the page gets back exactly the inline value it
+ * had before the first one arrived - and a `value` of null means it had none, so the declaration
+ * is REMOVED rather than zeroed over whatever the stylesheet asks for.
+ */
+function paddingWrite(ledger, edge) {
+    if (!edge) return null;
+    var record = ledger.edges[edge];
+    if (!record) return null;
+
+    var tallest = -1;
+    for (var i = 0; i < ledger.banners.length; i++) {
+        if (ledger.banners[i].edge === edge && ledger.banners[i].height > tallest) {
+            tallest = ledger.banners[i].height;
+        }
+    }
+    if (tallest >= 0) return { edge: edge, value: (record.base + tallest) + 'px' };
+
+    // Drained: hand the page's own padding back and forget it, so the next banner to arrive reads
+    // the page fresh rather than measuring against a reservation that has been gone for an hour.
+    delete ledger.edges[edge];
+    return { edge: edge, value: record.previous === '' ? null : record.previous };
+}
+
+/**
+ * Records one banner's measurement - or re-records it after a resize - and answers everything the
+ * page should now carry. `readPage` supplies the page's OWN padding on the edge and is called at
+ * most once per edge, BEFORE the first claim on it lands, so a second banner never reads our own
+ * reservation back as the page's base. Re-recording an existing banner replaces its claim instead
+ * of stacking another, which is what makes a repeated call harmless.
+ */
+function reserveInLedger(ledger, key, edge, height, readPage) {
+    var writes = [];
+    var index = findBanner(ledger, key);
+    if (index >= 0 && ledger.banners[index].edge !== edge) {
+        // Not the edge it was on: settle the one it leaves before it claims the new one.
+        var left = ledger.banners[index].edge;
+        ledger.banners.splice(index, 1);
+        index = -1;
+        var vacated = paddingWrite(ledger, left);
+        if (vacated) writes.push(vacated);
+    }
+    if (index < 0) ledger.banners.push({ key: key, edge: edge, height: height });
+    else ledger.banners[index].height = height;
+
+    if (edge && !ledger.edges[edge]) {
+        var page = readPage ? readPage() : null;
+        ledger.edges[edge] = { base: (page && page.base) || 0, previous: (page && page.previous) || '' };
+    }
+    var claimed = paddingWrite(ledger, edge);
+    if (claimed) writes.push(claimed);
+    return { height: publishedHeight(ledger), padding: writes };
+}
+
+/**
+ * Drops one banner's claim. A key holding nothing - released twice, or never reserved at all -
+ * answers null: nothing to write, and nothing of anybody else's disturbed.
+ */
+function releaseFromLedger(ledger, key) {
+    var index = findBanner(ledger, key);
+    if (index < 0) return null;
+    var edge = ledger.banners[index].edge;
+    ledger.banners.splice(index, 1);
+    var write = paddingWrite(ledger, edge);
+    return { height: publishedHeight(ledger), padding: write ? [write] : [] };
+}
+// ---- END shared reserve-space bookkeeping ----
+
+// ---- The DOM half: measuring, observing, and writing what the ledger decided ----
+
+// Page-scoped, and keyed PER BANNER rather than held in one "the last call wins" variable: two
+// <ConsentBanner> in the same circuit share one scoped IConsentService, and so one cached copy of
+// this module, and neither may release or double-count the other's reservation.
+const _space = { ledger: createSpaceLedger(), held: Object.create(null), seed: 0 };
+
+function nextSpaceKey() {
+    _space.seed += 1;
+    return 'wwcs-' + _space.seed;
+}
+
+/** The page's OWN padding on an edge: what to add to, and the inline value to give back. */
+function readPageEdge(edge) {
+    return function () {
+        var body = document.body;
+        return { base: parseFloat(getComputedStyle(body)[edge]) || 0, previous: body.style[edge] || '' };
+    };
+}
+
+/** Writes what the ledger decided: the published height, and the padding for any edge it moved. */
+function applySpace(write) {
+    var root = document.documentElement;
+    var body = document.body;
+    if (write.height === null) root.style.removeProperty(CONSENT_HEIGHT_VAR);
+    else root.style.setProperty(CONSENT_HEIGHT_VAR, write.height);
+
+    for (var i = 0; i < write.padding.length; i++) {
+        var p = write.padding[i];
+        if (p.value === null) body.style.removeProperty(edgeProperty(p.edge));
+        else body.style[p.edge] = p.value;
+    }
+}
+
+/**
+ * Publishes the banner's measured height and, unless it is a corner card or the host opted out,
+ * reserves that much room at the edge it is anchored to. Returns the token the reservation is
+ * held under; the element is tagged with it too.
+ *
+ * Idempotent per banner: calling it again for the same element re-measures that one reservation
+ * instead of stacking a second, so an interop call that arrives twice cannot strand padding.
+ */
+export function reserveBannerSpace(el, reserve, key) {
+    if (!el || typeof document === 'undefined') return null;
+
+    var tagged = el.getAttribute(SPACE_KEY_ATTR);
+    var token = key || tagged || nextSpaceKey();
+    if (tagged && tagged !== token) releaseBannerSpace(tagged);
+    el.setAttribute(SPACE_KEY_ATTR, token);
+
+    var held = _space.held[token];
+    if (held && held.observer) held.observer.disconnect();
+
+    var edge = reservedEdge(positionOf(el), reserve);
+    var measure = function () {
+        applySpace(reserveInLedger(_space.ledger, token, edge, el.offsetHeight, readPageEdge(edge)));
+    };
+
+    measure();
+    // Guarded: older runtimes have no ResizeObserver, and a consent banner must never be the reason
+    // a host's page fails to render. Without one the measurement above simply stands alone.
+    var observer = null;
+    if (typeof ResizeObserver !== 'undefined') {
+        observer = new ResizeObserver(measure);
+        observer.observe(el);
+    }
+    _space.held[token] = { el: el, observer: observer };
+    return token;
+}
+
+/**
+ * Gives one banner's reservation back: its observer, its share of the page's padding, and - once
+ * it was the last one up - the published height and the page's own inline padding, restored
+ * exactly as found. A token that holds nothing is a no-op, so releasing twice, or releasing a
+ * banner that never reserved, cannot disturb another banner that is still up.
+ *
+ * Takes the token, not the element, so it still works from Blazor's Dispose: by then the banner's
+ * DOM node is gone and an ElementReference no longer resolves. An element is accepted too, for a
+ * caller that has the banner but not its token.
+ */
+export function releaseBannerSpace(key) {
+    if (typeof document === 'undefined' || !key) return;
+    var token = typeof key === 'string' ? key : (key.getAttribute ? key.getAttribute(SPACE_KEY_ATTR) : null);
+    if (!token) return;
+
+    var held = _space.held[token];
+    if (held) {
+        if (held.observer) held.observer.disconnect();
+        if (held.el && held.el.removeAttribute) held.el.removeAttribute(SPACE_KEY_ATTR);
+        delete _space.held[token];
+    }
+    var write = releaseFromLedger(_space.ledger, token);
+    if (write) applySpace(write);
 }
 
 // ---- Focus trap (WCAG 2.2 AA: the preferences modal must be focus-trapped while open) ----

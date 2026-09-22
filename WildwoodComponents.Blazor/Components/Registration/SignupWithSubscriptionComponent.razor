@@ -78,8 +78,12 @@
                     }
                     else if (_preSelectedTierPricing != null)
                     {
-                        <span class="ww-price-amount">@GetCurrencySymbol()@_preSelectedTierPricing.Price.ToString("N0")</span>
+                        <span class="ww-price-amount">@FormatPlanPrice(_preSelectedTier, _preSelectedTierPricing.Price)</span>
                         <span class="ww-price-period">/@(_preSelectedTierPricing.BillingFrequency?.ToLower() ?? "month")</span>
+                        @if (!_preSelectedTier.IsFreeTier && CatalogHelpers.TrialLabel(_preSelectedTierPricing.TrialDays) is { Length: > 0 } trialLabel)
+                        {
+                            <div class="ww-plan-trial">@trialLabel</div>
+                        }
                     }
                 </div>
             </div>
@@ -150,10 +154,16 @@
                 <div class="ww-payment-summary-row">
                     <span>@_selectedTier.Name</span>
                     <span class="ww-payment-summary-price">
-                        @GetCurrencySymbol()@_selectedPricing.Price.ToString("N0")
+                        @FormatPlanPrice(_selectedTier, _selectedPricing.Price)
                         <span class="ww-payment-summary-period">/@(_selectedPricing.BillingFrequency?.ToLower() ?? "month")</span>
                     </span>
                 </div>
+                @if (SelectedTrialDays > 0)
+                {
+                    <div class="ww-order-summary-trial">
+                        @CatalogHelpers.TrialLabel(SelectedTrialDays). Due today: @FormatHelpers.FormatMoney(0m, "USD")
+                    </div>
+                }
             </div>
 
             <PaymentComponent
@@ -162,10 +172,12 @@
                 Currency="USD"
                 Description="@($"{_selectedTier.Name} Subscription")"
                 PricingModelId="@_selectedPricing.PricingModelId"
+                TrialDays="@(SelectedTrialDays > 0 ? SelectedTrialDays : (int?)null)"
                 IsSubscription="true"
                 ShowAmount="false"
                 RequireBillingAddress="@RequireBillingAddress"
                 OnPaymentSuccess="HandlePaymentSuccess"
+                OnContinue="HandlePaymentContinue"
                 OnPaymentFailure="HandlePaymentFailure"
                 OnCancel="HandleBack" />
 
@@ -176,6 +188,56 @@
                     </svg>
                     Back
                 </button>
+            </div>
+        </div>
+    }
+
+    @* What the registration token sets up, in the words the server used. Nothing is priced: the
+       registrant is not paying for any of it, and a price beside a granted plan would say they were. *@
+    @if (_tokenGrant != null && (_currentStep == SignupStep.Processing || _currentStep == SignupStep.Success))
+    {
+        <div class="ww-token-plan-summary">
+            <div class="ww-token-plan-summary-content">
+                <h4 class="ww-token-plan-summary-title">Your registration token includes</h4>
+
+                <p class="ww-token-plan-tier">
+                    <strong>@SignupPlanDecisions.GrantPlanName(_tokenGrant)</strong>
+                    @if (!string.IsNullOrEmpty(_tokenGrant.PricingName))
+                    {
+                        <span class="ww-token-plan-pricing"> (@_tokenGrant.PricingName)</span>
+                    }
+                </p>
+
+                @{
+                    var grantedPacks = SignupPlanDecisions.DisplayNames(_tokenGrant.AddOnIds, _tokenGrant.AddOnNames);
+                    var grantedFeatures = SignupPlanDecisions.DisplayNames(_tokenGrant.FeatureCodes, _tokenGrant.FeatureNames);
+                }
+
+                @if (grantedPacks.Count > 0)
+                {
+                    <div class="ww-token-plan-group">
+                        <span class="ww-token-plan-group-title">Packs</span>
+                        <ul class="ww-token-plan-list">
+                            @foreach (var pack in grantedPacks)
+                            {
+                                <li>@pack</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (grantedFeatures.Count > 0)
+                {
+                    <div class="ww-token-plan-group">
+                        <span class="ww-token-plan-group-title">Features</span>
+                        <ul class="ww-token-plan-list">
+                            @foreach (var feature in grantedFeatures)
+                            {
+                                <li>@feature</li>
+                            }
+                        </ul>
+                    </div>
+                }
             </div>
         </div>
     }
@@ -226,7 +288,7 @@
 
             <WildwoodComponents.Blazor.Components.Disclaimer.DisclaimerComponent
                 AppId="@AppId"
-                UserId="@_authResponse?.Id"
+                UserId="@AuthResponse?.Id"
                 Mode="registration"
                 PendingDisclaimers="@_pendingDisclaimers"
                 ShowCancelButton="false"
@@ -246,13 +308,21 @@
             </div>
             <h3>You're All Set!</h3>
             <p class="ww-text-muted">
-                @if (SkipTierSelection && !HasPreSelectedTier)
+                @if (_tokenGrant != null)
+                {
+                    <text>Your account has been created with the @SignupPlanDecisions.GrantPlanName(_tokenGrant) from your registration token.</text>
+                }
+                else if (SkipTierSelection && !HasPreSelectedTier)
                 {
                     <text>Your account has been created successfully.</text>
                 }
-                else if (_subscriptionFailed)
+                else if (SubscriptionFailed)
                 {
                     <text>Your account is ready! Plan activation is pending — you can select a plan from your dashboard.</text>
+                }
+                else if (SelectedTrialDays > 0)
+                {
+                    <text>Your account has been created and your @CatalogHelpers.TrialLabel(SelectedTrialDays) has started.</text>
                 }
                 else
                 {

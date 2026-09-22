@@ -222,6 +222,10 @@
                 </div>
             }
 
+            @* data-ww-field names each input for the cross-stack end-to-end suites, and
+               data-ww-action names the submit. The ids stay for hosts that already use them, but an
+               id cannot be the contract: the Razor stack suffixes its ids with a per-instance
+               component id, so no constant id selector exists there at all. *@
             <EditForm Model="_registrationModel" OnValidSubmit="RegisterUserAsync" OnInvalidSubmit="HandleInvalidSubmit">
                 <DataAnnotationsValidator />
                 <ValidationSummary class="text-danger mb-2" />
@@ -232,7 +236,8 @@
                             <label for="firstName">First Name *</label>
                             <InputText @bind-Value="_registrationModel.FirstName" 
                                      class="form-control" 
-                                     id="firstName" />
+                                     id="firstName"
+                                     data-ww-field="firstName" />
                             <ValidationMessage For="@(() => _registrationModel.FirstName)" />
                         </div>
                     </div>
@@ -241,7 +246,8 @@
                             <label for="lastName">Last Name *</label>
                             <InputText @bind-Value="_registrationModel.LastName" 
                                      class="form-control" 
-                                     id="lastName" />
+                                     id="lastName"
+                                     data-ww-field="lastName" />
                             <ValidationMessage For="@(() => _registrationModel.LastName)" />
                         </div>
                     </div>
@@ -252,6 +258,7 @@
                     <InputText @bind-Value="_registrationModel.Username" 
                              class="form-control" 
                              id="username" 
+                             data-ww-field="username"
                              placeholder="Choose a unique username" />
                     <ValidationMessage For="@(() => _registrationModel.Username)" />
                     <small class="text-muted">This will be used to log in to your account</small>
@@ -262,6 +269,7 @@
                     <InputText @bind-Value="_registrationModel.Email" 
                              class="form-control" 
                              id="email" 
+                             data-ww-field="email"
                              type="email" />
                     <ValidationMessage For="@(() => _registrationModel.Email)" />
                 </div>
@@ -272,6 +280,7 @@
                         <InputText @bind-Value="_registrationModel.Password" 
                                  class="form-control" 
                                  id="password" 
+                                 data-ww-field="password"
                                  type="@(_showPassword ? "text" : "password")" />
                         <button type="button" 
                                 class="btn btn-outline-secondary" 
@@ -291,6 +300,7 @@
                     <InputText @bind-Value="_registrationModel.ConfirmPassword" 
                              class="form-control" 
                              id="confirmPassword" 
+                             data-ww-field="confirmPassword"
                              type="password" />
                     <ValidationMessage For="@(() => _registrationModel.ConfirmPassword)" />
                 </div>
@@ -305,6 +315,7 @@
                 <div class="d-grid gap-2 mt-3">
                     <button type="submit" 
                             class="btn btn-success btn-lg" 
+                            data-ww-action="submit-register"
                             disabled="@_isLoading">
                         @if (_isLoading)
                         {
@@ -1554,16 +1565,14 @@
         }
     }
 
+    /// <summary>
+    /// The plan's price in the currency the server quoted it in. One shared formatter instead of a
+    /// four-entry switch: every currency outside that switch printed the ISO code with no grouping,
+    /// and the two it did carry had lost their symbols to a bad encoding.
+    /// </summary>
     private string FormatPrice(decimal amount)
     {
-        var currency = _pricingDetails?.Currency ?? "USD";
-        return currency switch
-        {
-            "USD" => $"${amount:F2}",
-            "EUR" => $"�{amount:F2}",
-            "GBP" => $"�{amount:F2}",
-            _ => $"{currency} {amount:F2}"
-        };
+        return FormatHelpers.FormatMoney(amount, _pricingDetails?.Currency);
     }
 
     /// <summary>

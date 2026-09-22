@@ -6,6 +6,11 @@
 @inject CircuitStateStorageService StateStorage
 @inject ComponentLifecycleTracker LifecycleTracker
 @inject IConfiguration Configuration
+@* PricingDisplayComponent is deprecated in favour of the pricing view
+   (/test/registration-subscription), and this page exists to keep exercising it. Marking the PAGE
+   obsolete is the narrowest suppression there is for Razor-generated code - see AppTierTest.razor
+   for the reasoning. *@
+@attribute [System.Obsolete("Test page for the deprecated PricingDisplayComponent. Use /test/registration-subscription for the replacement.")]
 
 <ComponentTestPage PageTitle="PricingDisplayComponent Test" ComponentName="PricingDisplayComponent" IconClass="fas fa-tags"
                    OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">

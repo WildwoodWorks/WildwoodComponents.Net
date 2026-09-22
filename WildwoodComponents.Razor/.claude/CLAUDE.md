@@ -1,4 +1,4 @@
-# WildwoodComponents.Razor Claude Instructions
+﻿# WildwoodComponents.Razor Claude Instructions
 
 ## Project Overview
 
@@ -26,6 +26,7 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 |-----------|--------|-------|----------------|-----------------|------------------------|----------------|
 | Authentication | AuthenticationComponent | AuthenticationViewComponent | authService | AuthenticationComponent | AuthenticationComponent | authMiddleware |
 | AI Chat | AIChatComponent | AIChatViewComponent | aiService | AIChatComponent | -- | -- |
+| AI Chat: voice input | Web Speech + MediaRecorder fallback (AIChatComponent.SpeechToText.cs / .SpeechRecorder.cs); `IAIService.TranscribeAudioAsync` | Web Speech + MediaRecorder fallback (ai-chat.js) + `WildwoodSpeechProxyController` (`api/wildwood-stt/transcribe`); `IWildwoodAIChatService.TranscribeAudioAsync` | `transcribeAudio` | useSpeechInput (native + recorder) | -- | -- |
 | AI Flow | AIFlowComponent | AIFlowViewComponent | aiFlowService | AIFlowComponent + useAIFlow | AIFlowComponent + useAIFlow | -- |
 | AI Proxy | AIProxyComponent | AIProxyViewComponent | (via aiService) | AIProxyComponent | -- | -- |
 | Feature Gate | FeatureGateComponent | (IWildwoodAppTierService.HasFeatureAsync) | (via appTierService) | FeatureGate + useFeatures | FeatureGate + useFeatures | -- |
@@ -38,12 +39,16 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 | Token Registration | TokenRegistrationComponent | TokenRegistrationViewComponent | (via authService) | TokenRegistrationComponent | -- | -- |
 | App Tier | AppTierComponent | AppTierViewComponent | appTierService | AppTierComponent | -- | -- |
 | Pricing Display | PricingDisplayComponent | PricingDisplayViewComponent | (via appTierService) | -- | -- | -- |
+| Reg & Sub: pricing | RegistrationSubscriptionPricing | RegistrationSubscriptionPricingViewComponent | (via appTierService + catalog helpers) | RegistrationSubscriptionPricing | RegistrationSubscriptionPricing | -- |
+| Reg & Sub: signup | RegistrationSubscriptionSignup | RegistrationSubscriptionSignupViewComponent | (via authService + appTierService) | RegistrationSubscriptionSignup | RegistrationSubscriptionSignup | -- |
+| Reg & Sub: manage | RegistrationSubscriptionManage | RegistrationSubscriptionManageViewComponent | (via appTierService) | ManageView | ManageView | -- |
+| Reg & Sub: shell | RegistrationAndSubscriptionComponent | RegistrationAndSubscriptionViewComponent | -- | RegistrationAndSubscriptionComponent | RegistrationAndSubscriptionComponent | -- |
 | Usage Dashboard | UsageDashboardComponent | UsageDashboardViewComponent | (via appTierService) | -- | -- | -- |
 | Overage Summary | OverageSummaryComponent | OverageSummaryViewComponent | (via appTierService) | -- | -- | -- |
 | Disclaimer | DisclaimerComponent | DisclaimerViewComponent | disclaimerService | DisclaimerComponent | -- | -- |
 | Feedback | FeedbackWidgetComponent | FeedbackWidgetViewComponent | feedbackService | FeedbackComponent | FeedbackComponent | -- |
 | Signup + Sub | SignupWithSubscriptionComponent | SignupWithSubscriptionViewComponent | -- | -- | -- | -- |
-| Campaign Attribution | AttributionBootstrap + IAttributionService (wildwood-attribution.js); AuthenticationComponent claims after a provider sign-in (IAttributionService.ClaimAsync) | AttributionViewComponent (attribution.js) + WildwoodAttributionProxyController claim for signed-in sessions | AttributionService (attribution engine) | useAttribution (WildwoodProvider starts capture) | useAttribution (provider captures deep links) | -- |
+| Campaign Attribution | AttributionBootstrap + IAttributionService (wildwood-attribution.js); AuthenticationService auto-attaches the payload to every registration path and claims after a provider-token sign-in (15-minute queue); AuthenticationComponent claims after a popup provider sign-in (IAttributionService.ClaimAsync) | AttributionViewComponent (attribution.js) + WildwoodAttributionProxyController claim for signed-in sessions | AttributionService (attribution engine) | useAttribution (WildwoodProvider starts capture) | useAttribution (provider captures deep links) | -- |
 
 *`--` = not yet implemented on that platform*
 
@@ -163,6 +168,13 @@ WildwoodComponents.Razor/
         Notification/               # Notification + Toast ViewComponents
         Payment/                    # Payment + PaymentForm ViewComponents
         Registration/               # Token Registration + Signup ViewComponents
+        RegistrationSubscription/   # Registration & Subscription pricing + signup + manage
+                                    #   ViewComponents, and the RegistrationAndSubscription shell
+                                    #   (a view="pricing|signup|manage" switch, nothing else)
+                                    #   + RegistrationSubscriptionPricingDecisions (pure, testable)
+                                    #   + RegistrationSubscriptionSignupDecisions (pure, testable)
+                                    #   + RegistrationSubscriptionManageDecisions (pure, testable)
+                                    #   + RegistrationAndSubscriptionShell (pure, testable)
         Security/                   # Two-Factor Settings ViewComponent
         Subscription/Admin/         # Subscription Admin ViewComponents (status, tiers, features, add-ons, limits, overrides)
         Usage/                      # Usage Dashboard + Overage Summary ViewComponents
@@ -177,6 +189,7 @@ WildwoodComponents.Razor/
         IWildwoodDisclaimerService.cs + WildwoodDisclaimerService.cs
         IWildwoodMessagingService.cs + WildwoodMessagingService.cs
         IWildwoodPaymentService.cs + WildwoodPaymentService.cs
+        IWildwoodPublicCatalogService.cs + WildwoodPublicCatalogService.cs   # 60s catalog cache
         IWildwoodRegistrationService.cs + WildwoodRegistrationService.cs
         IWildwoodSessionManager.cs + WildwoodSessionManager.cs
         IWildwoodTwoFactorSettingsService.cs + WildwoodTwoFactorSettingsService.cs
@@ -190,11 +203,52 @@ WildwoodComponents.Razor/
         MessagingModels.cs
         NotificationModels.cs
         PaymentModels.cs
+        RegistrationSubscriptionPricingModels.cs
         SubscriptionModels.cs
         TokenRegistrationModels.cs
         TwoFactorSettingsModels.cs
         UsageModels.cs
+    Controllers/
+        WildwoodAttributionProxyController.cs
+        WildwoodNotificationsProxyController.cs
+        WildwoodRegistrationSubscriptionProxyController.cs
+        WildwoodSpeechProxyController.cs   # api/wildwood-stt/transcribe: the same-origin upload
+                                    #   for recorded voice input. Every answer is a
+                                    #   SpeechTranscriptionResult; 4xx only for its own
+                                    #   preconditions (401 signed out, 415 not audio, 400 not one
+                                    #   file part, 413 past 25 MB), 200 for a transcription
+                                    #   refusal. No antiforgery, matching the other three.
     wwwroot/
         css/wildwood-razor-themes.css
+        js/ai-chat.js               # chat + TTS + voice input. The speech DECISIONS
+                                    #   (speechEnabled, detectSpeechMode, shouldDowngrade,
+                                    #   pickMimeType, exceedsCap, extensionFor, bareMediaType) are
+                                    #   pure and exported through a guarded module.exports;
+                                    #   WildwoodComponents.Tests/Razor/js/ai-chat-speech.selftest.mjs
+                                    #   runs them under node via AIChatSpeechSelfTestRunnerTests.
+                                    #   The auto-init is guarded by `typeof document` so the file
+                                    #   can be required with no DOM - do not remove that guard.
+        css/regsub.css              # Registration & Subscription: pricing, signup and manage
+        js/regsub-pricing.js        # billing toggle, pack basket, ww-regsub-select
+        js/regsub-machines.js       # signup + pack-checkout + plan-change reducers, ported
+                                    #   table-identical from @wildwood/react-shared. Pure; load it
+                                    #   FIRST, before every driver below.
+                                    #   Covered by WildwoodComponents.Tests/Razor/js/regsub-machines.selftest.mjs,
+                                    #   which RegSubMachineSelfTestRunnerTests runs through node.
+        js/regsub-packcheckout.js   # SHARED driver: quote -> one card -> checkout -> 3DS walk.
+                                    #   Used by the signup's pack step AND the manage view's picker.
+        js/regsub-planchange.js     # SHARED driver: preview -> confirmation modal -> change ->
+                                    #   3DS on the card on file -> complete the parked change.
+                                    #   Used by the manage view AND subscription-admin.js. Carries
+                                    #   the one wwFormatMoney copy those two need.
+        js/regsub-signup.js         # the signup driver: pay-first, card-once pack checkout
+        js/regsub-manage.js         # the manage driver: sections, plan-change notice, pack picker
+
+    NEVER copy a sequence out of the two SHARED drivers into a view's own script. They are shared
+    because they are the parts that move money - whether the server may park a change on a bank
+    challenge, whether a parked change is ever completed, whether an authenticated pack is
+    recorded - and a second copy is a second place for those to drift. A source guard fails the
+    build if `confirmCardPayment`, `confirmCardSetup`, a reducer call or `SupportsPaymentAction`
+    appears in regsub-signup.js, regsub-manage.js or subscription-admin.js.
     WildwoodComponents.Razor.csproj
 ```

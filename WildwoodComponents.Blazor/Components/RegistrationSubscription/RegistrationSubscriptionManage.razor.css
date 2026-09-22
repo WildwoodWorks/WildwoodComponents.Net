@@ -1,0 +1,151 @@
+/* RegistrationSubscriptionManage - scoped CSS.
+
+   Ported from the ww-regsub-manage- / ww-regsub-plan-change- / ww-modal- families in the JS SDK
+   (packages/wildwood-react/src/styles/components.css). The class names are the cross-stack hook
+   every stack's end-to-end suite locates by, so they are identical here.
+
+   ::deep throughout: the classes sit on this component's own markup and on the Parts rendered
+   inside it (PlanChangeNotice, PaymentModal, PackPicker) plus the subscription panels, all of
+   which are descendants of the scoped root.
+
+   Every colour is a --ww-* custom property WITH a fallback, so the component looks right in a host
+   that has not imported wildwood-themes.css, and follows the host's theme in one that has. */
+
+/* ── The view itself ── */
+
+::deep .ww-regsub {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+::deep .ww-regsub-manage {
+    width: 100%;
+}
+
+/* ── The stacked layout: every section down the page, each under its own heading ── */
+
+::deep .ww-regsub-manage-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+::deep .ww-regsub-manage-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+::deep .ww-regsub-manage-section-title {
+    margin: 0;
+    font-size: 1.125rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ── The tabbed layout ── */
+
+::deep .ww-sub-admin-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--ww-border-color, #dee2e6);
+    margin-bottom: 1.25rem;
+}
+
+::deep .ww-sub-admin-tab {
+    position: relative;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ww-text-muted, #6c757d);
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+}
+
+::deep .ww-sub-admin-tab:hover {
+    color: var(--ww-primary, #0d6efd);
+}
+
+::deep .ww-sub-admin-tab-active {
+    color: var(--ww-primary, #0d6efd);
+    border-bottom-color: var(--ww-primary, #0d6efd);
+}
+
+::deep .ww-sub-admin-content {
+    padding-top: 0.25rem;
+}
+
+/* The subscription card, lifted above the tab bar. */
+::deep .ww-sub-status-card {
+    border-left: 4px solid var(--ww-primary, #0d6efd);
+    background: var(--ww-bg-primary, #fff);
+    border-radius: var(--ww-border-radius, 0.5rem);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* ── What a cancellation did ── */
+
+::deep .ww-sub-cancel-notice {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+/* ── What the plan change is doing, and what stopped it ── */
+
+::deep .ww-regsub-plan-change {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--ww-border-light, rgba(0, 0, 0, 0.125));
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+::deep .ww-regsub-plan-change-failed {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+::deep .ww-regsub-plan-change-reason {
+    display: block;
+    margin-top: 0.25rem;
+}
+
+::deep .ww-regsub-plan-change-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+/* ── The card an upgrade needs, and the pack picker, both inside .ww-modal ── */
+
+::deep .ww-regsub-payment-modal {
+    max-width: 30rem;
+}
+
+::deep .ww-regsub-pack-picker {
+    max-width: 46rem;
+}
+
+/* A modal opened OVER another one: the confirmation stays on screen behind the card. */
+::deep .ww-modal-overlay--stacked {
+    z-index: 10000;
+}
+
+/* ── A feature an override grants, rather than one the plan carries ── */
+
+::deep .ww-feature-included {
+    margin-left: 0.5rem;
+}

@@ -1,0 +1,296 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.RegistrationSubscription.Parts
+@using WildwoodComponents.Blazor.Components.Subscription.Admin
+@using WildwoodComponents.Shared.Models
+@using WildwoodComponents.Shared.RegistrationSubscription
+@inherits BaseWildwoodComponent
+
+@* The manage view: what a customer already pays for, and every way of changing it.
+
+   The panels are the platform's own, so a site swapping its hand-built plan page for this keeps
+   its markup and its locators. What is new is the middle: the plan change runs through
+   PlanChangeDriver, so a preview is confirmed in EVERY layout - a plan picked in a stacked layout
+   used to preview and then show nothing - a card is asked for by the component itself when the
+   host brought no modal, and a prorated charge the bank wants to see is authenticated and the
+   parked change completed instead of being refused.
+
+   The two layouts render the same panels through the same handlers. The markup is written out
+   twice rather than shared through an @@code block, which the house rules forbid and which is also
+   how SubscriptionAdminComponent has always written its own two layouts.
+
+   data-ww-view and data-ww-step name the view and the plan change's step, and data-ww-section
+   names each panel - the hooks the live sites' end-to-end suites locate by. *@
+@if (!(AppId is { Length: > 0 }))
+{
+    <div class="ww-regsub ww-regsub-manage @CssClass" data-ww-view="manage" @attributes="AdditionalAttributes">
+        <div class="ww-alert ww-alert-warning">@ManageViewDecisions.AppIdRequired</div>
+    </div>
+}
+else
+{
+    <div class="ww-regsub ww-regsub-manage @CssClass"
+         data-ww-view="manage"
+         data-ww-step="@StepName"
+         @attributes="AdditionalAttributes">
+
+        @if (ShowErrorAlert)
+        {
+            <div class="ww-alert ww-alert-danger">
+                @ErrorMessage
+                <button type="button" class="ww-alert-dismiss" @onclick="ClearError">&times;</button>
+            </div>
+        }
+
+        @if (Flow is not null)
+        {
+            <PlanChangeNotice Step="Flow.Step"
+                              Error="@Flow.Error"
+                              CanRetry="Flow.CanRetry"
+                              Labels="ResolvedLabels"
+                              OnRetry="HandleRetryChangeAsync"
+                              OnDismiss="HandleDismissChangeAsync" />
+        }
+
+        @* Only a successful cancellation says anything here: a refused one belongs in the error
+           alert above, not in a notice that reads like confirmation. *@
+        @if (ShowCancelNotice)
+        {
+            <div class="ww-alert ww-alert-info ww-sub-cancel-notice">
+                <span>
+                    @CancelNoticeText
+                    @if (CancelActionInstructions is { Length: > 0 })
+                    {
+                        <text> </text>
+                        @CancelActionInstructions
+
+                        @if (CancelActionUrl is { Length: > 0 })
+                        {
+                            <text> </text>
+                            <a href="@CancelActionUrl" target="_blank" rel="noopener noreferrer">@ManageViewDecisions.StoreCancelLink</a>
+                        }
+                    }
+                </span>
+                <button type="button" class="ww-alert-dismiss" @onclick="DismissCancelNotice">&times;</button>
+            </div>
+        }
+
+        @if (StatusAbove)
+        {
+            <div class="ww-sub-status-card">
+                <SubscriptionStatusPanel @ref="_statusPanel"
+                                         AppId="@AppId"
+                                         CompanyId="@CompanyId"
+                                         IsCompanyMode="@IsCompanyMode"
+                                         UserId="@ScopedUserId"
+                                         Subscription="@_subscription"
+                                         OnCancelRequested="CancelSubscriptionCallback" />
+            </div>
+        }
+
+        @if (Layout == ManageLayout.Stacked)
+        {
+            <div class="ww-regsub-manage-sections">
+                @foreach (var section in BodySections)
+                {
+                    <section class="ww-regsub-manage-section" data-ww-section="@SectionName(section)">
+                        <h3 class="ww-regsub-manage-section-title">@SectionTitle(section)</h3>
+
+                        @switch (section)
+                        {
+                            case ManageSection.Subscription:
+                                <SubscriptionStatusPanel @ref="_statusPanel"
+                                                         AppId="@AppId"
+                                                         CompanyId="@CompanyId"
+                                                         IsCompanyMode="@IsCompanyMode"
+                                                         UserId="@ScopedUserId"
+                                                         Subscription="@_subscription"
+                                                         OnCancelRequested="CancelSubscriptionCallback" />
+                                break;
+
+                            case ManageSection.Plans:
+                                <TierPlansPanel @ref="_plansPanel"
+                                                AppId="@AppId"
+                                                CompanyId="@CompanyId"
+                                                IsCompanyMode="@IsCompanyMode"
+                                                UserId="@ScopedUserId"
+                                                IsAdmin="@IsAdmin"
+                                                Currency="@ResolvedCurrency"
+                                                EnterpriseContactUrl="@ContactUrl"
+                                                OnTierSelected="HandleTierSelectedAsync" />
+                                break;
+
+                            case ManageSection.Features:
+                                <FeaturesPanel @ref="_featuresPanel"
+                                               AppId="@AppId"
+                                               CompanyId="@CompanyId"
+                                               IsCompanyMode="@IsCompanyMode"
+                                               UserId="@ScopedUserId"
+                                               IsAdmin="@IsAdmin"
+                                               IncludedLabel="@ResolvedLabels.FeatureIncluded"
+                                               OnOverrideToggled="HandleOverrideToggledAsync" />
+                                break;
+
+                            case ManageSection.AddOns:
+                                <AddOnsPanel @ref="_addOnsPanel"
+                                             AppId="@AppId"
+                                             CompanyId="@CompanyId"
+                                             IsCompanyMode="@IsCompanyMode"
+                                             UserId="@ScopedUserId"
+                                             IsAdmin="@IsAdmin"
+                                             Currency="@ResolvedCurrency"
+                                             CurrentTierId="@CurrentTierId"
+                                             AllowCancel="@AllowCancel"
+                                             Labels="PackLabels"
+                                             OnAddPacks="AddPacksCallback"
+                                             OnEntitlementsChanged="HandlePackChangedAsync" />
+                                break;
+
+                            case ManageSection.Usage:
+                                <UsageLimitsPanel @ref="_usagePanel"
+                                                  AppId="@AppId"
+                                                  CompanyId="@CompanyId"
+                                                  IsCompanyMode="@IsCompanyMode"
+                                                  UserId="@ScopedUserId"
+                                                  IsAdmin="@IsAdmin"
+                                                  LimitStatusesOverride="@_mergedLimitStatuses"
+                                                  OnLimitChanged="HandleLimitChangedAsync" />
+                                break;
+
+                            default:
+                                <OverridesPanel @ref="_overridesPanel"
+                                                AppId="@AppId"
+                                                CompanyId="@CompanyId"
+                                                IsCompanyMode="@IsCompanyMode"
+                                                UserId="@ScopedUserId"
+                                                OnOverrideRemoved="HandleOverrideRemovedAsync" />
+                                break;
+                        }
+                    </section>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="ww-sub-admin-tabs">
+                @foreach (var section in BodySections)
+                {
+                    var tab = section;
+                    <button type="button"
+                            class="@TabCssClass(tab)"
+                            data-ww-section="@SectionName(tab)"
+                            @onclick="@(() => SetActiveTab(tab))">
+                        @SectionTitle(tab)
+                    </button>
+                }
+            </div>
+
+            <div class="ww-sub-admin-content">
+                @switch (CurrentTab)
+                {
+                    case ManageSection.Subscription:
+                        <SubscriptionStatusPanel @ref="_statusPanel"
+                                                 AppId="@AppId"
+                                                 CompanyId="@CompanyId"
+                                                 IsCompanyMode="@IsCompanyMode"
+                                                 UserId="@ScopedUserId"
+                                                 Subscription="@_subscription"
+                                                 OnCancelRequested="CancelSubscriptionCallback" />
+                        break;
+
+                    case ManageSection.Plans:
+                        <TierPlansPanel @ref="_plansPanel"
+                                        AppId="@AppId"
+                                        CompanyId="@CompanyId"
+                                        IsCompanyMode="@IsCompanyMode"
+                                        UserId="@ScopedUserId"
+                                        IsAdmin="@IsAdmin"
+                                        Currency="@ResolvedCurrency"
+                                        EnterpriseContactUrl="@ContactUrl"
+                                        OnTierSelected="HandleTierSelectedAsync" />
+                        break;
+
+                    case ManageSection.Features:
+                        <FeaturesPanel @ref="_featuresPanel"
+                                       AppId="@AppId"
+                                       CompanyId="@CompanyId"
+                                       IsCompanyMode="@IsCompanyMode"
+                                       UserId="@ScopedUserId"
+                                       IsAdmin="@IsAdmin"
+                                       IncludedLabel="@ResolvedLabels.FeatureIncluded"
+                                       OnOverrideToggled="HandleOverrideToggledAsync" />
+                        break;
+
+                    case ManageSection.AddOns:
+                        <AddOnsPanel @ref="_addOnsPanel"
+                                     AppId="@AppId"
+                                     CompanyId="@CompanyId"
+                                     IsCompanyMode="@IsCompanyMode"
+                                     UserId="@ScopedUserId"
+                                     IsAdmin="@IsAdmin"
+                                     Currency="@ResolvedCurrency"
+                                     CurrentTierId="@CurrentTierId"
+                                     AllowCancel="@AllowCancel"
+                                     Labels="PackLabels"
+                                     OnAddPacks="AddPacksCallback"
+                                     OnEntitlementsChanged="HandlePackChangedAsync" />
+                        break;
+
+                    case ManageSection.Usage:
+                        <UsageLimitsPanel @ref="_usagePanel"
+                                          AppId="@AppId"
+                                          CompanyId="@CompanyId"
+                                          IsCompanyMode="@IsCompanyMode"
+                                          UserId="@ScopedUserId"
+                                          IsAdmin="@IsAdmin"
+                                          LimitStatusesOverride="@_mergedLimitStatuses"
+                                          OnLimitChanged="HandleLimitChangedAsync" />
+                        break;
+
+                    case ManageSection.Overrides:
+                        <OverridesPanel @ref="_overridesPanel"
+                                        AppId="@AppId"
+                                        CompanyId="@CompanyId"
+                                        IsCompanyMode="@IsCompanyMode"
+                                        UserId="@ScopedUserId"
+                                        OnOverrideRemoved="HandleOverrideRemovedAsync" />
+                        break;
+                }
+            </div>
+        }
+
+        @* Every layout confirms: a plan picked in a stacked layout previewed and then showed
+           nothing when only the tabbed return carried the modal. *@
+        @if (Flow?.Preview is not null)
+        {
+            <TierChangeConfirmationModal Preview="Flow.Preview"
+                                         OnConfirm="HandleConfirmChangeAsync"
+                                         OnCancel="HandleCancelChangeAsync"
+                                         IsProcessing="Flow.Busy" />
+        }
+
+        @if (Flow?.PaymentRequest is not null)
+        {
+            @* It renders after the confirmation, so it paints over it on the shared overlay layer;
+               Stacked is left off here exactly as React leaves its own `stacked` prop off, and is
+               there for a host that mounts this modal over chrome of its own. *@
+            <PaymentModal AppId="@AppId"
+                          Request="Flow.PaymentRequest"
+                          Currency="@ResolvedCurrency"
+                          Labels="ResolvedLabels"
+                          ReturnUrl="@ReturnUrl"
+                          OnSettled="HandlePaymentSettledAsync"
+                          OnError="HandleChildErrorAsync" />
+        }
+
+        @if (_pickingPacks)
+        {
+            <PackPicker AppId="@AppId"
+                        AddOns="AvailablePacks"
+                        Currency="@ResolvedCurrency"
+                        Labels="ResolvedLabels"
+                        OnFinished="HandlePacksBoughtAsync"
+                        OnClose="ClosePackPicker"
+                        OnError="HandleChildErrorAsync" />
+        }
+    </div>
+}

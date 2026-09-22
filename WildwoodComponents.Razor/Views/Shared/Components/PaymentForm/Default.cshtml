@@ -53,7 +53,7 @@
     <div class="ww-pf-form">
         <!-- Amount Display -->
         <div class="ww-pf-amount-display mb-4 text-center">
-            <span class="amount-value fs-3 fw-bold">@ViewHelpers.FormatAmount(Model.Amount, Model.Currency)</span>
+            <span class="amount-value fs-3 fw-bold">@ViewHelpers.FormatMoney(Model.Amount, Model.Currency)</span>
             @if (!string.IsNullOrEmpty(Model.Description))
             {
                 <p class="text-muted mb-0">@Model.Description</p>
@@ -153,7 +153,7 @@
         <div class="ww-pf-submit mt-4">
             <button class="btn btn-primary btn-lg w-100 ww-pf-pay-btn" disabled>
                 <i class="bi bi-lock-fill me-2"></i>
-                Pay <span class="ww-pf-pay-amount">@ViewHelpers.FormatAmount(Model.Amount, Model.Currency)</span>
+                Pay <span class="ww-pf-pay-amount">@ViewHelpers.FormatMoney(Model.Amount, Model.Currency)</span>
             </button>
         </div>
 

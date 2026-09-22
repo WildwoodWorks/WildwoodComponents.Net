@@ -90,24 +90,15 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             }
         }
 
-        private string FormatCurrency(decimal? amount, string currency)
+        /// <summary>
+        /// One money formatter for the whole preview, the platform's own. An amount the server left
+        /// out is zero IN THE PREVIEW'S CURRENCY — the old hard-coded "$0.00" quoted dollars to a
+        /// customer being billed in francs — and an ISO code outside the old three-entry table says
+        /// the code and the amount instead of silently printing a dollar sign.
+        /// </summary>
+        private static string FormatCurrency(decimal? amount, string currency)
         {
-            if (!amount.HasValue)
-            {
-                return "$0.00";
-            }
-
-            var symbol = "$";
-            if (string.Equals(currency, "EUR", StringComparison.OrdinalIgnoreCase))
-            {
-                symbol = "€";
-            }
-            else if (string.Equals(currency, "GBP", StringComparison.OrdinalIgnoreCase))
-            {
-                symbol = "£";
-            }
-
-            return symbol + amount.Value.ToString("N2");
+            return FormatHelpers.FormatMoney(amount ?? 0m, currency);
         }
     }
 

@@ -13,7 +13,14 @@
      data-configuration-id="@(Model.ConfigurationId ?? "")"
      data-enable-tts="@Model.EnableTTS.ToString().ToLower()"
      data-enable-stt="@Model.EnableSTT.ToString().ToLower()"
-     data-enable-file-upload="@Model.EnableFileUpload.ToString().ToLower()">
+     data-enable-file-upload="@Model.EnableFileUpload.ToString().ToLower()"
+     @* Razor omits an attribute whose value is null, so the speech attributes exist only while
+        voice input is on: with it off the script has no upload URL, renders no mic button and
+        asks for no microphone. *@
+     data-stt-url="@(Model.EnableSTT ? Model.SpeechProxyUrl : null)"
+     data-stt-language="@(Model.EnableSTT ? Model.SpeechLanguage : null)"
+     data-stt-max-seconds="@(Model.EnableSTT ? Model.MaxRecordingSeconds.ToString() : null)"
+     data-stt-max-bytes="@(Model.EnableSTT ? Model.MaxRecordingBytes.ToString() : null)">
 
     <div class="ww-ai-chat-layout d-flex" style="height: 600px;">
         @* Session Sidebar *@
@@ -105,6 +112,10 @@
                 </small>
             </div>
 
+            @* Voice-input failures land here, not in an alert() and not in the transcript:
+               a clip that could not be transcribed is not something the assistant said. *@
+            <div class="ww-stt-error ww-alert ww-alert-danger mx-3 mt-2" role="status" style="display: none;"></div>
+
             @* Input Area *@
             <div class="ww-ai-input border-top p-3">
                 <div class="d-flex gap-2">
@@ -117,8 +128,14 @@
                     }
                     @if (Model.EnableSTT)
                     {
-                        <button class="btn btn-outline-secondary ww-stt-btn" title="Voice input">
-                            <i class="bi bi-mic"></i>
+                        @* Hidden until the script has decided this browser can do voice input at
+                           all — a mic button that only ever says "unsupported" is worse than none. *@
+                        <button type="button" class="btn btn-outline-secondary ww-stt-btn"
+                                title="Voice input" aria-label="Voice input" aria-pressed="false"
+                                style="display: none;">
+                            <i class="bi bi-mic ww-stt-idle"></i>
+                            <i class="bi bi-stop-fill ww-stt-recording" style="display: none;"></i>
+                            <span class="spinner-border spinner-border-sm ww-stt-busy" role="status" style="display: none;"></span>
                         </button>
                     }
                     <textarea class="form-control ww-chat-input"
@@ -135,6 +152,12 @@
                         <i class="bi bi-x"></i>
                     </button>
                 </div>
+                @if (Model.EnableSTT)
+                {
+                    @* "Recording..." / "Transcribing..." — the script fills it; aria-live so a
+                       screen reader hears the state change the mic button's colour conveys. *@
+                    <div class="ww-stt-status mt-2" role="status" aria-live="polite" style="display: none;"></div>
+                }
             </div>
         </div>
     </div>

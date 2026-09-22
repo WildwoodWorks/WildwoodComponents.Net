@@ -8,9 +8,30 @@ using WildwoodComponents.Blazor.Services;
 
 namespace WildwoodComponents.Blazor.Components.AppTier
 {
+    /// <summary>
+    /// The original self-service plan surface. Superseded by
+    /// <see cref="RegistrationSubscription.RegistrationSubscriptionManage"/>.
+    /// </summary>
+    /// <remarks>
+    /// Deprecated in step with the JS package (commit 541e446), so the same component is called
+    /// legacy on every stack. Nothing has been removed and nothing behaves differently — including
+    /// the known one-time-charge bug named in the <c>[Obsolete]</c> message, which is left exactly
+    /// as it is because fixing it would change what existing hosts charge.
+    /// </remarks>
+    [Obsolete(
+        "Use RegistrationAndSubscriptionComponent with View=\"RegistrationSubscriptionView.Manage\" " +
+        "(or RegistrationSubscriptionManage directly), which runs a plan change through preview, " +
+        "confirmation, its own card modal, 3-D Secure and completion. Known bug, and the reason this " +
+        "should not be used for anything priced: the payment step here passes no PricingModelId (and " +
+        "no IsSubscription) to PaymentComponent, so a paid plan is charged once instead of starting " +
+        "the plan's recurring subscription and its free trial. The manage view sends the plan's " +
+        "pricing model. Left as it is deliberately - fixing it would change what existing hosts " +
+        "charge - so this component stays supported and behaves exactly as before.",
+        error: false)]
     public partial class AppTierComponent : BaseWildwoodComponent
     {
         [Inject] private IAppTierComponentService AppTierService { get; set; } = default!;
+        [Inject] private IFeatureEntitlementService EntitlementService { get; set; } = default!;
 
         #region Parameters
 
@@ -164,6 +185,7 @@ namespace WildwoodComponents.Blazor.Components.AppTier
                 {
                     _currentSubscription = result.Subscription;
                     _currentStep = AppTierComponentStep.Success;
+                    NotifyEntitlementsChanged(EntitlementsChangedReasons.TierChange);
                     await NotifySubscriptionChanged(_selectedTier, "subscribed");
                 }
                 else
@@ -197,6 +219,7 @@ namespace WildwoodComponents.Blazor.Components.AppTier
                 {
                     _currentSubscription = result.Subscription;
                     _currentStep = AppTierComponentStep.Success;
+                    NotifyEntitlementsChanged(EntitlementsChangedReasons.TierChange);
                     await NotifySubscriptionChanged(_selectedTier, "subscribed");
                 }
                 else
@@ -230,6 +253,7 @@ namespace WildwoodComponents.Blazor.Components.AppTier
                     {
                         _currentSubscription = result.Subscription;
                         _currentStep = AppTierComponentStep.Success;
+                        NotifyEntitlementsChanged(EntitlementsChangedReasons.TierChange);
                         await NotifySubscriptionChanged(_selectedTier, "changed");
                     }
                     else
@@ -247,6 +271,7 @@ namespace WildwoodComponents.Blazor.Components.AppTier
                     {
                         _currentSubscription = result.Subscription;
                         _currentStep = AppTierComponentStep.Success;
+                        NotifyEntitlementsChanged(EntitlementsChangedReasons.TierChange);
                         await NotifySubscriptionChanged(_selectedTier, "subscribed");
                     }
                     else
@@ -355,6 +380,7 @@ namespace WildwoodComponents.Blazor.Components.AppTier
                     _currentSubscription = null;
                     _currentStep = AppTierComponentStep.TierSelection;
 
+                    NotifyEntitlementsChanged(EntitlementsChangedReasons.Cancel);
                     await NotifySubscriptionChanged(null, "cancelled");
                     await LoadTierData();
                 }
@@ -432,17 +458,19 @@ namespace WildwoodComponents.Blazor.Components.AppTier
             }
         }
 
+        /// <summary>
+        /// Drops the shared entitlement cache and says why, so FeatureGate instances elsewhere in
+        /// the app stop serving the plan the user just left. Raised only after the server confirmed
+        /// the change — a refusal changes nothing to re-read.
+        /// </summary>
+        private void NotifyEntitlementsChanged(string reason)
+        {
+            EntitlementService.Invalidate(AppId, reason);
+        }
+
         private static void SortTiersByDisplayOrder(List<AppTierModel> tiers)
         {
             tiers.Sort((a, b) => a.DisplayOrder.CompareTo(b.DisplayOrder));
-        }
-
-        private static bool IsAnnualFrequency(string? frequency)
-        {
-            if (string.IsNullOrEmpty(frequency)) return false;
-            return string.Equals(frequency, "Annually", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(frequency, "Annual", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(frequency, "Yearly", StringComparison.OrdinalIgnoreCase);
         }
 
         private static AppTierPricingModel? FindPricingForCycle(AppTierModel tier, string cycle)
@@ -452,7 +480,7 @@ namespace WildwoodComponents.Blazor.Components.AppTier
             AppTierPricingModel? defaultPricing = null;
             foreach (var p in tier.PricingOptions)
             {
-                if (wantAnnual && IsAnnualFrequency(p.BillingFrequency))
+                if (wantAnnual && FormatHelpers.IsAnnualFrequency(p.BillingFrequency))
                     return p;
 
                 if (!wantAnnual && string.Equals(p.BillingFrequency, "Monthly", StringComparison.OrdinalIgnoreCase))
@@ -473,14 +501,6 @@ namespace WildwoodComponents.Blazor.Components.AppTier
             if (string.Equals(billingCycle, "annually", StringComparison.OrdinalIgnoreCase))
                 return "/year";
             return "/month";
-        }
-
-        private static string GetCurrencySymbol(string currency)
-        {
-            if (string.Equals(currency, "USD", StringComparison.OrdinalIgnoreCase)) return "$";
-            if (string.Equals(currency, "EUR", StringComparison.OrdinalIgnoreCase)) return "\u20AC";
-            if (string.Equals(currency, "GBP", StringComparison.OrdinalIgnoreCase)) return "\u00A3";
-            return currency;
         }
 
         private int GetMaxAnnualDiscount()
@@ -504,7 +524,7 @@ namespace WildwoodComponents.Blazor.Components.AppTier
             {
                 if (string.Equals(p.BillingFrequency, "Monthly", StringComparison.OrdinalIgnoreCase))
                     monthly = p;
-                if (IsAnnualFrequency(p.BillingFrequency))
+                if (FormatHelpers.IsAnnualFrequency(p.BillingFrequency))
                     annual = p;
             }
             if (monthly == null || annual == null || monthly.Price <= 0) return 0;
@@ -518,12 +538,13 @@ namespace WildwoodComponents.Blazor.Components.AppTier
             return !tier.IsFreeTier && tier.PricingOptions.Count == 0;
         }
 
-        private string FormatPrice(decimal amount)
+        /// <summary>
+        /// An amount in the tier's own currency, falling back to <see cref="Currency"/>. One call
+        /// instead of a per-component symbol table, so a CHF or SEK plan stops showing a "$".
+        /// </summary>
+        private string FormatPrice(AppTierModel? tier, decimal amount)
         {
-            var symbol = GetCurrencySymbol(Currency);
-            if (string.Equals(Currency, "JPY", StringComparison.OrdinalIgnoreCase))
-                return $"{symbol}{Math.Round(amount)}";
-            return $"{symbol}{amount:N2}";
+            return CatalogHelpers.FormatPrice(tier, amount, Currency);
         }
 
         private bool IsTierCurrentPlan(AppTierModel tier)
@@ -548,7 +569,7 @@ namespace WildwoodComponents.Blazor.Components.AppTier
                 {
                     if (string.Equals(p.BillingFrequency, "Monthly", StringComparison.OrdinalIgnoreCase))
                         hasMonthly = true;
-                    if (IsAnnualFrequency(p.BillingFrequency))
+                    if (FormatHelpers.IsAnnualFrequency(p.BillingFrequency))
                         hasAnnual = true;
                 }
                 if (hasMonthly && hasAnnual) return true;
@@ -602,6 +623,7 @@ namespace WildwoodComponents.Blazor.Components.AppTier
 
                 if (success)
                 {
+                    NotifyEntitlementsChanged(EntitlementsChangedReasons.AddOn);
                     _myAddOns = await AppTierService.GetMyAddOnsAsync(AppId);
                 }
                 else

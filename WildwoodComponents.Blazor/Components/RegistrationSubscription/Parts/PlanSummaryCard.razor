@@ -1,0 +1,43 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Shared.Utilities
+@inherits BaseWildwoodComponent
+
+@* The plan a signup link already chose, shown above the registration form.
+
+   The visitor picked this on a pricing page, so the signup does not ask again - it shows what they
+   are getting, at the price the catalog is quoting this minute, and offers a way back to the grid.
+   Same markup as the wizard's summary card, so a site that styled it keeps its styling. *@
+@if (Tier is not null)
+{
+    <div class="ww-plan-summary-card @CssClass" @attributes="AdditionalAttributes">
+        <div class="ww-plan-summary-content">
+            <div class="ww-plan-info">
+                <h5 class="ww-plan-name">@Tier.Name</h5>
+                @if (!string.IsNullOrEmpty(Tier.Description))
+                {
+                    <p class="ww-plan-desc">@Tier.Description</p>
+                }
+            </div>
+            <div class="ww-plan-price">
+                @if (Pricing is not null)
+                {
+                    <span class="ww-price-amount">@CatalogHelpers.FormatPrice(Tier, Pricing.Price, Currency)</span>
+                    <span class="ww-price-period">/@Frequency</span>
+                    @if (Trial.Length > 0)
+                    {
+                        <div class="ww-plan-trial">@Trial</div>
+                    }
+                }
+                else
+                {
+                    @* Never a made-up number: a plan with no pricing option says what it is instead. *@
+                    <span class="ww-price-amount">@(Tier.IsFreeTier ? Labels.PlanFree : string.Empty)</span>
+                }
+            </div>
+        </div>
+        @if (OnChangePlan.HasDelegate)
+        {
+            <button type="button" class="ww-plan-change-link" @onclick="HandleChangePlan">@Labels.ChangePlan</button>
+        }
+    </div>
+}

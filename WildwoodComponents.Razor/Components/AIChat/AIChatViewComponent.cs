@@ -11,6 +11,12 @@ namespace WildwoodComponents.Razor.Components.AIChat;
 /// session management, and optional text-to-speech/speech-to-text.
 /// Razor Pages equivalent of WildwoodComponents.Blazor AIChatComponent.
 /// </summary>
+/// <remarks>
+/// Voice input has two mechanisms behind one mic button, exactly as Blazor does: live Web Speech
+/// recognition where the browser has it, and a <c>MediaRecorder</c> clip transcribed server-side
+/// through <c>WildwoodSpeechProxyController</c> where it does not. With
+/// <c>enableSTT: false</c> the mic button is not rendered and the script starts neither.
+/// </remarks>
 public class AIChatViewComponent : ViewComponent
 {
     private readonly IWildwoodAIChatService _aiChatService;
@@ -31,7 +37,9 @@ public class AIChatViewComponent : ViewComponent
         bool enableTTS = true,
         bool enableSTT = true,
         bool enableFileUpload = false,
-        string? placeholderText = null)
+        string? placeholderText = null,
+        string speechProxyUrl = "/api/wildwood-stt/transcribe",
+        string? speechLanguage = null)
     {
         var configurations = new List<AIConfiguration>();
         var sessions = new List<AISessionSummary>();
@@ -66,7 +74,12 @@ public class AIChatViewComponent : ViewComponent
             EnableFileUpload = enableFileUpload,
             PlaceholderText = placeholderText,
             Configurations = configurations,
-            Sessions = sessions
+            Sessions = sessions,
+            // Trailing slashes would make the posted URL ".../transcribe/", which routes nowhere.
+            SpeechProxyUrl = string.IsNullOrWhiteSpace(speechProxyUrl)
+                ? "/api/wildwood-stt/transcribe"
+                : speechProxyUrl.TrimEnd('/'),
+            SpeechLanguage = string.IsNullOrWhiteSpace(speechLanguage) ? null : speechLanguage.Trim()
         };
 
         return View(model);

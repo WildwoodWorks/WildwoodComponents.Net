@@ -67,7 +67,9 @@ else
                     </div>
                 }
 
-                @if (_subscription.TrialEndDate.HasValue)
+                @* The server keeps a finished trial's end date on the row, so the date shows only
+                   while that trial is still running — never on a plan already being paid for. *@
+                @if (ShowTrialEnd)
                 {
                     <div class="ww-sub-status-field">
                         <div class="ww-sub-status-field-icon ww-sub-status-field-icon-trial">
@@ -75,7 +77,7 @@ else
                         </div>
                         <div class="ww-sub-status-field-content">
                             <span class="ww-sub-status-field-label">Trial Ends</span>
-                            <span class="ww-sub-status-field-value">@_subscription.TrialEndDate.Value.ToString("MMM d, yyyy")</span>
+                            <span class="ww-sub-status-field-value">@_subscription.TrialEndDate!.Value.ToString("MMM d, yyyy")</span>
                         </div>
                     </div>
                 }

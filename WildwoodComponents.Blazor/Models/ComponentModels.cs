@@ -370,16 +370,9 @@ namespace WildwoodComponents.Blazor.Models
         public Dictionary<string, object>? Metadata { get; set; }
     }
 
-    public class BillingAddress
-    {
-        public string FirstName { get; set; } = string.Empty;
-        public string LastName { get; set; } = string.Empty;
-        public string Street { get; set; } = string.Empty;
-        public string City { get; set; } = string.Empty;
-        public string State { get; set; } = string.Empty;
-        public string ZipCode { get; set; } = string.Empty;
-        public string Country { get; set; } = string.Empty;
-    }
+    // BillingAddress moved to WildwoodComponents.Shared.Models (PaymentProviderModels.cs) so the
+    // Shared InitiatePaymentRequest can carry it. Resolved here through the file's
+    // `using WildwoodComponents.Shared.Models;`.
 
     public class PaymentResult
     {

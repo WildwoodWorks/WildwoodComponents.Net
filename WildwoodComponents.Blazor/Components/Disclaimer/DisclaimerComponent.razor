@@ -88,7 +88,12 @@
                     Cancel
                 </button>
             }
-            <button class="ww-btn ww-btn-primary" @onclick="HandleAcceptAll" disabled="@(!CanSubmit || _isSubmitting)">
+            @* data-ww-disclaimer-action: the cross-stack hook a live suite clicks by. This
+               component has one accept button and it accepts every ticked disclaimer at once, so
+               "accept-all" is the only value it can carry; there is no per-disclaimer accept
+               button and no retry button here to hang the other two on. *@
+            <button class="ww-btn ww-btn-primary" data-ww-disclaimer-action="accept-all"
+                    @onclick="HandleAcceptAll" disabled="@(!CanSubmit || _isSubmitting)">
                 @if (_isSubmitting)
                 {
                     <span class="ww-spinner-sm"></span>

@@ -1,0 +1,97 @@
+@using WildwoodComponents.Razor.Components.RegistrationSubscription
+@using WildwoodComponents.Razor.Models
+@model RegistrationAndSubscriptionViewModel
+
+@*
+    The view switch, and nothing else. Each branch forwards only the parameters its ViewComponent
+    accepts - a shell that forwarded everything to everything would make a typo in a manage-only
+    attribute look like a working pricing page.
+
+    An unknown view renders a developer message in Development and NOTHING anywhere else; the
+    ViewComponent has already logged a warning either way.
+*@
+@if (!Model.IsKnownView)
+{
+    @if (Model.ShowDeveloperMessage)
+    {
+        <div class="ww-alert ww-alert-danger ww-regsub-misconfigured" role="alert">@Model.DeveloperMessage</div>
+    }
+}
+else if (Model.View == RegistrationSubscriptionView.Signup)
+{
+    @await Component.InvokeAsync("RegistrationSubscriptionSignup", new
+    {
+        appId = Model.AppId,
+        preSelectedTierId = Model.PreSelectedTierId,
+        preSelectedPricingId = Model.PreSelectedPricingId,
+        preSelectedAddOnIds = Model.PreSelectedAddOnIds,
+        registrationToken = Model.RegistrationToken,
+        prefillEmail = Model.PrefillEmail,
+        planSelection = Model.PlanSelection,
+        planDefault = Model.PlanDefault,
+        packSelection = Model.PackSelection,
+        tokenMode = Model.TokenMode,
+        requireBillingAddress = Model.RequireBillingAddress,
+        returnUrl = Model.ReturnUrl,
+        completeUrl = Model.CompleteUrl,
+        alreadySignedInUrl = Model.AlreadySignedInUrl,
+        contactUrl = Model.ContactUrl,
+        currency = Model.Currency,
+        labels = Model.Labels,
+        closedText = Model.ClosedText,
+        regSubProxyUrl = Model.RegSubProxyUrl,
+        showFeatureComparison = Model.ShowFeatureComparison,
+        showLimits = Model.ShowLimits,
+        componentId = Model.ComponentId
+    })
+}
+else if (Model.View == RegistrationSubscriptionView.Manage)
+{
+    @await Component.InvokeAsync("RegistrationSubscriptionManage", new
+    {
+        appId = Model.AppId,
+        layout = Model.Layout,
+        sections = Model.Sections,
+        showStatusAboveTabs = Model.ShowStatusAboveTabs,
+        isAdmin = Model.IsAdmin,
+        userId = Model.UserId,
+        companyId = Model.CompanyId,
+        allowPackSelfService = Model.AllowPackSelfService,
+        allowCancel = Model.AllowCancel,
+        showAddOns = Model.ShowAddOns,
+        currency = Model.Currency,
+        labels = Model.Labels,
+        contactUrl = Model.ContactUrl,
+        returnUrl = Model.ReturnUrl,
+        paymentRequiredText = Model.PaymentRequiredText,
+        proxyBaseUrl = Model.ProxyBaseUrl,
+        regSubProxyUrl = Model.RegSubProxyUrl,
+        showBillingToggle = Model.ShowBillingToggle,
+        componentId = Model.ComponentId
+    })
+}
+else
+{
+    @await Component.InvokeAsync("RegistrationSubscriptionPricing", new
+    {
+        appId = Model.AppId,
+        currency = Model.Currency,
+        showPlans = Model.ShowPlans,
+        showAddOns = Model.ShowAddOns,
+        offerFreeTierChoice = Model.OfferFreeTierChoice,
+        packSelection = Model.PackSelection,
+        addOnGroups = Model.AddOnGroups,
+        showBillingToggle = Model.ShowBillingToggle,
+        defaultBilling = Model.DefaultBilling,
+        showFeatureComparison = Model.ShowFeatureComparison,
+        showLimits = Model.ShowLimits,
+        highlightTierId = Model.HighlightTierId,
+        contactUrl = Model.ContactUrl,
+        includeJsonLd = Model.IncludeJsonLd,
+        jsonLdUrl = Model.JsonLdUrl,
+        labels = Model.Labels,
+        selectUrl = Model.SelectUrl,
+        unavailableText = Model.UnavailableText,
+        componentId = Model.ComponentId
+    })
+}

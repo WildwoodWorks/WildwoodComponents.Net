@@ -1,0 +1,38 @@
+@using WildwoodComponents.Blazor.Components.Base
+@inherits BaseWildwoodComponent
+
+@* Phrasing content only, so the multi-select variant can make the whole card one button without
+   producing invalid markup. Every price is the live one off the catalog; a pack the operator has
+   defined but not priced says so instead of implying it is free. *@
+@* No icon is taken from the catalog: React's pack card never renders the add-on's IconClass, only
+   whatever its describeAddOn callback supplies, so a catalog-sourced icon here would put a glyph on
+   the Blazor card that the React card does not have. Host artwork arrives through Describe. *@
+<span class="ww-pack-card-title">
+    <strong>@AddOn.Name</strong>
+</span>
+
+@if (Describe is not null)
+{
+    <span class="ww-pack-card-blurb">@Describe(AddOn)</span>
+}
+else if (!string.IsNullOrEmpty(AddOn.Description))
+{
+    <span class="ww-pack-card-blurb">@AddOn.Description</span>
+}
+
+<span class="ww-pack-card-price @(HasPrice ? string.Empty : "ww-pack-card-unavailable")">@PriceText</span>
+
+@if (TrialLabel.Length > 0)
+{
+    <span class="ww-pack-card-trial">@TrialLabel</span>
+}
+
+@if (AddOn.Features.Count > 0)
+{
+    <span class="ww-pack-card-features">
+        @foreach (var feature in AddOn.Features)
+        {
+            <span class="ww-pack-card-feature">@(string.IsNullOrEmpty(feature.DisplayName) ? feature.FeatureCode : feature.DisplayName)</span>
+        }
+    </span>
+}

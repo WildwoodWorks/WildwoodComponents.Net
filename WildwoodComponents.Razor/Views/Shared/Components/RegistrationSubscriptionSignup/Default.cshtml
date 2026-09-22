@@ -1,0 +1,427 @@
+@using WildwoodComponents.Razor.Models
+@using WildwoodComponents.Shared.RegistrationSubscription
+@model RegistrationSubscriptionSignupViewModel
+
+@*
+    The signup view: an account, a plan, packs and a card, in the order that keeps them consistent.
+
+    PAY-FIRST. The plan's card is taken BEFORE the account exists, so a declined card leaves
+    nothing behind rather than an account sitting on a plan nobody paid for; the packs are bought
+    AFTER the sign-in, because they are bought as the user. There are NO card-number, expiry or
+    CVC fields anywhere here - the card is Stripe Elements inside <vc:payment />, and a source
+    guard greps this file for an input that looks like a PAN.
+
+    Every step's markup is rendered here and the script only decides which one is visible, the
+    same way the pricing view's billing toggle only swaps which price block is hidden. That is
+    what keeps English, money and server-supplied HTML out of the browser script: regsub-signup.js
+    writes text with textContent and never builds markup.
+
+    Which is also why the ROOT carries data-ww-step, as the manage root does: with twelve panels
+    in the DOM at once, the root is the only place a single readable step can live, and it
+    precedes every panel in document order. The script mirrors the machine's step onto it from
+    its first render; the value shipped here is the machine's own starting state, so it is true
+    of a page whose script has not run - and of a visitor who is already signed in, whom the
+    machine leaves on `loading` while the notice below says so.
+
+    The disclaimers are rendered server-side for the same reason: one whose content format is HTML
+    has to be rendered as HTML, and only a Razor view may do that safely.
+*@
+@{
+    var cid = Model.ComponentId;
+    var labels = Model.Labels;
+    var plan = Model.PresetPlan;
+    var paymentCid = "regsub-pay-" + cid;
+}
+
+<div id="ww-regsub-signup-@cid"
+     class="ww-regsub ww-regsub-signup"
+     data-ww-view="signup"
+     data-ww-step="loading"
+     data-component-id="@cid"
+     data-ww-app-id="@Model.AppId"
+     data-ww-proxy="@Model.ProxyUrl"
+     data-ww-payment-cid="@paymentCid"
+     data-ww-initial-step="@Model.InitialStep"
+     data-ww-signed-in="@(Model.AlreadySignedIn ? "true" : "false")"
+     data-ww-token-mode="@Model.TokenModeCode"
+     data-ww-plan-selection="@Model.PlanSelectionCode"
+     data-ww-pack-selection="@Model.PackSelectionCode"
+     data-ww-mode-closed="@(Model.Mode.Closed ? "true" : "false")"
+     data-ww-mode-require-token="@(Model.Mode.RequireToken ? "true" : "false")"
+     data-ww-mode-allow-open="@(Model.Mode.AllowOpenRegistration ? "true" : "false")"
+     data-ww-mode-optional-token="@(Model.Mode.ShowOptionalTokenEntry ? "true" : "false")"
+     data-ww-catalog-ok="@(Model.IsCatalogUnavailable ? "false" : "true")"
+     data-ww-catalog-error="@Model.CatalogUnavailableMessage"
+     data-ww-tier="@Model.Params.TierId"
+     data-ww-pricing="@Model.Params.PricingId"
+     data-ww-addons="@Model.SelectedAddOnsAttribute"
+     data-ww-pack-order="@Model.PackOrderAttribute"
+     data-ww-pack-max="@Model.MaxPackSelection"
+     data-ww-plan-preset="@(plan is not null ? "true" : "false")"
+     data-ww-plan-requires-payment="@(Model.PlanRequiresPayment ? "true" : "false")"
+     data-ww-trial-days="@Model.PlanTrialDays"
+     data-ww-token="@Model.Params.RegistrationToken"
+     data-ww-currency="@Model.Currency"
+     data-ww-return-url="@Model.ReturnUrl"
+     data-ww-complete-url="@Model.CompleteUrl"
+     data-ww-already-signed-in-url="@Model.AlreadySignedInUrl"
+     data-ww-publishable-key="@Model.PublishableKey"
+     data-ww-payment-provider="@Model.PaymentProviderId"
+     data-ww-names="@Model.NamesJson"
+     data-ww-labels="@Model.LabelsJson">
+
+@if (Model.AlreadySignedIn)
+{
+    @* A visitor who is already signed in is the host's problem, not this component's: it says so
+       through ww-regsub-already-signed-in (and already-signed-in-url when one is configured) and
+       renders nothing rather than offering a second account. *@
+    <p class="ww-regsub-notice" role="status">@labels.AlreadySignedIn</p>
+}
+else
+{
+    @* What the token set up, from the token check onwards: the visitor is not paying for it. The
+       script fills the lists with textContent - names only, never prices. *@
+    <div class="ww-regsub-token-plan" data-ww-token-plan hidden>
+        <h4 class="ww-regsub-token-plan-title">@labels.TokenPlanIncludes</h4>
+        <p class="ww-regsub-token-plan-tier" data-ww-token-plan-tier></p>
+        <div class="ww-regsub-token-plan-group" data-ww-token-plan-packs-group hidden>
+            <span class="ww-regsub-token-plan-label">@labels.TokenPlanPacks</span>
+            <ul class="ww-regsub-token-plan-list" data-ww-token-plan-packs></ul>
+        </div>
+        <div class="ww-regsub-token-plan-group" data-ww-token-plan-features-group hidden>
+            <span class="ww-regsub-token-plan-label">@labels.TokenPlanFeatures</span>
+            <ul class="ww-regsub-token-plan-list" data-ww-token-plan-features></ul>
+        </div>
+    </div>
+
+    <div class="ww-signup-step ww-signup-processing" data-ww-step="loading" hidden>
+        <div class="ww-reg-success-icon"><span class="ww-spinner ww-spinner-lg"></span></div>
+        <h3>@labels.LoadingSignup</h3>
+    </div>
+
+    <div class="ww-signup-step" data-ww-step="closed" hidden>
+        <div class="ww-regsub-notice ww-alert ww-alert-warning" role="status">
+            <span class="ww-regsub-closed-message">@Model.ClosedMessage</span>
+            @if (!string.IsNullOrEmpty(Model.ContactUrl))
+            {
+                <a class="ww-btn ww-btn-outline" href="@Model.ContactUrl">@labels.ContactUs</a>
+            }
+        </div>
+    </div>
+
+    @* ── Register ──────────────────────────────────────────────────────────── *@
+    <div class="ww-signup-step" data-ww-step="register" hidden>
+        @if (plan is not null)
+        {
+            @* Whatever plan the flow is carrying: the link's, or the app's default in a skip flow.
+               Hidden by the script once a token grant supersedes it. *@
+            <div class="ww-plan-summary-card" data-ww-plan-summary>
+                <div class="ww-plan-summary-name">@plan.Tier.Name</div>
+                <div class="ww-plan-summary-price">
+                    @Model.PlanPriceText
+                    @if (plan.Pricing is not null)
+                    {
+                        <span class="ww-plan-summary-period">/@Model.PlanFrequencyText</span>
+                    }
+                </div>
+                @if (Model.PlanTrialText.Length > 0)
+                {
+                    <div class="ww-plan-summary-trial">@Model.PlanTrialText</div>
+                }
+                @if (Model.HasPlanStep && Model.PlanSelection != SignupPlanSelection.Skip && !Model.IsInvite)
+                {
+                    <button type="button" class="ww-btn ww-btn-link" data-ww-action="change-plan">@labels.ChangePlan</button>
+                }
+            </div>
+        }
+
+        <div class="ww-alert ww-alert-danger" role="alert" data-ww-token-error hidden></div>
+
+        @* The register form. It is NOT <vc:token-registration />: that component owns its own
+           submit and posts registrations itself, and this flow has to hold the details until the
+           card has been taken. The fields and the password policy are the same, and the policy
+           text is the server's own - read from the same route token-registration.js reads, never
+           re-stated here. *@
+        <div class="ww-signup-form" data-ww-form novalidate>
+            @if (Model.Mode.RequireToken || Model.Mode.ShowOptionalTokenEntry)
+            {
+                <div class="ww-form-group">
+                    <label class="ww-form-label" for="ww-regsub-token-@cid">
+                        @(Model.Mode.RequireToken ? labels.TokenLabel : labels.HaveToken)
+                    </label>
+                    <input type="text"
+                           class="ww-form-control"
+                           id="ww-regsub-token-@cid"
+                           name="registrationToken"
+                           autocomplete="off"
+                           value="@Model.Params.RegistrationToken"
+                           data-ww-field="token" />
+                </div>
+            }
+
+            <div class="ww-form-row">
+                <div class="ww-form-group">
+                    <label class="ww-form-label" for="ww-regsub-first-@cid">First name</label>
+                    <input type="text" class="ww-form-control" id="ww-regsub-first-@cid"
+                           name="firstName" autocomplete="given-name" data-ww-field="firstName" />
+                </div>
+                <div class="ww-form-group">
+                    <label class="ww-form-label" for="ww-regsub-last-@cid">Last name</label>
+                    <input type="text" class="ww-form-control" id="ww-regsub-last-@cid"
+                           name="lastName" autocomplete="family-name" data-ww-field="lastName" />
+                </div>
+            </div>
+
+            <div class="ww-form-group">
+                <label class="ww-form-label" for="ww-regsub-email-@cid">@labels.EmailLabel</label>
+                <input type="email" class="ww-form-control" id="ww-regsub-email-@cid"
+                       name="email" autocomplete="email" required
+                       value="@Model.Params.PrefillEmail" data-ww-field="email" />
+            </div>
+
+            <div class="ww-form-group">
+                <label class="ww-form-label" for="ww-regsub-username-@cid">Username</label>
+                @* An invitation's email is the username too, so the visitor types neither. *@
+                <input type="text" class="ww-form-control" id="ww-regsub-username-@cid"
+                       name="username" autocomplete="username" required
+                       value="@Model.Params.PrefillEmail" data-ww-field="username" />
+            </div>
+
+            <div class="ww-form-group">
+                <label class="ww-form-label" for="ww-regsub-password-@cid">Password</label>
+                <input type="password" class="ww-form-control" id="ww-regsub-password-@cid"
+                       name="newPassword" autocomplete="new-password" required data-ww-field="password" />
+                @if (!string.IsNullOrEmpty(Model.PasswordRequirements))
+                {
+                    <p class="ww-form-help">@Model.PasswordRequirements</p>
+                }
+            </div>
+
+            <div class="ww-form-group">
+                <label class="ww-form-label" for="ww-regsub-confirm-@cid">Confirm password</label>
+                <input type="password" class="ww-form-control" id="ww-regsub-confirm-@cid"
+                       name="confirmPassword" autocomplete="new-password" required data-ww-field="confirmPassword" />
+            </div>
+
+            <div class="ww-alert ww-alert-danger" role="alert" data-ww-form-error hidden></div>
+
+            <div class="ww-signup-step-nav">
+                <button type="button" class="ww-btn ww-btn-primary ww-btn-block" data-ww-action="submit-register">@Model.SubmitButtonText</button>
+                <button type="button" class="ww-btn ww-btn-link" data-ww-action="cancel">@labels.Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="ww-signup-step ww-signup-processing" data-ww-step="token" hidden>
+        <div class="ww-reg-success-icon"><span class="ww-spinner ww-spinner-lg"></span></div>
+        <h3>@labels.CheckingToken</h3>
+    </div>
+
+    @* ── Plan ──────────────────────────────────────────────────────────────────
+       Which card opens highlighted was decided on the SERVER (PlanGrid is built from
+       Model.HighlightedTierId), so `plan-default="free"` needs no script and no data attribute:
+       the grid is painted once, a paid choice reloads the page with ?tier= and is highlighted by
+       the same rule on the way back, and a free choice leaves the plan step for good. The default
+       is never written into the machine's seed selection - it is a highlight, not a choice. *@
+    <div class="ww-signup-step" data-ww-step="plan" hidden>
+        <h3 class="ww-regsub-step-title">@labels.ChoosePlan</h3>
+        @if (Model.PlanGrid is not null)
+        {
+            @await Html.PartialAsync("_RegSubPlanGrid", Model.PlanGrid)
+        }
+        <div class="ww-signup-step-nav">
+            <button type="button" class="ww-btn ww-btn-link" data-ww-action="back-to-register">@labels.Back</button>
+            <button type="button" class="ww-btn ww-btn-link" data-ww-action="cancel">@labels.Cancel</button>
+        </div>
+    </div>
+
+    @* ── Packs ─────────────────────────────────────────────────────────────── *@
+    <div class="ww-signup-step" data-ww-step="packs" hidden>
+        <h3 class="ww-regsub-step-title">@labels.ChoosePacks</h3>
+        <div class="ww-regsub-packs">
+            @foreach (var group in Model.PackGroups)
+            {
+                <section class="ww-regsub-pack-group" data-ww-group="@group.Id">
+                    @if (!string.IsNullOrEmpty(group.Title))
+                    {
+                        <h4 class="ww-regsub-pack-group-title">@group.Title</h4>
+                    }
+                    <div class="ww-pack-grid">
+                        @foreach (var addOn in group.AddOns)
+                        {
+                            <button type="button"
+                                    class="ww-pack-card"
+                                    aria-pressed="false"
+                                    data-ww-pack="@addOn.Id"
+                                    data-ww-action="toggle-pack">
+                                @await Html.PartialAsync("_RegSubPackCardBody", Model.PackCard(addOn))
+                            </button>
+                        }
+                    </div>
+                </section>
+            }
+            <div class="ww-regsub-summary">
+                <button type="button" class="ww-btn ww-btn-primary" data-ww-action="continue-packs">@labels.ContinueWithOnePack</button>
+            </div>
+        </div>
+        <div class="ww-signup-step-nav">
+            <button type="button" class="ww-btn ww-btn-link" data-ww-action="back-to-register">@labels.Back</button>
+            <button type="button" class="ww-btn ww-btn-link" data-ww-action="skip-packs">@labels.SkipForNow</button>
+        </div>
+    </div>
+
+    @* ── Payment (BEFORE the account exists) ───────────────────────────────── *@
+    <div class="ww-signup-step" data-ww-step="payment" hidden>
+        @if (plan is not null && Model.PlanRequiresPayment)
+        {
+            <div class="ww-payment-summary">
+                <div class="ww-payment-summary-header"><h4>@labels.OrderSummary</h4></div>
+                <div class="ww-payment-summary-row">
+                    <span>@plan.Tier.Name</span>
+                    <span class="ww-payment-summary-price">
+                        @Model.PlanPriceText
+                        <span class="ww-payment-summary-period">/@Model.PlanFrequencyText</span>
+                    </span>
+                </div>
+                @if (Model.PlanTrialText.Length > 0)
+                {
+                    <div class="ww-order-summary-trial">@Model.PlanTrialText</div>
+                }
+            </div>
+
+            @* Stripe Elements, through the shipped payment component. Its proxy is the shipped
+               one, so a host writes no /api/wildwood-payment of its own for this flow. *@
+            <vc:payment app-id="@Model.AppId"
+                        amount="@Model.PlanAmount"
+                        currency="@Model.Currency"
+                        description="@plan.Tier.Name"
+                        pricing-model-id="@(plan.Pricing?.PricingModelId ?? string.Empty)"
+                        is-subscription="true"
+                        trial-days="@Model.PlanTrialDays"
+                        show-amount="false"
+                        require-billing-address="@Model.RequireBillingAddress"
+                        proxy-base-url="@(Model.ProxyUrl + "/payment")"
+                        component-id="@paymentCid" />
+
+            <div class="ww-signup-step-nav">
+                <button type="button" class="ww-btn ww-btn-link" data-ww-action="back-to-register">@labels.Back</button>
+            </div>
+        }
+    </div>
+
+    @* ── Creating ──────────────────────────────────────────────────────────── *@
+    <div class="ww-signup-step ww-signup-processing" data-ww-step="creating" hidden>
+        <div class="ww-reg-success-icon"><span class="ww-spinner ww-spinner-lg"></span></div>
+        <h3 data-ww-processing-status>@labels.StatusCreatingAccount</h3>
+        <p class="ww-text-muted">@labels.ProcessingWait</p>
+    </div>
+
+    @* ── Disclaimers ───────────────────────────────────────────────────────── *@
+    <div class="ww-signup-step ww-signup-disclaimers" data-ww-step="disclaimers" hidden>
+        <h3 class="ww-signup-disclaimers-title">@labels.DisclaimersTitle</h3>
+        <p class="ww-text-muted">@labels.DisclaimersIntro</p>
+        <div class="ww-disclaimers-list">
+            @foreach (var disclaimer in Model.Disclaimers)
+            {
+                <div class="ww-disclaimer-item"
+                     data-ww-disclaimer="@disclaimer.DisclaimerId"
+                     data-ww-disclaimer-version="@disclaimer.VersionId">
+                    <h4 class="ww-disclaimer-title">@disclaimer.Title</h4>
+                    <div class="ww-disclaimer-content">
+                        @if (string.Equals(disclaimer.ContentFormat, "HTML", StringComparison.OrdinalIgnoreCase))
+                        {
+                            @Html.Raw(disclaimer.Content)
+                        }
+                        else
+                        {
+                            <p>@disclaimer.Content</p>
+                        }
+                    </div>
+                    <label class="ww-disclaimer-accept">
+                        <input type="checkbox" class="ww-disclaimer-check"
+                               required="@(disclaimer.IsRequired ? "required" : null)"
+                               data-ww-disclaimer-check />
+                        <span>I accept @disclaimer.Title</span>
+                    </label>
+                </div>
+            }
+        </div>
+        <div class="ww-alert ww-alert-danger" role="alert" data-ww-disclaimer-error hidden></div>
+        <div class="ww-signup-step-nav">
+            @* data-ww-disclaimer-action: the cross-stack hook a live suite clicks the gate by.
+               This one button accepts every pending disclaimer at once, so it is "accept-all". *@
+            <button type="button" class="ww-btn ww-btn-primary" disabled
+                    data-ww-action="accept-disclaimers"
+                    data-ww-disclaimer-action="accept-all">@labels.ContinueLabel</button>
+        </div>
+    </div>
+
+    @* ── Pack checkout (AS THE SIGNED-IN USER) ─────────────────────────────── *@
+    <div class="ww-signup-step" data-ww-step="packCheckout" hidden>
+        @* The packs being bought, and the card they are being bought with. NO money total: the
+           quote's due-today amount is only known once the quote comes back, and formatting it
+           would be the browser stating a price - which is the one thing this package never does.
+           React shows the amount here; Razor shows what is being bought and what it will be paid
+           with, and the charge itself is the processor's own confirmation. *@
+        <div class="ww-payment-summary" data-ww-pack-summary hidden>
+            <div class="ww-payment-summary-header"><h4>@labels.OrderSummary</h4></div>
+            <div data-ww-pack-summary-lines></div>
+            <div class="ww-payment-summary-card" data-ww-pack-saved-card hidden></div>
+        </div>
+
+        @* The card, entered ONCE for a basket of any size. A SetupIntent, not a charge: Stripe
+           Elements mounts here and nothing in this package ever sees a card number. *@
+        <div class="ww-pack-card-form" data-ww-pack-card-form hidden>
+            <h4>@labels.CardDetails</h4>
+            <div id="ww-regsub-card-@cid" class="ww-stripe-card-element" data-ww-pack-card-host></div>
+            <div class="ww-alert ww-alert-danger" role="alert" data-ww-pack-card-error hidden></div>
+            <button type="button" class="ww-btn ww-btn-primary ww-btn-block" data-ww-action="confirm-card">@labels.SaveCard</button>
+        </div>
+
+        <p class="ww-signup-pack-status" role="status" data-ww-pack-status></p>
+
+        <div class="ww-alert ww-alert-danger" role="alert" data-ww-pack-error hidden></div>
+        <div class="ww-signup-step-nav" data-ww-pack-actions hidden>
+            <button type="button" class="ww-btn ww-btn-primary" data-ww-action="retry-packs">@labels.TryAgain</button>
+            <button type="button" class="ww-btn ww-btn-link" data-ww-action="skip-packs-checkout">@labels.SkipForNow</button>
+        </div>
+    </div>
+
+    @* ── Failed ────────────────────────────────────────────────────────────── *@
+    <div class="ww-signup-step ww-signup-processing" data-ww-step="failed" hidden>
+        <div class="ww-reg-success-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--ww-danger, #dc3545)" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+        </div>
+        <h3>@labels.SignupFailed</h3>
+        <p class="ww-text-muted" data-ww-error-message></p>
+        <div class="ww-signup-processing-actions">
+            @* signup-retry / signup-start-over: the cross-stack action vocabulary, not Razor's
+               own. The signup prefix is what keeps them apart from the pricing view's plain
+               "retry", which is this package's own name for reloading a catalog. *@
+            <button type="button" class="ww-btn ww-btn-primary" data-ww-action="signup-retry">@labels.TryAgain</button>
+            <button type="button" class="ww-btn ww-btn-link" data-ww-action="signup-start-over">@labels.StartOver</button>
+        </div>
+    </div>
+
+    @* ── Success ───────────────────────────────────────────────────────────── *@
+    <div class="ww-signup-step ww-signup-success" data-ww-step="success" hidden>
+        <div class="ww-reg-success-icon">
+            @* Integer coordinates on purpose: the dynamic-pricing guard reads a decimal as a price. *@
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="17 9 11 16 7 12" />
+            </svg>
+        </div>
+        <h3>@labels.SignupCompleteTitle</h3>
+        <p class="ww-text-muted" data-ww-success-message></p>
+        <ul class="ww-pack-outcome-list" data-ww-pack-outcomes hidden></ul>
+        @* signup-get-started, the contract's name for this button, on the panel the contract
+           finds by .ww-signup-success. *@
+        <button type="button" class="ww-btn ww-btn-primary ww-btn-lg" data-ww-action="signup-get-started">@labels.GetStarted</button>
+    </div>
+}
+</div>

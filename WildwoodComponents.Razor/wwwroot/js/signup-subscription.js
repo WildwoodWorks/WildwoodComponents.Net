@@ -6,6 +6,59 @@
 (function () {
     'use strict';
 
+    /**
+     * Why a user's entitlements changed. The six values of the JS entitlementsChanged event
+     * (events/eventEmitter.ts) and of C# EntitlementsChangedReasons - one vocabulary across the
+     * three stacks. Duplicated by name into each component IIFE: no shared script is loaded on
+     * every page, so keep the copies identical.
+     */
+    var WW_REASON = {
+        Signup: 'signup',
+        TierChange: 'tierChange',
+        AddOn: 'addOn',
+        Cancel: 'cancel',
+        Reactivate: 'reactivate',
+        Manual: 'manual'
+    };
+
+    // ===== PLAN DECISIONS (pure) =====
+    //
+    // Ported from the Blazor SignupPlanDecisions. Every one of them answers from the state it is
+    // handed, so the wizard can re-derive at the moment it acts instead of latching an answer
+    // when the token was applied — a token can be cleared or replaced at any point before submit.
+
+    /** A grant is an object or it is nothing. A stray string or a bad parse is treated as no grant. */
+    function normalizeGrant(grant) {
+        return (grant && typeof grant === 'object') ? grant : null;
+    }
+
+    /** The plan's name as the server named it, never an empty string in the copy. */
+    function grantPlanName(grant) {
+        if (!grant) return 'plan';
+        return grant.appTierName || grant.appTierId || 'plan';
+    }
+
+    /**
+     * Whether the wizard subscribes the account itself after registering. A token grant means the
+     * account is ALREADY on the token's plan and a second subscribe REPLACES it, cancelling what
+     * the token just created — so a grant means no. Without one, a chosen tier means yes.
+     */
+    function shouldSelfSubscribe(state) {
+        if (!state) return false;
+        if (state.tokenGrant) return false;
+        return !!(state.selectedTier && state.selectedTier.id);
+    }
+
+    /**
+     * Whether this signup collects payment. Only a tier the wizard is subscribing to itself can be
+     * paid for: a granted plan is not being bought, a free tier has nothing to charge, and a tier
+     * with no pricing option has no amount to charge — registration subscribes those directly.
+     */
+    function needsPaymentStep(state) {
+        if (!shouldSelfSubscribe(state)) return false;
+        return state.selectedTier.isFree !== 'true' && !!state.selectedPricing;
+    }
+
     var roots = document.querySelectorAll('.ww-signup-subscription-component');
     for (var r = 0; r < roots.length; r++) {
         initSignupSubscription(roots[r]);
@@ -34,6 +87,66 @@
         var selectedPricing = null;
         var registeredUser = null;
         var pendingDisclaimers = null;
+
+        // The plan a registration token already set up for this app, when one was applied. The
+        // wizard must not subscribe over it: the second subscribe REPLACES the token's plan,
+        // cancelling what the token had just created.
+        var tokenGrant = null;
+
+        // The attempt's payment, and whether activating the plan was refused. A refusal is not a
+        // failed signup: the account exists and is signed in, so the wizard finishes and says the
+        // plan is pending rather than stranding the user on an error.
+        var paymentTransactionId = null;
+        var subscriptionFailed = false;
+
+        /** What the plan decisions above are asked about — always read fresh, never cached. */
+        function currentState() {
+            return {
+                tokenGrant: tokenGrant,
+                selectedTier: selectedTier,
+                selectedPricing: selectedPricing
+            };
+        }
+
+        // A token grant reaches the wizard as a bubbling event from TokenRegistration, so the two
+        // components need no knowledge of each other's markup.
+        document.addEventListener('ww-token-grant', function (e) {
+            var detail = e.detail || {};
+            // A token belonging to a DIFFERENT app is not this wizard's business — neither to
+            // apply nor to clear.
+            if (appId && detail.appId && String(detail.appId).toLowerCase() !== String(appId).toLowerCase()) return;
+            // Applied, replaced and CLEARED all arrive here, and the last one wins. `grant: null`
+            // is the token being cleared and it must clear the wizard's copy: a grant left behind
+            // skips the /subscribe call and claims a plan the account never got.
+            setTokenGrant(detail.grant);
+        });
+
+        // The grant decides whether payment is collected and whether the wizard subscribes, so
+        // changing it re-renders the parts that read it. Deliberately narrow: no step transition
+        // and no clearMessage(), so applying or clearing a token never moves the user or wipes a
+        // message they are reading. The decisions themselves are re-derived when they are acted on.
+        function setTokenGrant(grant) {
+            tokenGrant = normalizeGrant(grant);
+            updatePaymentStepVisibility();
+            renderSuccessCopy();
+        }
+
+        // Shown only when this signup will actually reach the payment step. A granted plan is not
+        // being paid for, so clearing the token puts the step back and applying one takes it away.
+        function updatePaymentStepVisibility() {
+            var paymentStepEl = root.querySelector('.ww-step-payment');
+            var paymentLine = root.querySelector('.ww-step-line-payment');
+            var show = needsPaymentStep(currentState());
+            if (paymentStepEl) paymentStepEl.style.display = show ? '' : 'none';
+            if (paymentLine) paymentLine.style.display = show ? '' : 'none';
+        }
+
+        // Forgets the previous attempt: its payment, and an activation refusal that was about the
+        // plan being abandoned. The token grant survives — it belongs to the token, not the attempt.
+        function resetAttempt() {
+            paymentTransactionId = null;
+            subscriptionFailed = false;
+        }
 
         // ===== HELPERS =====
 
@@ -78,12 +191,8 @@
                 stepViews[i].style.display = viewStep === currentStep ? '' : 'none';
             }
 
-            // Show payment step indicator only for paid tiers
-            var paymentStepEl = root.querySelector('.ww-step-payment');
-            var paymentLine = root.querySelector('.ww-step-line-payment');
-            var isPaid = selectedTier && selectedTier.isFree !== 'true';
-            if (paymentStepEl) paymentStepEl.style.display = isPaid ? '' : 'none';
-            if (paymentLine) paymentLine.style.display = isPaid ? '' : 'none';
+            // Show the payment step indicator only when payment will actually be collected.
+            updatePaymentStepVisibility();
 
             clearMessage();
         }
@@ -132,15 +241,48 @@
 
         function finishSuccess() {
             goToStep(4); // Complete
+            renderSuccessCopy();
 
             root.dispatchEvent(new CustomEvent('ww-signup-complete', {
                 detail: {
-                    tierId: selectedTier.id,
-                    tierName: selectedTier.name,
-                    user: registeredUser
+                    tierId: tokenGrant ? tokenGrant.appTierId : (selectedTier ? selectedTier.id : null),
+                    tierName: tokenGrant ? grantPlanName(tokenGrant) : (selectedTier ? selectedTier.name : null),
+                    fromTokenGrant: !!tokenGrant,
+                    subscriptionPending: subscriptionFailed,
+                    user: registeredUser,
+                    reason: WW_REASON.Signup
                 },
                 bubbles: true
             }));
+
+            // A new account is entitled to whatever it just signed up for - the token's grant, the
+            // plan it bought, or the free tier. "signup" is the signup flow's only reason, and it
+            // fires once, here, even when no plan was taken: the account itself is new.
+            root.dispatchEvent(new CustomEvent('ww-entitlements-changed', {
+                detail: { appId: appId, reason: WW_REASON.Signup },
+                bubbles: true
+            }));
+        }
+
+        // Which of the three success sentences applies. The account exists in all three.
+        function renderSuccessCopy() {
+            var activeEl = root.querySelector('.ww-success-active');
+            var pendingEl = root.querySelector('.ww-success-pending');
+            var tokenEl = root.querySelector('.ww-success-token');
+
+            var mode = tokenGrant ? 'token' : (subscriptionFailed ? 'pending' : 'active');
+
+            if (activeEl) activeEl.style.display = mode === 'active' ? '' : 'none';
+            if (pendingEl) pendingEl.style.display = mode === 'pending' ? '' : 'none';
+            if (tokenEl) tokenEl.style.display = mode === 'token' ? '' : 'none';
+
+            // Both names are written every time, blank when they do not apply: a name left over
+            // from a token that was cleared (or a tier that was abandoned) would outlive its copy.
+            var planNameEl = root.querySelector('.ww-success-plan-name');
+            if (planNameEl) planNameEl.textContent = (selectedTier && selectedTier.name) || '';
+
+            var tokenPlanEl = root.querySelector('.ww-success-token-plan');
+            if (tokenPlanEl) tokenPlanEl.textContent = tokenGrant ? grantPlanName(tokenGrant) : '';
         }
 
         function showDisclaimersStep() {
@@ -356,10 +498,15 @@
                             // The signup carried the campaign tags; drop them so a later signup cannot reuse them.
                             if (window.wildwoodAttribution) window.wildwoodAttribution.clear();
 
-                            if (selectedTier && selectedTier.isFree !== 'true' && selectedPricing) {
+                            // Re-derived HERE, from current state: the token may have been applied,
+                            // replaced or cleared at any point between choosing a plan and this
+                            // submit, and the answer that counts is the one true now.
+                            if (needsPaymentStep(currentState())) {
                                 goToStep(3); // Payment needed
                             } else {
-                                // Free tier - subscribe directly
+                                // A plan the token already set up (nothing to pay for and nothing
+                                // to subscribe over), a free tier, or a paid tier with no pricing
+                                // option: subscribeTier decides again and finishes.
                                 subscribeTier();
                             }
                         } else {
@@ -375,21 +522,35 @@
 
         // ===== STEP 3: PAYMENT (delegated to PaymentForm if embedded) =====
 
-        // Listen for payment success from embedded payment form
+        // Listen for payment success from an embedded payment component. It is dispatched exactly
+        // once per payment; the success panel's Continue button dispatches ww-payment-continue
+        // instead, which this flow does not need (the wizard advances itself).
         root.addEventListener('ww-payment-success', function (e) {
-            subscribeTier(e.detail.transactionId);
+            var detail = e.detail || {};
+            if (paymentTransactionId) return; // One payment, one subscribe.
+            paymentTransactionId = detail.transactionId || null;
+            subscribeTier(paymentTransactionId);
         });
 
         // ===== SUBSCRIBE =====
 
-        function subscribeTier(paymentTransactionId) {
+        function subscribeTier(transactionId) {
+            // The final decision, re-derived from CURRENT state rather than a flag latched when
+            // the token was applied. Never subscribe over a plan a registration token already set
+            // up: the second subscribe REPLACES it, cancelling the plan the token just created.
+            // Equally, a token that was CLEARED must put this call back.
+            if (!shouldSelfSubscribe(currentState())) {
+                checkDisclaimersThenFinish();
+                return;
+            }
+
             setLoading(true, 'Activating subscription...');
 
             var body = {
                 appId: appId,
                 appTierId: selectedTier.id,
                 appTierPricingId: selectedPricing ? selectedPricing.id : null,
-                paymentTransactionId: paymentTransactionId || null
+                paymentTransactionId: transactionId || null
             };
 
             fetch(subProxy + '/subscribe', {
@@ -401,16 +562,22 @@
                     if (!r.ok) throw new Error('Subscription failed');
                     return r.json();
                 })
+                .then(function (result) {
+                    // A structured refusal is a refusal, not a transport failure.
+                    if (result && result.success === false) subscriptionFailed = true;
+                })
+                .catch(function () {
+                    // The account exists and is signed in, so a refused plan is NOT a failed
+                    // signup: finish, and say the plan is pending. Stranding the user here left
+                    // them with an account they could not reach.
+                    subscriptionFailed = true;
+                })
                 .then(function () {
                     setLoading(false);
 
                     // Account exists and is authenticated; gate completion on any pending
                     // registration disclaimers (fetched for the just-created user) before success.
                     checkDisclaimersThenFinish();
-                })
-                .catch(function (err) {
-                    setLoading(false);
-                    showMessage('Subscription failed: ' + err.message, 'danger');
                 });
         }
 
@@ -434,6 +601,9 @@
             var backBtn = e.target.closest('.ww-back-to-plans-btn') || e.target.closest('.ww-back-to-register-btn');
             if (!backBtn) return;
             if (currentStep > 1) {
+                // Going back is this wizard's Start Over: the previous attempt's payment and its
+                // activation refusal belong to the plan being left behind.
+                resetAttempt();
                 goToStep(currentStep - 1);
             }
         });

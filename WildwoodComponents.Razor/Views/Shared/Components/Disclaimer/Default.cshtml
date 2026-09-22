@@ -116,10 +116,16 @@
                             Read Full Document
                         </button>
 
+                        @* data-ww-disclaimer-check names the gate in front of Accept: the button
+                           below ships disabled until the required boxes are ticked, so a suite
+                           that cannot find the boxes waits on a button that will never enable.
+                           disclaimer.js reads these by .ww-disclaimer-checkbox, so the attribute
+                           is a marker only. *@
                         <div class="form-check">
                             <input type="checkbox"
                                    class="form-check-input ww-disclaimer-checkbox"
                                    id="ww-disclaimer-accept-@cid-@disclaimer.DisclaimerId"
+                                   data-ww-disclaimer-check
                                    data-disclaimer-id="@disclaimer.DisclaimerId"
                                    data-version-id="@disclaimer.VersionId"
                                    data-is-required="@disclaimer.IsRequired.ToString().ToLower()" />
@@ -140,9 +146,14 @@
 
             @* Action Buttons *@
             <div class="ww-disclaimer-actions d-flex gap-2 mt-3">
+                @* data-ww-disclaimer-action: the cross-stack hook a live suite clicks by. This
+                   surface has one button and it accepts every ticked disclaimer at once, so
+                   "accept-all" is the only value it can carry; there is no per-disclaimer accept
+                   button and no retry button here to hang the other two on. *@
                 <button type="button"
                         class="btn btn-primary ww-disclaimer-accept-all-btn"
                         disabled
+                        data-ww-disclaimer-action="accept-all"
                         data-required-count="@requiredCount">
                     <span class="ww-btn-text">Accept &amp; Continue</span>
                     <span class="ww-btn-spinner" style="display:none;">

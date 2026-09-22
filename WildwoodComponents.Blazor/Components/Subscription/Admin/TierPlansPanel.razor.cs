@@ -82,16 +82,11 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             {
                 if (OnTierSelected.HasDelegate)
                 {
-                    var pricing = FindPricingForCycle(tier, _selectedBillingCycle);
-                    await OnTierSelected.InvokeAsync(new TierSelectedEventArgs
-                    {
-                        TierId = tier.Id,
-                        TierName = tier.Name,
-                        PricingId = pricingId ?? pricing?.Id,
-                        Price = pricing?.Price ?? 0,
-                        IsFreeTier = tier.IsFreeTier,
-                        IsChange = _currentSubscription != null && _currentSubscription.IsActive
-                    });
+                    await OnTierSelected.InvokeAsync(BuildTierSelectedArgs(
+                        tier,
+                        pricingId,
+                        _selectedBillingCycle,
+                        isChange: _currentSubscription != null && _currentSubscription.IsActive));
                 }
             }
             finally
@@ -113,14 +108,6 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             return string.Equals(_currentSubscription.AppTierId, tier.Id, StringComparison.OrdinalIgnoreCase) && _currentSubscription.IsActive;
         }
 
-        private static bool IsAnnualFrequency(string? frequency)
-        {
-            if (string.IsNullOrEmpty(frequency)) return false;
-            return string.Equals(frequency, "Annually", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(frequency, "Annual", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(frequency, "Yearly", StringComparison.OrdinalIgnoreCase);
-        }
-
         private bool HasMonthlyAndAnnualPricing()
         {
             foreach (var tier in _tiers)
@@ -131,7 +118,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 {
                     if (string.Equals(p.BillingFrequency, "Monthly", StringComparison.OrdinalIgnoreCase))
                         hasMonthly = true;
-                    if (IsAnnualFrequency(p.BillingFrequency))
+                    if (FormatHelpers.IsAnnualFrequency(p.BillingFrequency))
                         hasAnnual = true;
                 }
                 if (hasMonthly && hasAnnual) return true;
@@ -144,13 +131,48 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             tiers.Sort((a, b) => a.DisplayOrder.CompareTo(b.DisplayOrder));
         }
 
+        /// <summary>
+        /// Describes the plan the clicked button offered. The pricing model, the price and the trial
+        /// all come from ONE pricing option — the one named by <paramref name="pricingId"/>, falling
+        /// back to the option for the selected billing cycle when the caller named none (the
+        /// Contact Sales path) — so a host cannot start a payment for one plan at another's price.
+        /// </summary>
+        internal static TierSelectedEventArgs BuildTierSelectedArgs(
+            AppTierModel tier, string? pricingId, string billingCycle, bool isChange)
+        {
+            var pricing = FindPricingById(tier, pricingId) ?? FindPricingForCycle(tier, billingCycle);
+
+            return new TierSelectedEventArgs
+            {
+                TierId = tier.Id,
+                TierName = tier.Name,
+                PricingId = pricingId ?? pricing?.Id,
+                PricingModelId = pricing?.PricingModelId,
+                Price = pricing?.Price ?? 0,
+                TrialDays = pricing?.TrialDays,
+                IsFreeTier = tier.IsFreeTier,
+                IsChange = isChange
+            };
+        }
+
+        private static AppTierPricingModel? FindPricingById(AppTierModel tier, string? pricingId)
+        {
+            if (string.IsNullOrEmpty(pricingId)) return null;
+
+            foreach (var p in tier.PricingOptions)
+            {
+                if (string.Equals(p.Id, pricingId, StringComparison.OrdinalIgnoreCase)) return p;
+            }
+            return null;
+        }
+
         private static AppTierPricingModel? FindPricingForCycle(AppTierModel tier, string cycle)
         {
             bool wantAnnual = string.Equals(cycle, "annually", StringComparison.OrdinalIgnoreCase);
             AppTierPricingModel? defaultPricing = null;
             foreach (var p in tier.PricingOptions)
             {
-                if (wantAnnual && IsAnnualFrequency(p.BillingFrequency))
+                if (wantAnnual && FormatHelpers.IsAnnualFrequency(p.BillingFrequency))
                     return p;
 
                 if (!wantAnnual && string.Equals(p.BillingFrequency, "Monthly", StringComparison.OrdinalIgnoreCase))
@@ -165,35 +187,35 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             return null;
         }
 
-        private static string GetCurrencySymbol(string currency)
-        {
-            if (string.Equals(currency, "USD", StringComparison.OrdinalIgnoreCase)) return "$";
-            if (string.Equals(currency, "EUR", StringComparison.OrdinalIgnoreCase)) return "\u20AC";
-            if (string.Equals(currency, "GBP", StringComparison.OrdinalIgnoreCase)) return "\u00A3";
-            return currency;
-        }
-
         private static bool IsEnterpriseTier(AppTierModel tier)
         {
             return !tier.IsFreeTier && tier.PricingOptions.Count == 0;
         }
-
-        private string FormatPrice(decimal amount)
-        {
-            var symbol = GetCurrencySymbol(Currency);
-            if (string.Equals(Currency, "JPY", StringComparison.OrdinalIgnoreCase))
-                return $"{symbol}{Math.Round(amount)}";
-            return $"{symbol}{amount:N2}";
-        }
-
     }
 
     public class TierSelectedEventArgs
     {
         public string TierId { get; set; } = string.Empty;
         public string TierName { get; set; } = string.Empty;
+
+        /// <summary>The tier's pricing option (AppTierPricing id). Not a pricing model id.</summary>
         public string? PricingId { get; set; }
+
+        /// <summary>
+        /// The pricing model behind that option — what <c>PaymentComponent.PricingModelId</c>
+        /// needs, so a payment starts the plan's recurring subscription (and its trial) rather than
+        /// a one-time charge.
+        /// </summary>
+        public string? PricingModelId { get; set; }
+
+        /// <summary>The amount the plan's subscription charges (the pricing option's price).</summary>
         public decimal Price { get; set; }
+
+        /// <summary>
+        /// Free-trial days on the pricing option; pass to <c>PaymentComponent.TrialDays</c>.
+        /// </summary>
+        public int? TrialDays { get; set; }
+
         public bool IsFreeTier { get; set; }
         public bool IsChange { get; set; }
     }

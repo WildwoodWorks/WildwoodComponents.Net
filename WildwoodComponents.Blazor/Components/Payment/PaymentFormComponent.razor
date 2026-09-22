@@ -344,14 +344,12 @@
         };
     }
 
-    private string FormatAmount(decimal amount, string currency)
+    /// <summary>
+    /// The amount the customer is about to be charged, through the one shared formatter — see the
+    /// note on <c>PaymentComponent.FormatAmount</c> for why the locale is fixed.
+    /// </summary>
+    private static string FormatAmount(decimal amount, string currency)
     {
-        return currency.ToUpperInvariant() switch
-        {
-            "USD" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-US")),
-            "EUR" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("de-DE")),
-            "GBP" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-GB")),
-            _ => $"{currency} {amount:N2}"
-        };
+        return FormatHelpers.FormatMoney(amount, currency);
     }
 }

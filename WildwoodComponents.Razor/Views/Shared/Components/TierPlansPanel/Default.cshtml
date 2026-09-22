@@ -1,10 +1,10 @@
 @using WildwoodComponents.Shared.Models
 @using WildwoodComponents.Razor.Helpers
+@using WildwoodComponents.Shared.Utilities
 @model WildwoodComponents.Razor.Models.TierPlansPanelViewModel
 
 @{
     var cid = Model.ComponentId;
-    string FormatPrice(decimal price, string currency) => price.ToString("C2", System.Globalization.CultureInfo.GetCultureInfo(currency == "EUR" ? "de-DE" : "en-US"));
     bool IsEnterpriseTier(AppTierModel tier) => tier.PricingOptions.Count == 0 && !tier.IsFreeTier;
 }
 
@@ -86,8 +86,12 @@
                                               data-price="@pricing.Price"
                                               data-billing="@pricing.BillingFrequency.ToLower()"
                                               data-is-default="@isDefault.ToString().ToLower()">
-                                            <span class="fs-4 fw-bold">@FormatPrice(pricing.Price, Model.Currency)</span>
+                                            <span class="fs-4 fw-bold">@CatalogHelpers.FormatPrice(tier, pricing.Price, Model.Currency)</span>
                                             <span class="text-muted small">/@pricing.BillingFrequencyLabel</span>
+                                            @if (CatalogHelpers.TierCardTrialLabel(tier, pricing, tier.ShowPrice) is { Length: > 0 } trialLabel)
+                                            {
+                                                <span class="ww-plan-trial">@trialLabel</span>
+                                            }
                                         </span>
                                     }
                                 }

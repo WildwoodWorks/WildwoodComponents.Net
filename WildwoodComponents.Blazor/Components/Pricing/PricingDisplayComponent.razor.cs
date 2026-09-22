@@ -8,6 +8,23 @@ using WildwoodComponents.Blazor.Services;
 
 namespace WildwoodComponents.Blazor.Components.Pricing
 {
+    /// <summary>
+    /// The original price list. Superseded by
+    /// <see cref="RegistrationSubscription.RegistrationSubscriptionPricing"/>.
+    /// </summary>
+    /// <remarks>
+    /// Deprecated in step with the JS package (commit 541e446), so the same component is called
+    /// legacy on every stack. Nothing has been removed and nothing behaves differently: the
+    /// <c>[Obsolete]</c> below is a WARNING, and this component still compiles, renders and ships.
+    /// </remarks>
+    [Obsolete(
+        "Use RegistrationAndSubscriptionComponent with View=\"RegistrationSubscriptionView.Pricing\" " +
+        "(or RegistrationSubscriptionPricing directly), which renders the same tier-card grid - same " +
+        "markup, same calls to action - off the live public catalog, adds packs, JSON-LD offers, a " +
+        "PreloadedCatalog for first-paint prices, and a loading/unavailable state that never shows a " +
+        "price the server did not just quote. This component stays supported and behaves exactly as " +
+        "before; nothing has been removed.",
+        error: false)]
     public partial class PricingDisplayComponent : BaseWildwoodComponent
     {
         [Inject] private IAppTierComponentService AppTierService { get; set; } = default!;
@@ -184,10 +201,7 @@ namespace WildwoodComponents.Blazor.Components.Pricing
             {
                 foreach (var p in tier.PricingOptions)
                 {
-                    if (string.Equals(p.BillingFrequency, "Yearly", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(p.BillingFrequency, "Annual", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(p.BillingFrequency, "Annually", StringComparison.OrdinalIgnoreCase))
-                        return true;
+                    if (FormatHelpers.IsAnnualFrequency(p.BillingFrequency)) return true;
                 }
             }
             return false;
@@ -196,24 +210,6 @@ namespace WildwoodComponents.Blazor.Components.Pricing
         private bool IsEnterpriseTier(AppTierModel tier)
         {
             return !tier.IsFreeTier && tier.PricingOptions.Count == 0;
-        }
-
-        private string FormatPrice(decimal amount)
-        {
-            var symbol = GetCurrencySymbol(Currency);
-            if (string.Equals(Currency, "JPY", StringComparison.OrdinalIgnoreCase))
-                return $"{symbol}{Math.Round(amount)}";
-            return $"{symbol}{amount:N2}";
-        }
-
-        private static string GetCurrencySymbol(string currency)
-        {
-            if (string.Equals(currency, "USD", StringComparison.OrdinalIgnoreCase)) return "$";
-            if (string.Equals(currency, "EUR", StringComparison.OrdinalIgnoreCase)) return "\u20AC";
-            if (string.Equals(currency, "GBP", StringComparison.OrdinalIgnoreCase)) return "\u00A3";
-            if (string.Equals(currency, "JPY", StringComparison.OrdinalIgnoreCase)) return "\u00A5";
-            if (string.Equals(currency, "INR", StringComparison.OrdinalIgnoreCase)) return "\u20B9";
-            return currency;
         }
 
         private static void SortTiersByDisplayOrder(List<AppTierModel> tiers)

@@ -22,6 +22,10 @@
     <ProjectReference Include="..\WildwoodComponents.Shared\WildwoodComponents.Shared.csproj" />
     <ProjectReference Include="..\WildwoodComponents.Blazor\WildwoodComponents.Blazor.csproj" />
     <ProjectReference Include="..\WildwoodComponents.Razor\WildwoodComponents.Razor.csproj" />
+    <!-- The Playwright helpers. This is the ONLY project that may reference them: it is what brings
+         Microsoft.Playwright into a build at all, and a shipped UI package picking it up is the
+         thing WildwoodComponents.Testing exists to prevent. -->
+    <ProjectReference Include="..\WildwoodComponents.Testing\WildwoodComponents.Testing.csproj" />
   </ItemGroup>
 
 </Project>

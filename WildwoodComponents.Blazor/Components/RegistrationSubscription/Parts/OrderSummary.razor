@@ -1,0 +1,42 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Shared.Utilities
+@inherits BaseWildwoodComponent
+
+@* What the packs in the basket cost, as the server just quoted them.
+
+   Every figure is off the quote: its lines, its currency, its per-line trial and its total due
+   today. Nothing is added up here - the server owns the arithmetic, because it is the one that will
+   charge the card. *@
+@if (Quote is not null)
+{
+    <div class="ww-order-summary-card ww-regsub-order-summary @CssClass" @attributes="AdditionalAttributes">
+        <h4 class="ww-regsub-order-summary-title">@Labels.OrderSummary</h4>
+
+        @foreach (var line in Quote.Lines)
+        {
+            var quoted = line;
+            var trial = quoted.TrialEligible ? CatalogHelpers.TrialLabel(quoted.TrialDays) : string.Empty;
+
+            <div class="ww-order-summary-plan" data-ww-pack="@quoted.AddOnId">
+                <span class="ww-order-summary-name">@quoted.Name</span>
+                <span class="ww-order-summary-price">
+                    @FormatHelpers.FormatMoney(quoted.Price, Quote.Currency)
+                    @if (trial.Length > 0)
+                    {
+                        <span class="ww-order-summary-trial">@trial</span>
+                    }
+                </span>
+            </div>
+        }
+
+        <div class="ww-order-summary-total">
+            <span>@Labels.DueToday</span>
+            <span>@FormatHelpers.FormatMoney(Quote.TotalDueToday, Quote.Currency)</span>
+        </div>
+
+        @if (Quote.SavedCard is not null)
+        {
+            <p class="ww-regsub-saved-card">@SavedCardLine</p>
+        }
+    </div>
+}

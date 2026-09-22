@@ -6,6 +6,28 @@
 (function () {
     'use strict';
 
+    /**
+     * Money for display. The ONE money formatter in this package's scripts, duplicated by name into
+     * each component IIFE because no shared script is loaded on every page: keep the copies
+     * identical. It is the JS SDK's own formatMoney
+     * (packages/wildwood-core/src/features/catalog.ts) and matches C# FormatHelpers.FormatMoney, so
+     * an amount the server rendered and an amount the browser re-renders read the same. The locale
+     * is fixed at en-US for exactly that reason.
+     */
+    function wwFormatMoney(amount, currency) {
+        var code = (typeof currency === 'string' ? currency.trim() : '');
+        code = (code.length > 0 ? code : 'USD').toUpperCase();
+        var value = Number(amount);
+        if (!isFinite(value)) value = 0;
+        try {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(value);
+        } catch (e) {
+            // Intl throws on anything that is not a three-letter code; say the amount and the code
+            // rather than nothing - and never a dollar sign for a currency that is not dollars.
+            return code + ' ' + value.toFixed(2);
+        }
+    }
+
     var roots = document.querySelectorAll('.ww-payment-form-component');
     for (var r = 0; r < roots.length; r++) {
         initPaymentForm(roots[r]);
@@ -190,7 +212,7 @@
                             var txnId = root.querySelector('.ww-pf-txn-id code');
                             if (txnId) txnId.textContent = result.transactionId || '';
                             var successAmt = root.querySelector('.ww-pf-success-amount');
-                            if (successAmt) successAmt.textContent = formatAmount(amount, currency);
+                            if (successAmt) successAmt.textContent = wwFormatMoney(amount, currency);
                             showView('success');
 
                             root.dispatchEvent(new CustomEvent('ww-payment-success', {
@@ -232,11 +254,6 @@
             continueBtn.addEventListener('click', function () {
                 root.dispatchEvent(new CustomEvent('ww-payment-continue', { bubbles: true }));
             });
-        }
-
-        function formatAmount(amount, currency) {
-            var symbols = { USD: '$', EUR: '€', GBP: '£', JPY: '¥', CAD: 'CA$', AUD: 'A$' };
-            return (symbols[currency] || currency + ' ') + amount.toFixed(2);
         }
 
         // Initialize

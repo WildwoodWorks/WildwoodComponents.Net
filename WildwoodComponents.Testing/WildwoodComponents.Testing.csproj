@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <RootNamespace>WildwoodComponents.Testing</RootNamespace>
+
+    <!-- Package Metadata -->
+    <PackageId>WildwoodComponents.Testing</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Wildwood Development Team</Authors>
+    <Company>Wildwood</Company>
+    <Product>WildwoodComponents.Testing</Product>
+    <Description>Playwright helpers for driving the Wildwood Registration and Subscription component from a browser test: the step readers, the step recorder, the signup flows (registration form, disclaimers, consent banner, finish) and the shared data-ww-* DOM contract the Blazor, Razor, React and React Native implementations all honour. Opt-in: reference it from a test project only, never from an app.</Description>
+    <PackageTags>wildwood;testing;playwright;e2e;registration;subscription</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- This package exists so that Microsoft.Playwright is NOT a dependency of anything a host ships.
+       Its driver copies about 100 MB of Node and JavaScript into the build output of every project
+       that references it - before a single browser is installed - which has no business in
+       WildwoodComponents.Blazor or WildwoodComponents.Razor. Shared is worse still: both UI packages
+       reference it, as does the netstandard2.0 leg WebForms consumes. C# has no type-only import,
+       so where the JS helpers keep Playwright out of the built module with `import type`, this port
+       uses the package boundary itself. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Playwright" Version="1.61.0" />
+  </ItemGroup>
+
+  <!-- Shared, for the SignupStep / PlanChangeStep enums and the StepNames table the views publish.
+       Deliberately NOT Blazor or Razor: what these helpers drive is the DOM, not a type. -->
+  <ItemGroup>
+    <ProjectReference Include="..\WildwoodComponents.Shared\WildwoodComponents.Shared.csproj" />
+  </ItemGroup>
+
+  <!-- The waiting rules and the injected observer script are internal; the test project exercises
+       them without a browser. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="WildwoodComponents.Tests" />
+  </ItemGroup>
+
+</Project>

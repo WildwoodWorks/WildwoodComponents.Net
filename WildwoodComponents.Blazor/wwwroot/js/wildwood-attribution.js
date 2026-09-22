@@ -3,11 +3,18 @@
 // the same storage key (ww_attribution), capture and normalization rules, and endpoints. The Razor
 // attribution.js is the same engine as a classic script. Keep the three in step.
 //
-// Consent: touches are persisted only once the app's consent category is granted. The decision comes
-// from the consent engine's state (window.wildwoodConsent) or its ww_consent cookie, and is re-checked on
-// every 'wildwood:consent-change' event the consent engines dispatch. When consent state exists and does
-// not grant the category (declined, withdrawn, or not answered since the consent config changed), any
-// stored blob is removed.
+// Consent: touches are persisted only once the app's consent category is granted, and the gate has
+// THREE states, not two (mirrors @wildwood/core AttributionService.persistIfAllowed):
+//   granted  -> write the blob;
+//   decided-and-not-granted (declined, withdrawn, or not answered since the consent config changed)
+//            -> memory only AND remove any stored blob;
+//   UNDECIDED (no consent state to read yet) -> memory only, and leave a stored blob alone.
+// The decision comes from the consent engine's state (window.wildwoodConsent), which has already applied
+// the config version, config.enabled and the GPC forced-off categories. With no engine state the
+// ww_consent cookie is the only evidence, and it counts only when its configVersion matches the app's
+// CURRENT consent config (fetched once, lazily) — a stale cookie means the visitor has not answered since
+// the config changed, which is undecided, not granted. Every decision is re-checked on the
+// 'wildwood:consent-change' event the consent engines dispatch, including from their initialize().
 //
 // Nothing here throws into the host: attribution is measurement, and a failure must never cost a page
 // load or a signup.
@@ -26,6 +33,7 @@ const EXTRA_PARAMS_JSON_MAX = 2000;
 const MAX_EXTRA_PARAM_NAMES = 10;
 const CLICK_ID_PARAMS = ['gclid', 'gbraid', 'wbraid', 'fbclid', 'msclkid', 'ttclid', 'li_fat_id', 'twclid', 'rdt_cid'];
 const CONSENT_CATEGORIES = ['StrictlyNecessary', 'Functional', 'Analytics', 'Advertising', 'Sensitive'];
+const GPC_FORCED_OFF = ['Advertising', 'Sensitive'];
 const CONTROL_OR_FORMAT = /[\p{Cc}\p{Cf}]/u;
 const PARAM_NAME = /^[a-z0-9_]{1,32}$/;
 const CLICK_ID_VALUE = /^[A-Za-z0-9._~-]{1,200}$/;
@@ -268,30 +276,57 @@ function removeStored() {
   }
 }
 
-/** Granted categories as { Name: true }, or null when no consent state is known yet. */
-function readConsentCategories() {
+/** The consent engine's state, or null when no engine is loaded or it has not initialized yet. */
+function readConsentEngineState() {
   try {
     const engine = typeof window !== 'undefined' ? window.wildwoodConsent : null;
     const state = engine && typeof engine.getState === 'function' ? engine.getState() : null;
-    if (state && state.categories) return state.categories;
+    return state && state.categories ? state : null;
   } catch {
-    /* fall back to the cookie */
+    return null;
   }
+}
+
+/** The raw ww_consent cookie, or null when absent or unreadable. */
+function readConsentCookie() {
   try {
     if (typeof document === 'undefined') return null;
     const row = document.cookie.split('; ').find((r) => r.startsWith(`${CONSENT_COOKIE}=`));
     if (!row) return null;
     const cookie = JSON.parse(decodeURIComponent(row.substring(CONSENT_COOKIE.length + 1)));
-    if (!cookie || typeof cookie.consentString !== 'string') return null;
-    const categories = {};
-    for (const part of cookie.consentString.split(',')) {
-      const name = part.trim();
-      if (CONSENT_CATEGORIES.includes(name)) categories[name] = true;
-    }
-    return categories;
+    return cookie && typeof cookie.consentString === 'string' ? cookie : null;
   } catch {
     return null;
   }
+}
+
+/** Granted categories as { Name: true } from a consent string. */
+function decodeConsentString(consentString) {
+  const categories = {};
+  for (const part of String(consentString || '').split(',')) {
+    const name = part.trim();
+    if (CONSENT_CATEGORIES.includes(name)) categories[name] = true;
+  }
+  return categories;
+}
+
+/** The standardized Global Privacy Control DOM signal. */
+function readGpc() {
+  try {
+    return typeof navigator !== 'undefined' && navigator.globalPrivacyControl === true;
+  } catch {
+    return false;
+  }
+}
+
+/** The three fields of the consent config a cookie has to be judged against, or null. */
+function normalizeConsentConfig(data) {
+  if (!data || typeof data !== 'object') return null;
+  return {
+    enabled: data.enabled === true,
+    version: typeof data.version === 'number' ? data.version : -1,
+    honorGpc: data.honorGpc === true,
+  };
 }
 
 function readLanding() {
@@ -324,6 +359,8 @@ class AttributionEngine {
     this.initPromise = null;
     this.beaconed = new Set();
     this.listening = false;
+    this.consentConfig = null;
+    this.consentConfigPromise = null;
   }
 
   initialize(baseUrl, appId) {
@@ -332,6 +369,8 @@ class AttributionEngine {
       const landing = readLanding();
       this.apiRoot = apiRoot(baseUrl);
       this.appId = appId || '';
+      // Armed before the config fetch, so a consent decision made while that is in flight is not missed.
+      this._listenForConsent();
       this.initPromise = this._run(landing).catch(() => undefined);
     }
     return this.initPromise.then(() => this.getState());
@@ -404,7 +443,6 @@ class AttributionEngine {
     }
 
     const touch = landing ? this._capture(landing.href, landing.referrer) : null;
-    this._listenForConsent();
     this._persistIfAllowed(null);
     if (touch) this._beacon(touch);
   }
@@ -448,18 +486,14 @@ class AttributionEngine {
     const config = this.config;
     if (!config || !config.isEnabled) return; // no config (or attribution off): memory only
 
-    const category = config.persistenceConsentCategory;
-    let allowed = category === 'StrictlyNecessary';
-    let known = allowed;
-    if (!allowed) {
-      const categories = consentState && consentState.categories ? consentState.categories : readConsentCategories();
-      if (categories) {
-        known = true;
-        allowed = categories[category] === true;
-      }
-    }
+    // Nothing captured and nothing stored: no decision is needed, so no consent config is fetched
+    // for a visitor who never arrived on a campaign.
+    if (!this.first && !this.last && !readStored()) return;
 
-    if (allowed) {
+    const decision = this._consentDecision(config.persistenceConsentCategory, consentState);
+    if (!decision) return; // UNDECIDED: memory only, and a stored blob is left alone
+
+    if (decision.granted) {
       if (this.first || this.last) {
         writeStored({
           v: SCHEMA_VERSION,
@@ -476,12 +510,61 @@ class AttributionEngine {
       return;
     }
 
-    if (known) {
-      // Declined, withdrawn, or not answered since the consent config changed: memory only, nothing left behind.
-      removeStored();
-      this.persisted = false;
+    // Declined, withdrawn, or not answered since the consent config changed: memory only, nothing left behind.
+    removeStored();
+    this.persisted = false;
+  }
+
+  /**
+   * The persistence decision: `{ granted }` when the visitor's consent state is known, and null while
+   * it is UNDECIDED. Mirrors @wildwood/core, where `consent.getState() === null` is the undecided case.
+   */
+  _consentDecision(category, consentState) {
+    if (category === 'StrictlyNecessary') return { granted: true };
+
+    // 1. The consent engine is authoritative: its state already applies the config version,
+    //    config.enabled and the GPC forced-off categories.
+    const state = consentState && consentState.categories ? consentState : readConsentEngineState();
+    if (state) return { granted: state.categories[category] === true };
+
+    // 2. No engine state (consent is not on this page, or it has not initialized): the ww_consent
+    //    cookie is the only evidence, and it is judged against the app's current consent config.
+    const consentConfig = this.consentConfig;
+    if (!consentConfig) {
+      this._loadConsentConfig();
+      return null; // cannot tell a current cookie from a stale one yet
     }
-    // Otherwise no consent state yet: stay memory-only until a consent-change event arrives.
+    if (!consentConfig.enabled) return { granted: false }; // consent is off for the app: nothing is granted
+    const cookie = readConsentCookie();
+    if (!cookie || cookie.configVersion !== consentConfig.version) return { granted: false };
+
+    const categories = decodeConsentString(cookie.consentString);
+    if (consentConfig.honorGpc && readGpc()) {
+      for (const c of GPC_FORCED_OFF) categories[c] = false;
+    }
+    return { granted: categories[category] === true };
+  }
+
+  /** Loads the consent config once per page load, then re-runs the gate with what it learned. */
+  _loadConsentConfig() {
+    if (this.consentConfigPromise || !this.appId) return;
+    try {
+      this.consentConfigPromise = fetch(`${this.apiRoot}/consent/config?appId=${encodeURIComponent(this.appId)}`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+          this.consentConfig = normalizeConsentConfig(data);
+        })
+        .catch(() => undefined)
+        .then(() => {
+          // A failure leaves the config null, so the gate stays UNDECIDED: fail closed for persistence.
+          this._persistIfAllowed(null);
+        });
+    } catch {
+      /* best-effort: persistence stays memory-only */
+    }
   }
 
   _listenForConsent() {

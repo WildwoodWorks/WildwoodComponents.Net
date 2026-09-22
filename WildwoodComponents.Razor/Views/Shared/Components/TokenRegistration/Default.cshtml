@@ -106,6 +106,26 @@
             </div>
         </div>
 
+        @* What the registration token sets up for this app, in the words the server used. Nothing
+           is priced: the registrant is not paying for any of it, and a price beside a granted plan
+           would say they were. Filled in by token-registration.js after validate-detailed. *@
+        <div class="ww-token-plan-summary card mb-3" style="display: none;">
+            <div class="card-body">
+                <h6 class="ww-token-plan-summary-title">
+                    <i class="bi bi-gift me-1"></i>Your registration token includes
+                </h6>
+                <p class="ww-token-plan-tier mb-2"></p>
+                <div class="ww-token-plan-group ww-token-plan-packs" style="display: none;">
+                    <span class="ww-token-plan-group-title fw-semibold small">Packs</span>
+                    <ul class="ww-token-plan-list small mb-2"></ul>
+                </div>
+                <div class="ww-token-plan-group ww-token-plan-features" style="display: none;">
+                    <span class="ww-token-plan-group-title fw-semibold small">Features</span>
+                    <ul class="ww-token-plan-list small mb-0"></ul>
+                </div>
+            </div>
+        </div>
+
         <!-- Registration Form -->
         <form class="ww-registration-form" novalidate>
             <div class="row">
@@ -270,6 +290,24 @@
             <div class="ww-granted-apps alert alert-info text-start mb-4" style="display: none;">
                 <h6><i class="bi bi-phone me-2"></i>Apps You Have Access To:</h6>
                 <ul class="mb-0 ww-granted-apps-list"></ul>
+            </div>
+
+            @* The same token-plan summary on the success screen — see the form step above. *@
+            <div class="ww-token-plan-summary card text-start mb-4" style="display: none;">
+                <div class="card-body">
+                    <h6 class="ww-token-plan-summary-title">
+                        <i class="bi bi-gift me-1"></i>Your registration token includes
+                    </h6>
+                    <p class="ww-token-plan-tier mb-2"></p>
+                    <div class="ww-token-plan-group ww-token-plan-packs" style="display: none;">
+                        <span class="ww-token-plan-group-title fw-semibold small">Packs</span>
+                        <ul class="ww-token-plan-list small mb-2"></ul>
+                    </div>
+                    <div class="ww-token-plan-group ww-token-plan-features" style="display: none;">
+                        <span class="ww-token-plan-group-title fw-semibold small">Features</span>
+                        <ul class="ww-token-plan-list small mb-0"></ul>
+                    </div>
+                </div>
             </div>
 
             <!-- Payment Status -->

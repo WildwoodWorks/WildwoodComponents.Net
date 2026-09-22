@@ -93,6 +93,38 @@ namespace WildwoodComponents.Blazor.Services
             }
         }
 
+        public async Task ReserveBannerSpaceAsync(
+            Microsoft.AspNetCore.Components.ElementReference element, bool reserve, string key)
+        {
+            try
+            {
+                var module = await GetModuleAsync();
+                await module.InvokeVoidAsync("reserveBannerSpace", element, reserve, key);
+            }
+            catch (Exception ex)
+            {
+                // Never fatal: the banner still works, it just sits over the page as it used to.
+                _logger.LogDebug(ex, "Consent banner space reservation failed");
+            }
+        }
+
+        public async Task ReleaseBannerSpaceAsync(string key)
+        {
+            try
+            {
+                var module = await GetModuleAsync();
+                await module.InvokeVoidAsync("releaseBannerSpace", key);
+            }
+            catch (JSDisconnectedException)
+            {
+                // The circuit is gone, and with it the page whose padding this would restore.
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Consent banner space release failed");
+            }
+        }
+
         private async Task<ConsentStateModel?> InvokeStateAsync(string fn)
         {
             try

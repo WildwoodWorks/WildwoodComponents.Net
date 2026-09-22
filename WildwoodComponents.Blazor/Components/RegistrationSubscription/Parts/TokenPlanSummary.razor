@@ -1,0 +1,50 @@
+@using WildwoodComponents.Blazor.Components.Base
+@inherits BaseWildwoodComponent
+
+@* What a registration token sets up, in the words the server used.
+
+   Everything here comes from the token's detailed validation - the tier, the pricing option, the
+   packs and the extra features, with the display names the server sent. Nothing is priced: the
+   visitor is not paying for any of it, and a price beside a granted plan would say they were. *@
+@if (Grant is not null)
+{
+    <div class="ww-token-plan-summary @CssClass" @attributes="AdditionalAttributes">
+        <div class="ww-token-plan-summary-content">
+            <h4 class="ww-token-plan-summary-title">@Labels.TokenPlanIncludes</h4>
+
+            <p class="ww-token-plan-tier">
+                <strong>@TierName</strong>
+                @if (!string.IsNullOrEmpty(Grant.PricingName))
+                {
+                    <span class="ww-token-plan-pricing"> (@Grant.PricingName)</span>
+                }
+            </p>
+
+            @if (Packs.Count > 0)
+            {
+                <div class="ww-token-plan-group">
+                    <span class="ww-token-plan-group-title">@Labels.TokenPlanPacks</span>
+                    <ul class="ww-token-plan-list">
+                        @foreach (var pack in Packs)
+                        {
+                            <li>@pack</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            @if (Features.Count > 0)
+            {
+                <div class="ww-token-plan-group">
+                    <span class="ww-token-plan-group-title">@Labels.TokenPlanFeatures</span>
+                    <ul class="ww-token-plan-list">
+                        @foreach (var feature in Features)
+                        {
+                            <li>@feature</li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
+    </div>
+}

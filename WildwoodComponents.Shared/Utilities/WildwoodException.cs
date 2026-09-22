@@ -66,10 +66,15 @@ public class WildwoodException : Exception
                 var root = doc.RootElement;
                 details = body;
 
-                // Extract message: try "message", then "error", then "title"
+                // Extract message: try "message", then "errorMessage", then "error", then "title"
+                // — the same precedence as the JS WildwoodError.fromResponse.
                 if (root.TryGetProperty("message", out var msgProp) && msgProp.ValueKind == JsonValueKind.String)
                 {
                     message = msgProp.GetString() ?? message;
+                }
+                else if (root.TryGetProperty("errorMessage", out var errMsgProp) && errMsgProp.ValueKind == JsonValueKind.String)
+                {
+                    message = errMsgProp.GetString() ?? message;
                 }
                 else if (root.TryGetProperty("error", out var errProp) && errProp.ValueKind == JsonValueKind.String)
                 {
@@ -97,6 +102,14 @@ public class WildwoodException : Exception
                 // Body is not valid JSON; keep fallback message and treat body as details
                 details = body;
             }
+        }
+
+        // An HTTP/2 response carries no status text, and a body can hold an empty message field, so
+        // without this a caller that branches on "is there an error message?" reads the failure as
+        // no error at all. Pattern form narrows on netstandard2.0.
+        if (message is null || message.Length == 0)
+        {
+            message = $"Request failed (HTTP {statusCode})";
         }
 
         return new WildwoodException(message, statusCode, code, details);

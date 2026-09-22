@@ -107,6 +107,13 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         /// </summary>
         private DateTime? CancellationAccessEndDate => _subscription?.PendingChangeDate ?? _subscription?.EndDate;
 
+        /// <summary>
+        /// Whether to show the trial end date. The rule lives in
+        /// <see cref="SubscriptionAccess.IsTrialRunning"/> so Razor's panel can apply the same one.
+        /// </summary>
+        private bool ShowTrialEnd =>
+            SubscriptionAccess.IsTrialRunning(_subscription?.Status, _subscription?.TrialEndDate, DateTime.Now);
+
         private bool IsPendingCancellation =>
             string.Equals(_subscription?.Status, "PendingCancellation", StringComparison.OrdinalIgnoreCase);
 

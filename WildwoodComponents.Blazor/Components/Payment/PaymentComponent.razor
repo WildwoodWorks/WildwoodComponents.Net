@@ -4,10 +4,6 @@
 @using WildwoodComponents.Blazor.Services.Payment
 @using Microsoft.AspNetCore.Components.Forms
 @inherits BaseWildwoodComponent
-@implements IAsyncDisposable
-@inject IPaymentProviderService PaymentProviderService
-@inject IPlatformDetectionService PlatformService
-@inject PaymentScriptLoader ScriptLoader
 
 <div class="@GetRootCssClasses() payment-component">
     @if (IsLoading && ShowLoadingStates)
@@ -26,16 +22,30 @@
             <div class="success-icon mb-3">
                 <i class="bi bi-check-circle-fill text-success"></i>
             </div>
-            <h4 class="text-success">Payment Successful!</h4>
-            <p class="transaction-id-display">Transaction ID: <code>@_paymentResult.TransactionId</code></p>
-            <p class="mb-0">Amount: <strong>@FormatAmount(Amount, Currency)</strong></p>
+            @if (_trialEndsAt.HasValue)
+            {
+                <h4 class="text-success">Your free trial has started!</h4>
+                <p class="mb-0">
+                    Your card is saved. You won't be charged until
+                    <strong>@_trialEndsAt.Value.ToString("MMM d, yyyy")</strong>, when
+                    <strong>@FormatAmount(Amount, Currency)</strong> is due.
+                </p>
+            }
+            else
+            {
+                <h4 class="text-success">Payment Successful!</h4>
+                <p class="transaction-id-display">Transaction ID: <code>@_paymentResult.TransactionId</code></p>
+                <p class="mb-0">Amount: <strong>@FormatAmount(Amount, Currency)</strong></p>
+            }
             @if (!string.IsNullOrEmpty(_paymentResult.ReceiptUrl))
             {
                 <a href="@_paymentResult.ReceiptUrl" target="_blank" class="btn btn-outline-primary mt-3">
                     <i class="bi bi-receipt me-2"></i>View Receipt
                 </a>
             }
-            @if (OnPaymentSuccess.HasDelegate)
+            @* Continue renders only for a host that asked for it. It used to re-fire
+               OnPaymentSuccess, running the host's success handler a second time. *@
+            @if (OnContinue.HasDelegate)
             {
                 <button class="btn btn-primary mt-3 ms-2" @onclick="HandleSuccessContinue">
                     Continue
@@ -75,6 +85,15 @@
                 </div>
             }
 
+            @* The plan advertised a trial the account cannot have: nothing has been charged, and
+               the next Pay click confirms the SAME intent rather than starting another one. *@
+            @if (_trialUnavailable)
+            {
+                <div class="alert alert-warning mb-3" role="alert">
+                    The free trial isn't available on your account, so @FormatAmount(Amount, Currency) will be charged today. Select Pay to continue.
+                </div>
+            }
+
             <!-- Amount Display -->
             @if (ShowAmount)
             {
@@ -105,7 +124,9 @@
             }
 
             <!-- Provider Selection -->
-            @if (_availableProviders.Count > 1 && !_platformInfo?.RequiresAppStorePayment == true)
+            @* != true, not !(... == true): the latter parses as (!x) == true and hid the picker
+               whenever platform info had not loaded. *@
+            @if (_availableProviders.Count > 1 && _platformInfo?.RequiresAppStorePayment != true)
             {
                 <div class="payment-providers mb-4">
                     <label class="form-label fw-bold">Payment Method</label>
@@ -281,7 +302,11 @@
                 @if (!IsRedirectProvider(_selectedProvider.ProviderType))
                 {
                     <div class="payment-submit mt-4">
-                        <button class="btn btn-primary btn-lg w-100" 
+                        @if (!string.IsNullOrEmpty(_formError))
+                        {
+                            <div class="alert alert-danger" role="alert">@_formError</div>
+                        }
+                        <button class="btn btn-primary btn-lg w-100"
                                 @onclick="ProcessPayment"
                                 disabled="@_isProcessing">
                             @if (_isProcessing)
@@ -289,12 +314,23 @@
                                 <span class="spinner-border spinner-border-sm me-2"></span>
                                 <text>Processing...</text>
                             }
+                            else if (HasTrial)
+                            {
+                                <i class="bi bi-lock-fill me-2"></i>
+                                <text>Start @TrialDays-day free trial</text>
+                            }
                             else
                             {
                                 <i class="bi bi-lock-fill me-2"></i>
                                 <text>Pay @FormatAmount(Amount, Currency)</text>
                             }
                         </button>
+                        @if (HasTrial)
+                        {
+                            <p class="ww-order-summary-trial text-muted small mt-2 mb-0">
+                                You won't be charged today. @FormatAmount(Amount, Currency) is due when the trial ends unless you cancel before then.
+                            </p>
+                        }
                     </div>
                 }
 
@@ -375,900 +411,9 @@
 </div>
 
 @code {
-    // Required Parameters
-    [Parameter, EditorRequired] public string AppId { get; set; } = string.Empty;
-    [Parameter, EditorRequired] public decimal Amount { get; set; }
-    
-    // Optional Parameters
-    [Parameter] public string Currency { get; set; } = "USD";
-    [Parameter] public string? Description { get; set; }
-    [Parameter] public string? CustomerId { get; set; }
-    [Parameter] public string? CustomerEmail { get; set; }
-    [Parameter] public string? OrderId { get; set; }
-    [Parameter] public string? SubscriptionId { get; set; }
-    [Parameter] public string? PricingModelId { get; set; }
-    [Parameter] public bool IsSubscription { get; set; }
-    [Parameter] public bool ShowAmount { get; set; } = true;
-    [Parameter] public bool RequireBillingAddress { get; set; } = false;
-    [Parameter] public string? ReturnUrl { get; set; }
-    [Parameter] public string? CancelUrl { get; set; }
-    [Parameter] public Dictionary<string, string>? Metadata { get; set; }
-    
-    /// <summary>
-    /// Optional: Pre-loaded providers to use instead of fetching from API.
-    /// When provided, the component skips the API discovery call.
-    /// Useful for admin scenarios where the provider is already selected.
-    /// </summary>
-    [Parameter] public List<PaymentProviderDto>? PreloadedProviders { get; set; }
-    
-    /// <summary>
-    /// Optional: ID of the provider to pre-select when using PreloadedProviders.
-    /// </summary>
-    [Parameter] public string? PreselectedProviderId { get; set; }
-    
-    // Events
-    [Parameter] public EventCallback<PaymentSuccessEventArgs> OnPaymentSuccess { get; set; }
-    [Parameter] public EventCallback<PaymentFailureEventArgs> OnPaymentFailure { get; set; }
-    [Parameter] public EventCallback OnCancel { get; set; }
-
-    // Private state
-    private List<PaymentProviderDto> _availableProviders = new();
-    private PaymentProviderDto? _selectedProvider;
-    private PlatformFilteredProvidersDto? _platformInfo;
-    private PaymentCompletionResult? _paymentResult;
-    private bool _paymentComplete;
-    private bool _isProcessing;
-    private string? _loadingMessage;
-    private DotNetObjectReference<PaymentComponent>? _dotNetRef;
-    private bool _cardComplete;
-    private bool _stripeInitialized;
-    
-    // Track which provider scripts we've loaded for cleanup
-    private HashSet<PaymentProviderType> _loadedProviderScripts = new();
-    private bool _scriptsLoaded;
-    private bool _paypalButtonsLoaded;
-    
-    // Card form fields (for generic providers)
-    private string _cardNumber = string.Empty;
-    private string _cardExpiry = string.Empty;
-    private string _cardCvv = string.Empty;
-    
-    // Billing address
-    private string _billingFirstName = string.Empty;
-    private string _billingLastName = string.Empty;
-    private string _billingAddress = string.Empty;
-    private string _billingCity = string.Empty;
-    private string _billingState = string.Empty;
-    private string _billingZip = string.Empty;
-
-    // Flag for tracking prevention detection
-    private bool _trackingPreventionDetected = false;
-
-    // Debug info for when providers aren't loaded
-    private string? _noProvidersReason;
-    private string? _debugInfo;
-    
-    // Enhanced debug info
-    private List<string> _filteringDetails = new();
-    private string? _apiResponseStatus;
-    private int _providersFromApi = 0;
-    private int _platformFlags = 0;
-
-    protected override async Task OnComponentInitializedAsync()
-    {
-        await LoadAvailableProviders();
-    }
-
-    private bool _providersInitialized = false;
-    
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        await base.OnAfterRenderAsync(firstRender);
-        
-        // Log initialization state on first render for debugging
-        if (firstRender)
-        {
-            await LogToConsoleAsync($"[PaymentComponent] First render - AppId: {AppId}, Providers: {_availableProviders.Count}, Selected: {_selectedProvider?.Name ?? "none"}");
-        }
-        
-        // Initialize providers after render - handles both first render and subsequent renders
-        // This ensures DOM elements exist and scripts can be loaded
-        if (!_providersInitialized && _availableProviders.Count > 0 && _selectedProvider is { } selectedProvider)
-        {
-            _providersInitialized = true;
-            _dotNetRef = DotNetObjectReference.Create(this);
-
-            Logger?.LogInformation("OnAfterRenderAsync: Initializing {Count} providers, selected: {Selected}",
-                _availableProviders.Count, selectedProvider.Name);
-            await LogToConsoleAsync($"[PaymentComponent] Initializing provider: {selectedProvider.Name}");
-
-            // Load scripts for all available providers (multi-provider support)
-            await LoadProviderScriptsAsync();
-
-            // Small delay to ensure DOM is fully ready
-            await Task.Delay(100);
-
-            // Initialize the selected provider
-            await InitializeProviderJs(selectedProvider);
-        }
-    }
-
-    private async Task LoadProviderScriptsAsync()
-    {
-        if (_scriptsLoaded)
-            return;
-
-        foreach (var provider in _availableProviders)
-        {
-            var providerType = (PaymentProviderType)provider.ProviderType;
-            
-            // Only load scripts for providers that need client-side JS
-            if (RequiresClientScript(providerType))
-            {
-                var loaded = await ScriptLoader.LoadAsync(providerType);
-                if (loaded)
-                {
-                    _loadedProviderScripts.Add(providerType);
-                    Logger?.LogDebug("Loaded script for provider: {Provider}", providerType);
-                }
-            }
-        }
-
-        _scriptsLoaded = true;
-    }
-
-    private static bool RequiresClientScript(PaymentProviderType providerType)
-    {
-        return providerType == PaymentProviderType.Stripe ||
-               providerType == PaymentProviderType.PayPal ||
-               providerType == PaymentProviderType.ApplePay ||
-               providerType == PaymentProviderType.GooglePay;
-    }
-
-    private async Task LoadAvailableProviders()
-    {
-        // Reset debug info
-        _filteringDetails.Clear();
-        _apiResponseStatus = null;
-        _providersFromApi = 0;
-        _platformFlags = PlatformService.GetPlatformFlags();
-        
-        // Log to browser console via JS for easier debugging
-        await LogToConsoleAsync($"[PaymentComponent] LoadAvailableProviders starting for AppId: {AppId}");
-        await LogToConsoleAsync($"[PaymentComponent] Platform: {PlatformService.CurrentPlatform}, Flags: {_platformFlags} (0x{_platformFlags:X}), RequiresAppStore: {PlatformService.RequiresAppStorePayment}");
-        
-        // If providers are preloaded, use them directly (skip API call)
-        if (PreloadedProviders != null && PreloadedProviders.Count > 0)
-        {
-            _availableProviders = PreloadedProviders;
-            _providersFromApi = PreloadedProviders.Count;
-            _apiResponseStatus = "Preloaded (skipped API call)";
-            
-            if (!string.IsNullOrEmpty(PreselectedProviderId))
-            {
-                _selectedProvider = FindProviderById(PreselectedProviderId);
-            }
-            
-            if (_selectedProvider == null && _availableProviders.Count > 0)
-            {
-                _selectedProvider = _availableProviders[0];
-            }
-            
-            Logger?.LogDebug("Using {Count} preloaded providers, selected: {SelectedId}", 
-                _availableProviders.Count, _selectedProvider?.Id);
-            await LogToConsoleAsync($"[PaymentComponent] Using {_availableProviders.Count} preloaded providers");
-            return;
-        }
-        
-        _loadingMessage = "Loading payment options...";
-        await SetLoadingAsync(true);
-
-        try
-        {
-            // Validate AppId
-            if (string.IsNullOrEmpty(AppId))
-            {
-                _noProvidersReason = "Application ID is not configured.";
-                _debugInfo = "AppId parameter is null or empty";
-                _apiResponseStatus = "Not called - AppId missing";
-                Logger?.LogError("LoadAvailableProviders: AppId is null or empty!");
-                await LogToConsoleAsync("[PaymentComponent] ERROR: AppId is null or empty!");
-                return;
-            }
-            
-            Logger?.LogInformation("LoadAvailableProviders: Starting for AppId: '{AppId}'", AppId);
-            Logger?.LogInformation("LoadAvailableProviders: Platform: {Platform}, RequiresAppStore: {RequiresAppStore}", 
-                PlatformService.CurrentPlatform, PlatformService.RequiresAppStorePayment);
-            
-            _platformInfo = await PaymentProviderService.GetAvailableProvidersAsync(AppId);
-            
-            if (_platformInfo == null)
-            {
-                _noProvidersReason = "Unable to load payment configuration from server.";
-                _debugInfo = $"API returned null response. Check server logs and network connectivity.";
-                _apiResponseStatus = "Null response from API";
-                Logger?.LogError("LoadAvailableProviders: API returned null for AppId: {AppId}", AppId);
-                await LogToConsoleAsync($"[PaymentComponent] ERROR: API returned null for AppId: {AppId}");
-                return;
-            }
-            
-            _availableProviders = _platformInfo.AvailableProviders;
-            _providersFromApi = _availableProviders.Count;
-            _apiResponseStatus = $"Success - {_providersFromApi} provider(s) after filtering";
-            
-            Logger?.LogInformation("LoadAvailableProviders: Received {Count} providers for AppId: {AppId}", 
-                _availableProviders.Count, AppId);
-            await LogToConsoleAsync($"[PaymentComponent] Received {_availableProviders.Count} providers after filtering");
-            await LogToConsoleAsync($"[PaymentComponent] Check server console logs for '[PaymentProviderService]' entries to see what API returned BEFORE filtering");
-            
-            // Log each provider for debugging
-            foreach (var provider in _availableProviders)
-            {
-                var providerType = (PaymentProviderType)provider.ProviderType;
-                var hasKey = !string.IsNullOrEmpty(provider.PublishableKey) || !string.IsNullOrEmpty(provider.ClientId);
-                _filteringDetails.Add($"{provider.Name} (Type: {providerType}, Enabled: {provider.IsEnabled}, HasKey: {hasKey}, Platforms: {provider.AllowedPlatforms})");
-                await LogToConsoleAsync($"[PaymentComponent]   Provider: {provider.Name}, Type: {providerType}, Enabled: {provider.IsEnabled}, AllowedPlatforms: {provider.AllowedPlatforms}, HasPublishableKey: {!string.IsNullOrEmpty(provider.PublishableKey)}, HasClientId: {!string.IsNullOrEmpty(provider.ClientId)}");
-            }
-            
-            if (_availableProviders.Count == 0)
-            {
-                // Build debug info with more context - SERVER SIDE ISSUE
-                var debugBuilder = new System.Text.StringBuilder();
-                debugBuilder.AppendLine("SERVER-SIDE CONFIGURATION ISSUE:");
-                debugBuilder.AppendLine("The WildwoodAPI returned 0 payment providers for this app.");
-                debugBuilder.AppendLine("");
-                debugBuilder.AppendLine("Possible causes:");
-                debugBuilder.AppendLine("1. No payment providers configured for the app's company");
-                debugBuilder.AppendLine("2. Providers exist but none are enabled (IsEnabled=false)");
-                debugBuilder.AppendLine("3. Providers exist but none have Web platform in AllowedPlatforms");
-                debugBuilder.AppendLine("");
-                debugBuilder.AppendLine("To fix:");
-                debugBuilder.AppendLine("1. Go to WildwoodAdmin");
-                debugBuilder.AppendLine("2. Navigate to Company > Payment Providers");
-                debugBuilder.AppendLine("3. Add/configure a payment provider (e.g., Stripe, PayPal)");
-                debugBuilder.AppendLine("4. Ensure the provider is Enabled");
-                debugBuilder.AppendLine("5. Ensure AllowedPlatforms includes 'Web' (flag 1)");
-                
-                _noProvidersReason = "No payment providers are configured for this application. Please configure payment providers in the admin panel.";
-                _debugInfo = debugBuilder.ToString();
-                
-                Logger?.LogWarning("LoadAvailableProviders: API returned 0 providers - this is a SERVER-SIDE configuration issue. " +
-                    "AppId: {AppId}, Platform: {Platform}. Check that payment providers are configured and enabled for the app's company.", 
-                    AppId, _platformInfo.Platform);
-                await LogToConsoleAsync($"[PaymentComponent] WARNING: API returned 0 providers - SERVER-SIDE CONFIGURATION ISSUE");
-                await LogToConsoleAsync($"[PaymentComponent] Check that payment providers are configured in WildwoodAdmin for the company associated with AppId: {AppId}");
-                return;
-            }
-            
-            // Log each provider's details for debugging
-            foreach (var provider in _availableProviders)
-            {
-                var providerType = (PaymentProviderType)provider.ProviderType;
-                Logger?.LogInformation("  Provider: {Name} (Type: {Type}, Id: {Id})", 
-                    provider.Name, providerType, provider.Id);
-            }
-            
-            // Auto-select default or first provider
-            if (_platformInfo.RequiredProviderId != null)
-            {
-                _selectedProvider = FindProviderById(_platformInfo.RequiredProviderId);
-                Logger?.LogInformation("Required provider selected: {ProviderId}", _platformInfo.RequiredProviderId);
-            }
-            else if (_platformInfo.DefaultProvider != null)
-            {
-                _selectedProvider = _platformInfo.DefaultProvider;
-                Logger?.LogInformation("Default provider selected: {ProviderId}", _selectedProvider?.Id);
-            }
-            else if (_availableProviders.Count > 0)
-            {
-                _selectedProvider = _availableProviders[0];
-                Logger?.LogInformation("First provider selected: {ProviderId}", _selectedProvider?.Id);
-            }
-            
-            if (_selectedProvider != null)
-            {
-                var selectedType = (PaymentProviderType)_selectedProvider.ProviderType;
-                Logger?.LogInformation("SELECTED: {ProviderName} (Type: {Type})", 
-                    _selectedProvider.Name, selectedType);
-                await LogToConsoleAsync($"[PaymentComponent] Selected provider: {_selectedProvider.Name} (Type: {selectedType})");
-            }
-        }
-        catch (Exception ex)
-        {
-            _noProvidersReason = "An error occurred while loading payment options.";
-            _debugInfo = $"Exception: {ex.GetType().Name}\nMessage: {ex.Message}";
-            _apiResponseStatus = $"Exception: {ex.GetType().Name}";
-            Logger?.LogError(ex, "LoadAvailableProviders: Failed for AppId: {AppId}", AppId);
-            await LogToConsoleAsync($"[PaymentComponent] ERROR: {ex.Message}");
-            await HandleErrorAsync(ex, "Loading payment providers");
-        }
-        finally
-        {
-            await SetLoadingAsync(false);
-        }
-    }
-
-    private async Task InitializeProviderJs(PaymentProviderDto provider)
-    {
-        try
-        {
-            var providerType = (PaymentProviderType)provider.ProviderType;
-            Logger?.LogInformation("InitializeProviderJs: Starting for {ProviderType}", providerType);
-            await LogToConsoleAsync($"[PaymentComponent] InitializeProviderJs: Starting for {providerType}");
-            
-            // Ensure script is loaded for this provider
-            if (!ScriptLoader.IsLoaded(providerType) && RequiresClientScript(providerType))
-            {
-                Logger?.LogInformation("InitializeProviderJs: Loading script for {ProviderType}...", providerType);
-                await LogToConsoleAsync($"[PaymentComponent] Loading script for {providerType}...");
-                var loaded = await ScriptLoader.LoadAsync(providerType);
-                if (loaded)
-                {
-                    _loadedProviderScripts.Add(providerType);
-                    Logger?.LogInformation("InitializeProviderJs: Script loaded for {ProviderType}", providerType);
-                    await LogToConsoleAsync($"[PaymentComponent] Script loaded for {providerType}");
-                }
-                else
-                {
-                    Logger?.LogError("InitializeProviderJs: FAILED to load script for {ProviderType}", providerType);
-                    await LogToConsoleAsync($"[PaymentComponent] ERROR: FAILED to load script for {providerType}");
-                    await HandleErrorAsync(new Exception($"Failed to load {providerType} payment script"), "Script loading");
-                    return;
-                }
-            }
-            else
-            {
-                Logger?.LogInformation("InitializeProviderJs: Script already loaded for {ProviderType}", providerType);
-                await LogToConsoleAsync($"[PaymentComponent] Script already loaded for {providerType}");
-            }
-            
-            // Initialize the provider with its configuration
-            var refKey = $"payment-{ComponentId}-{providerType}";
-            
-            switch (providerType)
-            {
-                case PaymentProviderType.Stripe:
-                    if (!string.IsNullOrEmpty(provider.PublishableKey))
-                    {
-                        await LogToConsoleAsync($"[PaymentComponent] Initializing Stripe with key: {provider.PublishableKey.Substring(0, Math.Min(20, provider.PublishableKey.Length))}...");
-                        _dotNetRef ??= DotNetObjectReference.Create(this);
-                        await InvokeJSVoidAsync("wildwoodPayment.initStripe", 
-                            provider.PublishableKey, "stripe-card-element", _dotNetRef, refKey);
-                        _stripeInitialized = true;
-                        Logger?.LogInformation("InitializeProviderJs: Stripe initialized");
-                        await LogToConsoleAsync("[PaymentComponent] Stripe initialized successfully");
-                    }
-                    else
-                    {
-                        Logger?.LogWarning("InitializeProviderJs: Stripe provider missing PublishableKey");
-                        await LogToConsoleAsync("[PaymentComponent] ERROR: Stripe provider missing PublishableKey");
-                        await HandleErrorAsync(new Exception("Stripe is not properly configured (missing PublishableKey). Please contact support."), "Stripe configuration");
-                    }
-                    break;
-                    
-                case PaymentProviderType.PayPal:
-                    if (!string.IsNullOrEmpty(provider.ClientId))
-                    {
-                        Logger?.LogInformation("InitializeProviderJs: Calling wildwoodPayment.initPayPal with ClientId: {ClientIdPrefix}...", 
-                            provider.ClientId.Length > 10 ? provider.ClientId.Substring(0, 10) : provider.ClientId);
-                        await LogToConsoleAsync($"[PaymentComponent] Initializing PayPal with ClientId: {provider.ClientId.Substring(0, Math.Min(10, provider.ClientId.Length))}...");
-                        Logger?.LogInformation("InitializeProviderJs: PayPal options - IsSubscription: {IsSubscription}, SupportsApplePay: {ApplePay}, SupportsGooglePay: {GooglePay}",
-                            IsSubscription, provider.SupportsApplePay, provider.SupportsGooglePay);
-                        _dotNetRef ??= DotNetObjectReference.Create(this);
-                        
-                        try
-                        {
-                            // Build PayPal options including subscription and funding source info
-                            var paypalOptions = new Dictionary<string, object>
-                            {
-                                ["isSubscription"] = IsSubscription,
-                                ["supportsApplePay"] = provider.SupportsApplePay,
-                                ["supportsGooglePay"] = provider.SupportsGooglePay,
-                                ["description"] = Description ?? string.Empty
-                            };
-                            
-                            var result = await InvokeJSAsync<bool>("wildwoodPayment.initPayPal", 
-                                provider.ClientId, "paypal-button-container", Amount, Currency, _dotNetRef, refKey, paypalOptions);
-                            _paypalButtonsLoaded = result;
-                            Logger?.LogInformation("InitializeProviderJs: PayPal initPayPal returned: {Result}", result);
-                            await LogToConsoleAsync($"[PaymentComponent] PayPal initialization result: {result}");
-                            
-                            if (!result)
-                            {
-                                Logger?.LogWarning("InitializeProviderJs: PayPal initialization returned false");
-                                await HandleErrorAsync(new Exception("PayPal buttons failed to initialize. Check browser console for errors."), "PayPal initialization");
-                            }
-                        }
-                        catch (Exception jsEx)
-                        {
-                            Logger?.LogError(jsEx, "InitializeProviderJs: JavaScript error calling initPayPal");
-                            await LogToConsoleAsync($"[PaymentComponent] ERROR: PayPal JavaScript error: {jsEx.Message}");
-                            await HandleErrorAsync(new Exception($"PayPal JavaScript error: {jsEx.Message}"), "PayPal initialization");
-                        }
-                        
-                        StateHasChanged();
-                    }
-                    else
-                    {
-                        Logger?.LogWarning("InitializeProviderJs: PayPal provider missing ClientId - provider ID: {ProviderId}, Name: {Name}", 
-                            provider.Id, provider.Name);
-                        await LogToConsoleAsync("[PaymentComponent] ERROR: PayPal provider missing ClientId");
-                        _paypalButtonsLoaded = false;
-                        await HandleErrorAsync(new InvalidOperationException("PayPal is not properly configured (missing ClientId). Please contact support."), "PayPal configuration");
-                    }
-                    break;
-                    
-                case PaymentProviderType.ApplePay:
-                    _dotNetRef ??= DotNetObjectReference.Create(this);
-                    await LogToConsoleAsync("[PaymentComponent] Initializing Apple Pay...");
-                    await InvokeJSVoidAsync("wildwoodPayment.initApplePay", 
-                        provider.MerchantId, Amount, Currency, Description ?? "Payment", _dotNetRef, refKey);
-                    Logger?.LogInformation("InitializeProviderJs: Apple Pay initialized");
-                    await LogToConsoleAsync("[PaymentComponent] Apple Pay initialized");
-                    break;
-                    
-                case PaymentProviderType.GooglePay:
-                    _dotNetRef ??= DotNetObjectReference.Create(this);
-                    await LogToConsoleAsync("[PaymentComponent] Initializing Google Pay...");
-                    await InvokeJSVoidAsync("wildwoodPayment.initGooglePay", 
-                        provider.MerchantId, Amount, Currency, 
-                        provider.IsSandboxMode ? "TEST" : "PRODUCTION",
-                        provider.PublishableKey, _dotNetRef, refKey);
-                    Logger?.LogInformation("InitializeProviderJs: Google Pay initialized");
-                    await LogToConsoleAsync("[PaymentComponent] Google Pay initialized");
-                    break;
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger?.LogError(ex, "InitializeProviderJs: Failed to initialize payment provider JS for {ProviderType}", 
-                (PaymentProviderType)provider.ProviderType);
-            await LogToConsoleAsync($"[PaymentComponent] ERROR: Failed to initialize provider: {ex.Message}");
-            await HandleErrorAsync(ex, $"Initializing {(PaymentProviderType)provider.ProviderType}");
-        }
-    }
-
-    /// <summary>
-    /// Logs a message to the browser console for debugging
-    /// </summary>
-    private async Task LogToConsoleAsync(string message)
-    {
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("console.log", message);
-        }
-        catch
-        {
-            // Ignore logging failures - console may not be available
-        }
-    }
-
-    private PaymentProviderDto? FindProviderById(string id)
-    {
-        foreach (var provider in _availableProviders)
-        {
-            if (provider.Id == id)
-                return provider;
-        }
-        return null;
-    }
-
-    private async Task SelectProvider(PaymentProviderDto provider)
-    {
-        _selectedProvider = provider;
-        _cardComplete = false;
-        _stripeInitialized = false;
-        _paypalButtonsLoaded = false;
-        ClearError();
-        StateHasChanged();
-        
-        // Initialize JS for the new provider
-        await Task.Delay(100); // Allow DOM to update
-        await InitializeProviderJs(provider);
-    }
-
-    /// <summary>
-    /// Called from JavaScript when card input changes
-    /// </summary>
-    [JSInvokable]
-    public void OnCardChange(bool complete, string? error)
-    {
-        _cardComplete = complete;
-        StateHasChanged();
-    }
-
-    /// <summary>
-    /// Called from JavaScript when tracking prevention is detected.
-    /// Shows a user-friendly warning message about potential payment issues.
-    /// </summary>
-    [JSInvokable]
-    public void OnTrackingPreventionDetected()
-    {
-        _trackingPreventionDetected = true;
-        Logger?.LogWarning("Browser tracking prevention detected - this may affect Stripe fraud detection features");
-        StateHasChanged();
-    }
-
-    /// <summary>
-    /// Called from JavaScript when PayPal payment is approved
-    /// </summary>
-    [JSInvokable]
-    public async Task OnPayPalApproved(PayPalApprovalResult result)
-    {
-        try
-        {
-            Logger?.LogInformation("PayPal payment approved. OrderId: {OrderId}, TransactionId: {TransactionId}", 
-                result.OrderId, result.TransactionId);
-
-            _paymentResult = new PaymentCompletionResult
-            {
-                Success = true,
-                TransactionId = result.TransactionId,
-                PaymentIntentId = result.OrderId
-            };
-            _paymentComplete = true;
-            
-            await NotifyPaymentSuccess();
-            StateHasChanged();
-        }
-        catch (Exception ex)
-        {
-            Logger?.LogError(ex, "Error handling PayPal approval");
-            await HandlePaymentError("Failed to process PayPal payment", "paypal_error");
-        }
-    }
-
-    /// <summary>
-    /// Called from JavaScript when PayPal payment is cancelled
-    /// </summary>
-    [JSInvokable]
-    public void OnPayPalCancelled(PayPalCancelResult result)
-    {
-        Logger?.LogInformation("PayPal payment cancelled. OrderId: {OrderId}", result.OrderId);
-        StateHasChanged();
-    }
-
-    /// <summary>
-    /// Called from JavaScript when PayPal encounters an error
-    /// </summary>
-    [JSInvokable]
-    public async Task OnPayPalError(PayPalErrorResult result)
-    {
-        Logger?.LogWarning("PayPal error: {ErrorMessage}", result.ErrorMessage);
-        await HandlePaymentError(result.ErrorMessage ?? "PayPal payment failed", "paypal_error");
-        StateHasChanged();
-    }
-
-    // PayPal JS callback models
-    public class PayPalApprovalResult
-    {
-        public string? OrderId { get; set; }
-        public string? PayerId { get; set; }
-        public string? TransactionId { get; set; }
-    }
-
-    public class PayPalCancelResult
-    {
-        public string? OrderId { get; set; }
-    }
-
-    public class PayPalErrorResult
-    {
-        public string? ErrorMessage { get; set; }
-    }
-
-    private async Task ProcessPayment()
-    {
-        if (_selectedProvider == null || _isProcessing)
-            return;
-
-        _isProcessing = true;
-        _loadingMessage = "Processing payment...";
-        StateHasChanged();
-
-        try
-        {
-            var request = new InitiatePaymentRequest
-            {
-                ProviderId = _selectedProvider.Id,
-                AppId = AppId,
-                Amount = Amount,
-                Currency = Currency,
-                Description = Description,
-                CustomerId = CustomerId,
-                CustomerEmail = CustomerEmail,
-                OrderId = OrderId,
-                SubscriptionId = SubscriptionId,
-                PricingModelId = PricingModelId,
-                IsSubscription = IsSubscription,
-                ReturnUrl = ReturnUrl,
-                CancelUrl = CancelUrl,
-                Metadata = Metadata
-            };
-
-            var response = await PaymentProviderService.InitiatePaymentAsync(request);
-            Logger?.LogInformation("ProcessPayment: Payment initiation response: {Response}", response);
-
-            if (!response.Success)
-            {
-                await HandlePaymentError(response.ErrorMessage ?? "Payment initiation failed", response.ErrorCode);
-                return;
-            }
-
-            // If no client-side confirmation needed (trial, $0 amount, or payment succeeded immediately)
-            if (!response.RequiresClientConfirmation || string.IsNullOrEmpty(response.ClientSecret))
-            {
-                await CompletePayment(response.PaymentIntentId ?? response.SubscriptionId ?? "");
-                return;
-            }
-
-            var providerType = (PaymentProviderType)_selectedProvider.ProviderType;
-            switch (providerType)
-            {
-                case PaymentProviderType.Stripe:
-                    await ConfirmStripePayment(response.ClientSecret);
-                    break;
-
-                default:
-                    await CompletePayment(response.PaymentIntentId!);
-                    break;
-            }
-        }
-        catch (Exception ex)
-        {
-            await HandleErrorAsync(ex, "Processing payment");
-        }
-        finally
-        {
-            _isProcessing = false;
-            StateHasChanged();
-        }
-    }
-
-    private async Task ConfirmStripePayment(string clientSecret)
-    {
-        try
-        {
-            var result = await InvokeJSAsync<PaymentJsResult>("wildwoodPayment.confirmStripePayment", clientSecret) 
-                ?? new PaymentJsResult { Success = false, ErrorMessage = "JS call failed" };
-            
-            if (result.Success)
-            {
-                await CompletePayment(result.PaymentIntentId!);
-            }
-            else
-            {
-                await HandlePaymentError(result.ErrorMessage ?? "Card payment failed", result.ErrorCode);
-            }
-        }
-        catch (Exception ex)
-        {
-            await HandleErrorAsync(ex, "Confirming card payment");
-        }
-    }
-
-    private async Task InitiateAppStorePurchase()
-    {
-        if (_selectedProvider == null || _isProcessing)
-            return;
-
-        _isProcessing = true;
-        StateHasChanged();
-
-        try
-        {
-            var request = new InitiatePaymentRequest
-            {
-                ProviderId = _selectedProvider.Id,
-                AppId = AppId,
-                Amount = Amount,
-                Currency = Currency,
-                PricingModelId = PricingModelId,
-                IsSubscription = IsSubscription
-            };
-
-            var response = await PaymentProviderService.InitiatePaymentAsync(request);
-
-            if (!response.Success || response.ProductIds == null || response.ProductIds.Count == 0)
-            {
-                await HandlePaymentError(response.ErrorMessage ?? "No products configured", response.ErrorCode);
-                return;
-            }
-
-            var providerType = (PaymentProviderType)_selectedProvider.ProviderType;
-            var productId = response.ProductIds[0];
-            var receiptData = await InvokeJSAsync<string>("wildwoodPayment.purchaseAppStoreProduct",
-                productId, providerType == PaymentProviderType.AppleAppStore);
-
-            if (!string.IsNullOrEmpty(receiptData))
-            {
-                // The interop returns only the proof of purchase; the store transaction id is unknown here
-                // and the server extracts it from the validated receipt.
-                var validationResult = await PaymentProviderService.ValidateStorePurchaseAsync(AppId, new StorePurchase
-                {
-                    ProviderType = providerType,
-                    ProductId = productId,
-                    PurchaseToken = receiptData
-                });
-
-                if (validationResult.Success)
-                {
-                    _paymentResult = validationResult;
-                    _paymentComplete = true;
-                    await NotifyPaymentSuccess();
-                }
-                else
-                {
-                    await HandlePaymentError(validationResult.ErrorMessage ?? "Receipt validation failed", validationResult.ErrorCode);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            await HandleErrorAsync(ex, "App store purchase");
-        }
-        finally
-        {
-            _isProcessing = false;
-            StateHasChanged();
-        }
-    }
-
-    private async Task InitiateBnplPayment()
-    {
-        if (_selectedProvider == null || _isProcessing)
-            return;
-
-        _isProcessing = true;
-        StateHasChanged();
-
-        try
-        {
-            var request = new InitiatePaymentRequest
-            {
-                ProviderId = _selectedProvider.Id,
-                AppId = AppId,
-                Amount = Amount,
-                Currency = Currency,
-                CustomerEmail = CustomerEmail,
-                ReturnUrl = ReturnUrl,
-                CancelUrl = CancelUrl
-            };
-
-            var response = await PaymentProviderService.InitiatePaymentAsync(request);
-
-            if (response.Success && !string.IsNullOrEmpty(response.RedirectUrl))
-            {
-                await InvokeJSVoidAsync("eval", $"window.location.href = '{response.RedirectUrl}'");
-            }
-            else
-            {
-                await HandlePaymentError(response.ErrorMessage ?? "Failed to initialize payment", response.ErrorCode);
-            }
-        }
-        catch (Exception ex)
-        {
-            await HandleErrorAsync(ex, "BNPL payment");
-        }
-        finally
-        {
-            _isProcessing = false;
-            StateHasChanged();
-        }
-    }
-
-    private async Task CompletePayment(string paymentIntentId)
-    {
-        var providerType = (PaymentProviderType)(_selectedProvider?.ProviderType ?? (int)PaymentProviderType.Stripe);
-        var result = await PaymentProviderService.ConfirmPaymentAsync(paymentIntentId, providerType);
-
-        if (result.Success)
-        {
-            _paymentResult = result;
-            _paymentComplete = true;
-            await NotifyPaymentSuccess();
-        }
-        else
-        {
-            await HandlePaymentError(result.ErrorMessage ?? "Payment confirmation failed", result.ErrorCode);
-        }
-    }
-
-    private async Task NotifyPaymentSuccess()
-    {
-        if (OnPaymentSuccess.HasDelegate)
-        {
-            await OnPaymentSuccess.InvokeAsync(new PaymentSuccessEventArgs
-            {
-                TransactionId = _paymentResult?.TransactionId,
-                PaymentIntentId = _paymentResult?.PaymentIntentId,
-                SubscriptionId = _paymentResult?.SubscriptionId,
-                Amount = Amount,
-                Currency = Currency,
-                ProviderType = _selectedProvider?.ProviderType ?? (int)PaymentProviderType.Stripe,
-                ReceiptUrl = _paymentResult?.ReceiptUrl
-            });
-        }
-    }
-
-    private async Task HandlePaymentError(string message, string? code)
-    {
-        await HandleErrorAsync(new Exception(message), "Payment failed");
-        
-        if (OnPaymentFailure.HasDelegate)
-        {
-            await OnPaymentFailure.InvokeAsync(new PaymentFailureEventArgs
-            {
-                ErrorMessage = message,
-                ErrorCode = code,
-                ProviderType = _selectedProvider?.ProviderType ?? (int)PaymentProviderType.Stripe,
-                IsRetryable = IsRetryableError(code)
-            });
-        }
-    }
-
-    private void RetryPayment()
-    {
-        ClearError();
-        _paymentComplete = false;
-        _paymentResult = null;
-        _providersInitialized = false;
-        StateHasChanged();
-    }
-
-    private void HandleSuccessContinue()
-    {
-        if (OnPaymentSuccess.HasDelegate && _paymentResult != null)
-        {
-            _ = OnPaymentSuccess.InvokeAsync(new PaymentSuccessEventArgs
-            {
-                TransactionId = _paymentResult.TransactionId,
-                Amount = Amount,
-                Currency = Currency,
-                ProviderType = _selectedProvider?.ProviderType ?? (int)PaymentProviderType.Stripe
-            });
-        }
-    }
-
-    private void HandleCancel()
-    {
-        if (OnCancel.HasDelegate)
-        {
-            _ = OnCancel.InvokeAsync();
-        }
-    }
-
-    private static bool IsRedirectProvider(int providerType)
-    {
-        var type = (PaymentProviderType)providerType;
-        return type == PaymentProviderType.Klarna ||
-               type == PaymentProviderType.Affirm ||
-               type == PaymentProviderType.Afterpay;
-    }
-
-    private static bool IsRetryableError(string? code)
-    {
-        if (string.IsNullOrEmpty(code)) return true;
-        
-        return code != "card_declined" && 
-               code != "insufficient_funds" && 
-               code != "lost_card" && 
-               code != "stolen_card";
-    }
-
-    private static string FormatAmount(decimal amount, string currency)
-    {
-        return currency.ToUpperInvariant() switch
-        {
-            "USD" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-US")),
-            "EUR" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("de-DE")),
-            "GBP" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-GB")),
-            "JPY" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("ja-JP")),
-            "INR" => amount.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-IN")),
-            _ => $"{currency} {amount:N2}"
-        };
-    }
-
+    // Markup-bearing render fragment: Razor template syntax cannot live in a plain .cs file
+    // without being rewritten into RenderTreeBuilder calls, so it stays with the markup.
+    // All other C# lives in PaymentComponent.razor.cs / PaymentComponent.Stripe.cs.
     private RenderFragment RenderBillingAddressForm() => __builder =>
     {
         <div class="billing-address mt-4">
@@ -1313,56 +458,6 @@
             </div>
         </div>
     };
-
-    private class PaymentJsResult
-    {
-        public bool Success { get; set; }
-        public string? PaymentIntentId { get; set; }
-        public string? ErrorMessage { get; set; }
-        public string? ErrorCode { get; set; }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        _dotNetRef?.Dispose();
-        
-        if (_stripeInitialized)
-        {
-            try
-            {
-                await InvokeJSVoidAsync("wildwoodPayment.disposeStripe");
-            }
-            catch
-            {
-                // Ignore disposal errors
-            }
-        }
-        
-        if (_selectedProvider != null && (PaymentProviderType)_selectedProvider.ProviderType == PaymentProviderType.PayPal)
-        {
-            try
-            {
-                await InvokeJSVoidAsync("wildwoodPayment.disposePayPal");
-            }
-            catch
-            {
-                // Ignore disposal errors
-            }
-        }
-        
-        foreach (var providerType in _loadedProviderScripts)
-        {
-            try
-            {
-                await ScriptLoader.ReleaseAsync(providerType);
-            }
-            catch
-            {
-                // Ignore release errors during disposal
-            }
-        }
-        _loadedProviderScripts.Clear();
-    }
 }
 <style>
 .payment-component {

@@ -38,3 +38,48 @@
     background: var(--ww-bg-secondary, #f8f9fa);
     border-color: var(--ww-border-color, #dee2e6) !important;
 }
+
+/* The shared plan-change parts this component now renders (PlanChangeNotice, PaymentModal). The
+   same rules the manage view carries: the two packages are one assembly, but scoped CSS is per
+   component, so each root that renders a part has to carry the part's rules. */
+
+::deep .ww-regsub-plan-change {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--ww-border-light, rgba(0, 0, 0, 0.125));
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+::deep .ww-regsub-plan-change-failed {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+::deep .ww-regsub-plan-change-reason {
+    display: block;
+    margin-top: 0.25rem;
+}
+
+::deep .ww-regsub-plan-change-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+::deep .ww-regsub-payment-modal {
+    max-width: 30rem;
+}
+
+::deep .ww-modal-overlay--stacked {
+    z-index: 10000;
+}
+
+::deep .ww-feature-included {
+    margin-left: 0.5rem;
+}

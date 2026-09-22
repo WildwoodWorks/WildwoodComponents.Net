@@ -46,6 +46,14 @@ namespace WildwoodComponents.WebForms.Models
 
         /// <summary>Invitation token, for apps that gate registration.</summary>
         public string? RegistrationToken { get; set; }
+
+        /// <summary>
+        /// Campaign Attribution payload, from the browser engine (<c>attribution.js</c>) or from the
+        /// server-side <see cref="WildwoodComponents.WebForms.Attribution.WildwoodAttribution"/>. Left
+        /// null, <c>WildwoodAuthService.RegisterAsync</c> attaches whatever the server captured, so a
+        /// host never has to wire this up by hand; a value set here always wins.
+        /// </summary>
+        public AttributionPayloadModel? Attribution { get; set; }
     }
 
     /// <summary>Password reset initiation request.</summary>

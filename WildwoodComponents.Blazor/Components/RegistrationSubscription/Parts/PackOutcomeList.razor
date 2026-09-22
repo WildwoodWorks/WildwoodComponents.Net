@@ -1,0 +1,30 @@
+@using WildwoodComponents.Blazor.Components.Base
+@inherits BaseWildwoodComponent
+
+@* What became of each pack. One line per pack, including the ones that failed.
+
+   A basket is not a transaction: one pack can fail while the rest run, so this never collapses the
+   list into a single "done" - the customer is told, per pack, what they ended up with. *@
+@if (Packs is not null && Packs.Count > 0)
+{
+    <ul class="ww-pack-outcome-list @CssClass" @attributes="AdditionalAttributes">
+        @foreach (var pack in Packs)
+        {
+            var outcome = pack;
+            var trialEnd = TrialEndText(outcome.TrialEnd);
+
+            <li class="ww-pack-outcome ww-pack-outcome--@outcome.Status" data-ww-pack="@outcome.AddOnId">
+                <span class="ww-pack-outcome-name">@outcome.Name</span>
+                <span class="ww-pack-outcome-status">@StatusLabel(outcome.Status)</span>
+                @if (trialEnd.Length > 0)
+                {
+                    <span class="ww-pack-outcome-trial">@trialEnd</span>
+                }
+                @if (!string.IsNullOrEmpty(outcome.ErrorMessage))
+                {
+                    <span class="ww-pack-outcome-error">@outcome.ErrorMessage</span>
+                }
+            </li>
+        }
+    </ul>
+}
