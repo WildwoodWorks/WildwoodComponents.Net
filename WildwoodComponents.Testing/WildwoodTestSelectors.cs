@@ -5,10 +5,15 @@ namespace WildwoodComponents.Testing;
 // The DOM contract these helpers key on, as plain data.
 //
 // Ported from packages/wildwood-react/src/testing/selectors.ts, and kept apart from the drivers for
-// the two reasons that file gives. It is the shared vocabulary every stack that renders this flow
-// is asked to honour - Blazor, Razor, React, React Native, SwiftUI - so it should be readable in
-// one place rather than inlined in a click. And it is the only part of the package a unit test can
-// exercise without a browser; the drivers need a live page.
+// the two reasons that file gives. It is the shared vocabulary the three stacks that render this
+// flow to a DOM are asked to honour - Blazor, Razor, React - so it should be readable in one place
+// rather than inlined in a click. And it is the only part of the package a unit test can exercise
+// without a browser; the drivers need a live page.
+//
+// React Native and SwiftUI are asked to honour the same WORDS and cannot honour these selectors:
+// neither has a DOM, so `register`, `payment`, `submit-register` and the rest arrive as a `testID`
+// and an `accessibilityIdentifier`. One test plan reads against all five stacks; only three of them
+// are drivable from here.
 //
 // Ordered lists vs comma-joined lists. A CSS selector list (`a, b`) resolves in DOM order, not in
 // list order, so taking the first match of one does NOT mean "prefer a". Where preference is what

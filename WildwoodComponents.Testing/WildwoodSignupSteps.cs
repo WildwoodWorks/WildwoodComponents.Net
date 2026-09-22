@@ -40,7 +40,12 @@ public static class WildwoodSignupSteps
     public const int DefaultManageTimeoutMs = 90_000;
 
     /// <summary>What a read says when the component has not painted yet.</summary>
-    private const string NotRendered = "(not rendered)";
+    /// <remarks>
+    /// Internal rather than private because <see cref="WildwoodSignupFlows"/> reports the same thing
+    /// about the same read, and two spellings of "nothing has rendered" would send a reader looking
+    /// for two different problems.
+    /// </remarks>
+    internal const string NotRendered = "(not rendered)";
 
     #region Reading
 

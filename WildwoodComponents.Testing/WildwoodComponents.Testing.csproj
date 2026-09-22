@@ -14,10 +14,15 @@
     <Authors>Wildwood Development Team</Authors>
     <Company>Wildwood</Company>
     <Product>WildwoodComponents.Testing</Product>
-    <Description>Playwright helpers for driving the Wildwood Registration and Subscription component from a browser test: the step readers, the step recorder and the shared data-ww-* DOM contract the Blazor, Razor, React and React Native implementations all honour. Opt-in: reference it from a test project only, never from an app.</Description>
+    <Description>Playwright helpers for driving the Wildwood Registration and Subscription component from a browser test: the step readers, the step recorder, the signup flows (registration form, disclaimers, consent banner, finish) and the shared data-ww-* DOM contract the Blazor, Razor, React and React Native implementations all honour. Opt-in: reference it from a test project only, never from an app.</Description>
     <PackageTags>wildwood;testing;playwright;e2e;registration;subscription</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <!-- This package exists so that Microsoft.Playwright is NOT a dependency of anything a host ships.
        Its driver copies about 100 MB of Node and JavaScript into the build output of every project
