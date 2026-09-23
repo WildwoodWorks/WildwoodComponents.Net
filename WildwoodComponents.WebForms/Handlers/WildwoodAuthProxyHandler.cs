@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using System.Web;
+using WildwoodComponents.Shared.Models;
 using WildwoodComponents.WebForms.Authentication;
 using WildwoodComponents.WebForms.Models;
 using WildwoodComponents.WebForms.Services;
@@ -132,7 +133,10 @@ namespace WildwoodComponents.WebForms.Handlers
                 ConfirmPassword = body.ConfirmPassword,
                 FirstName = body.FirstName,
                 LastName = body.LastName,
-                RegistrationToken = body.RegistrationToken
+                RegistrationToken = body.RegistrationToken,
+                // What attribution.js captured in the browser, when the page loads it. Null here lets
+                // the service attach whatever the server captured for this visit instead.
+                Attribution = body.Attribution
             }).ConfigureAwait(false);
 
             await CompleteSignInAsync(context, result, body.ReturnUrl, createPersistentCookie: false).ConfigureAwait(false);
@@ -354,6 +358,14 @@ namespace WildwoodComponents.WebForms.Handlers
             public string? LastName { get; set; }
             public string? RegistrationToken { get; set; }
             public string? ReturnUrl { get; set; }
+
+            /// <summary>
+            /// The Campaign Attribution payload <c>authentication.js</c> reads from
+            /// <c>window.wildwoodAttribution</c> and posts with the signup. Null when the page does not
+            /// load <c>attribution.js</c>, in which case the service falls back to the server-side
+            /// capture.
+            /// </summary>
+            public AttributionPayloadModel? Attribution { get; set; }
         }
 
         private sealed class ForgotPasswordProxyRequest

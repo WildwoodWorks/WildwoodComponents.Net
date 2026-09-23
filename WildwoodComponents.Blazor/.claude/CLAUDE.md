@@ -34,11 +34,12 @@ WildwoodComponents exists across multiple platforms. **When a component is added
 | Notifications | NotificationComponent | -- | notificationService | NotificationComponent | -- | -- |
 | 2FA Settings | TwoFactorSettingsComponent | -- | twoFactorService | TwoFactorSettingsComponent | -- | -- |
 | Token Registration | TokenRegistrationComponent | TokenRegistrationViewComponent | (via authService) | TokenRegistrationComponent | -- | -- |
-| App Tier | AppTierComponent | AppTierViewComponent | appTierService | AppTierComponent | -- | -- |
+| Registration & Subscription | RegistrationAndSubscriptionComponent (+ RegistrationSubscriptionPricing / Signup / Manage) | (Razor ViewComponents pending) | appTierService + authService | RegistrationAndSubscriptionComponent (+ the three views) | -- | -- |
+| App Tier *(deprecated -> manage view)* | AppTierComponent | AppTierViewComponent | appTierService | AppTierComponent | -- | -- |
 | Disclaimer | DisclaimerComponent | -- | disclaimerService | DisclaimerComponent | -- | -- |
 | Feedback | FeedbackWidgetComponent | FeedbackWidgetViewComponent | feedbackService | FeedbackComponent | FeedbackComponent | -- |
 | Consent Management | ConsentBanner | -- | ConsentService (consent engine) | ConsentBanner | ConsentComponent (UI+state only, no script injection) | -- |
-| Campaign Attribution | AttributionBootstrap + IAttributionService (wildwood-attribution.js); AuthenticationComponent claims after a provider sign-in (IAttributionService.ClaimAsync) | AttributionViewComponent (attribution.js) + WildwoodAttributionProxyController claim for signed-in sessions | AttributionService (attribution engine) | useAttribution (WildwoodProvider starts capture) | useAttribution (provider captures deep links) | -- |
+| Campaign Attribution | AttributionBootstrap + IAttributionService (wildwood-attribution.js); AuthenticationService auto-attaches the payload to every registration path and claims after a provider-token sign-in (15-minute queue); AuthenticationComponent claims after a popup provider sign-in (IAttributionService.ClaimAsync) | AttributionViewComponent (attribution.js) + WildwoodAttributionProxyController claim for signed-in sessions | AttributionService (attribution engine) | useAttribution (WildwoodProvider starts capture) | useAttribution (provider captures deep links) | -- |
 
 *`--` = not yet implemented on that platform*
 
@@ -338,8 +339,23 @@ When the `SignupWithSubscriptionComponent` or `AppTierComponent` creates a subsc
 
 ### Subscription Flow Architecture
 
+`RegistrationAndSubscriptionComponent` is the current entry point — a switch over a `View`
+parameter (`Pricing | Signup | Manage`) onto three first-class views under
+`Components/RegistrationSubscription/`. The shell declares the UNION of the three views'
+parameters and forwards only the active view's; a parameter set for another view is ignored, and
+`RegistrationAndSubscriptionShellTests` pins that by reflection so a parameter added to a view
+cannot become unreachable. The signup view is **pay-first**: the card is taken before the account
+exists, and packs are bought after the login on the card already saved. See the Blazor README's
+"Registration & Subscription" section for every parameter, the `SignupOutcome` shape, the
+`data-ww-view` / `data-ww-step` hooks and the migration recipes.
+
+`SignupWithSubscriptionComponent`, `PricingDisplayComponent` and `AppTierComponent` are
+`[Obsolete]` warnings pointing at those views (in step with JS 541e446). They still ship and still
+behave exactly as before — including `AppTierComponent`'s known one-time-charge bug, left as it is
+deliberately. Their legacy flow, for reference:
+
 ```
-SignupWithSubscriptionComponent:
+SignupWithSubscriptionComponent (deprecated):
   Step 1: Collect registration data (TokenRegistrationComponent in deferred mode)
   Step 2: Select tier (PricingDisplayComponent, no auth needed)
   Step 3: Register → Login → Subscribe (atomic)

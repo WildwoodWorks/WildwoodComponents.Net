@@ -7,6 +7,13 @@
 @inject ComponentLifecycleTracker LifecycleTracker
 @inject IConfiguration Configuration
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@* AppTierComponent is deprecated in favour of the manage view (/test/registration-subscription),
+   and this page exists to keep exercising it. Marking the PAGE obsolete is the narrowest
+   suppression there is for Razor-generated code: C# does not report an obsolete type used from
+   inside an obsolete one, so the whole generated BuildRenderTree is covered without a project-wide
+   NoWarn and without touching any other file. Nothing references this type - the router finds it
+   by reflection - so the attribute warns nobody. *@
+@attribute [System.Obsolete("Test page for the deprecated AppTierComponent. Use /test/registration-subscription for the replacement.")]
 
 <ComponentTestPage PageTitle="AppTierComponent Test" ComponentName="AppTierComponent" IconClass="fas fa-layer-group"
                    OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">

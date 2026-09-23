@@ -33,6 +33,29 @@ namespace WildwoodComponents.Blazor.Components.Consent
         /// </summary>
         [Parameter] public bool ShowFooterOptOut { get; set; } = true;
 
+        /// <summary>
+        /// While the banner is up, add its height to the page's padding at the edge the banner is
+        /// anchored to, so it does not cover anything the host anchors there. Default true.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The banner is <c>position: fixed</c> with a very high z-index, so without this it
+        /// silently sits on top of chat composers, sticky action bars and the like - the host has
+        /// no way to know how much room to leave, because the height depends on the configured
+        /// copy and on how it wraps. Either way the measured height is published as
+        /// <c>--ww-consent-height</c> on the document element, so a host that would rather place
+        /// the room itself can set this false and use the variable (it is removed again when the
+        /// banner goes). Ported from the React <c>ConsentBanner</c>'s <c>reserveSpace</c> prop.
+        /// </para>
+        /// <para>
+        /// Only the two BAR positions reserve padding: <c>bottomBar</c> pads the bottom and
+        /// <c>topBar</c> the top. A <c>corner</c> card is a small box inset from the bottom-right,
+        /// so padding the whole page for it would leave a full-width blank strip under the content
+        /// for as long as the banner is up; it publishes the height and pads nothing.
+        /// </para>
+        /// </remarks>
+        [Parameter] public bool ReserveSpace { get; set; } = true;
+
         protected ConsentConfigModel? Config;
         protected ConsentStateModel? State;
         protected bool ShowBanner;
@@ -42,6 +65,17 @@ namespace WildwoodComponents.Blazor.Components.Consent
 
         private ElementReference _modalRef;
         private bool _focusTrapped;
+        private ElementReference _bannerRef;
+        private bool _spaceReserved;
+
+        /// <summary>
+        /// This instance's own reservation token. Two <c>ConsentBanner</c>s in one circuit share
+        /// the scoped <see cref="IConsentService"/>, and so one cached copy of the JS engine: the
+        /// engine keys every reservation by this, so neither can release or double-count the
+        /// other's. It also outlives the banner's DOM node, which is what lets
+        /// <see cref="Dispose(bool)"/> give the room back after the element has gone.
+        /// </summary>
+        private readonly string _spaceKey = "ww-consent-" + System.Guid.NewGuid().ToString("N");
 
         protected static readonly string[] NonNecessaryCategories = { "Functional", "Analytics", "Advertising", "Sensitive" };
 
@@ -52,6 +86,7 @@ namespace WildwoodComponents.Blazor.Components.Consent
             // Initialize as soon as an AppId is available (not only on the first render): a host that
             // binds AppId asynchronously would otherwise never initialize. JS interop is only safe
             // after a render, so this stays in OnAfterRenderAsync; the Initialized guard makes it run once.
+            var justInitialized = false;
             if (!Initialized && !string.IsNullOrEmpty(AppId))
             {
                 Initialized = true;
@@ -60,6 +95,23 @@ namespace WildwoodComponents.Blazor.Components.Consent
                 State = result.State;
                 ShowBanner = result.ShouldShowBanner;
                 StateHasChanged();
+                justInitialized = true;
+            }
+
+            // Keep the fixed banner off the page's own edge-anchored UI while it is up, and give
+            // every bit of it back the moment it goes. Never on the pass that just initialized:
+            // StateHasChanged only QUEUES the render that puts the banner on the page, so its
+            // element reference is not captured yet and there would be nothing to measure. The
+            // render that follows brings this method straight back with the banner in hand.
+            if (!justInitialized && ShowBanner && !_spaceReserved)
+            {
+                _spaceReserved = true;
+                await ConsentService.ReserveBannerSpaceAsync(_bannerRef, ReserveSpace, _spaceKey);
+            }
+            else if (!ShowBanner && _spaceReserved)
+            {
+                _spaceReserved = false;
+                await ConsentService.ReleaseBannerSpaceAsync(_spaceKey);
             }
 
             // Trap focus while the preferences dialog is open; release when it closes.
@@ -73,6 +125,28 @@ namespace WildwoodComponents.Blazor.Components.Consent
                 _focusTrapped = false;
                 await ConsentService.ReleaseFocusAsync();
             }
+        }
+
+        /// <summary>
+        /// A host that removes the component while the banner is up takes the banner with it, so
+        /// the page's padding has to come back too.
+        /// </summary>
+        /// <remarks>
+        /// Not awaited, and it cannot be: <see cref="System.IDisposable.Dispose"/> is
+        /// synchronous. The service swallows a disconnected circuit (the page is gone, and with it
+        /// the padding), so this is a call that either lands or is moot. It releases by token
+        /// rather than by element because the banner's DOM node has already gone by now - and
+        /// only this instance's token, so another banner still up keeps its own room.
+        /// </remarks>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && _spaceReserved)
+            {
+                _spaceReserved = false;
+                _ = ConsentService.ReleaseBannerSpaceAsync(_spaceKey);
+            }
+
+            base.Dispose(disposing);
         }
 
         protected void OnModalKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)

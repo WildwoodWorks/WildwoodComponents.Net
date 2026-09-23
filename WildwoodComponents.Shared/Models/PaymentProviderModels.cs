@@ -240,6 +240,52 @@ public class InitiatePaymentRequest
     public string? ReturnUrl { get; set; }
     public string? CancelUrl { get; set; }
     public Dictionary<string, string>? Metadata { get; set; }
+
+    /// <summary>
+    /// The address to bill the card to, for an app whose payment configuration sets
+    /// RequireBillingAddress. Sent as <c>BillingAddress</c> (PascalCase, matching the JS SDK)
+    /// alongside the otherwise camelCase body; WildwoodAPI's InitiatePaymentRequest has no such
+    /// property yet, so today it is carried for the provider layer rather than bound.
+    /// </summary>
+    [JsonPropertyName("BillingAddress")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BillingAddress? BillingAddress { get; set; }
+
+    /// <summary>
+    /// The client can confirm a Stripe SetupIntent. When set and the subscription starts with a
+    /// free trial, the server returns the trial's SetupIntent secret
+    /// (<see cref="PaymentClientSecretTypes.SetupIntent"/>) so the card is saved for the charge at
+    /// trial end instead of skipping card collection.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SupportsSetupIntent { get; set; }
+}
+
+/// <summary>
+/// Billing address for a card payment. Shared so the payment request models and the Blazor
+/// payment forms speak one shape.
+/// </summary>
+public class BillingAddress
+{
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
+    public string Street { get; set; } = string.Empty;
+    public string City { get; set; } = string.Empty;
+    public string State { get; set; } = string.Empty;
+    public string ZipCode { get; set; } = string.Empty;
+    public string Country { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// What an initiate-payment response's ClientSecret confirms.
+/// </summary>
+public static class PaymentClientSecretTypes
+{
+    /// <summary>A charge.</summary>
+    public const string PaymentIntent = "payment_intent";
+
+    /// <summary>A saved card for a trial.</summary>
+    public const string SetupIntent = "setup_intent";
 }
 
 /// <summary>
@@ -250,6 +296,23 @@ public class InitiatePaymentResponse
     public bool Success { get; set; }
     public string? PaymentIntentId { get; set; }
     public string? ClientSecret { get; set; }
+
+    /// <summary>
+    /// What <see cref="ClientSecret"/> confirms: a charge or a saved card for a trial.
+    /// One of <see cref="PaymentClientSecretTypes"/>.
+    /// </summary>
+    public string? ClientSecretType { get; set; }
+
+    /// <summary>
+    /// Free-trial length in days, when the subscription starts with one.
+    /// </summary>
+    public int? TrialDays { get; set; }
+
+    /// <summary>
+    /// When the free trial ends and the first charge is attempted.
+    /// </summary>
+    public DateTime? TrialEnd { get; set; }
+
     public string? RedirectUrl { get; set; }
     public string? ApprovalUrl { get; set; }
     public string? OrderId { get; set; }

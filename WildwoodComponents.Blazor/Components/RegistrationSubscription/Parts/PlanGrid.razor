@@ -1,0 +1,178 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Shared
+@using WildwoodComponents.Blazor.Components.RegistrationSubscription
+@inherits BaseWildwoodComponent
+
+@* The plan grid: the monthly/annual toggle over a row of tier cards.
+   Deliberately the markup PricingDisplayComponent renders - .ww-tier-grid full of .ww-tier-card,
+   the same toggle, the same footer calls to action - because live sites' end-to-end suites locate
+   plans by exactly those. This grid adds only what the component needs on top: the plans come from
+   the public catalog, and the billing cycle is owned by the pricing view so a pack selection can be
+   stamped with it too. *@
+<div class="ww-regsub-plans @CssClass" @attributes="AdditionalAttributes">
+    @if (ShowToggle)
+    {
+        <div class="ww-apptier-billing-toggle">
+            <span class="@(IsAnnual ? "" : "ww-billing-active")">@Labels.BillingMonthly</span>
+            <button type="button"
+                    class="ww-toggle @(IsAnnual ? "ww-toggle-on" : "")"
+                    aria-label="@Labels.BillingToggleAriaLabel"
+                    aria-pressed="@(IsAnnual ? "true" : "false")"
+                    @onclick="ToggleBilling">
+                <span class="ww-toggle-slider"></span>
+            </button>
+            <span class="@(IsAnnual ? "ww-billing-active" : "")">
+                @Labels.BillingAnnual
+                @if (MaxAnnualDiscount > 0)
+                {
+                    <span class="ww-badge ww-badge-success ww-badge-sm">@AnnualSavingsLabel</span>
+                }
+            </span>
+        </div>
+    }
+
+    <div class="ww-tier-grid">
+        @foreach (var tier in Tiers)
+        {
+            var plan = tier;
+            var pricing = PricingViewDecisions.PlanPriceOption(plan, Billing);
+            var enterprise = PricingViewDecisions.IsEnterpriseTier(plan);
+            var highlighted = PricingViewDecisions.IsHighlightedTier(plan.Id, HighlightTierId);
+            var discount = IsAnnual ? PricingViewDecisions.AnnualDiscount(plan) : 0;
+            var trial = CatalogHelpers.TierCardTrialLabel(plan, pricing, plan.ShowPrice);
+
+            <div class="ww-tier-card @(highlighted ? "ww-tier-preselected" : "") @(plan.IsDefault && !highlighted ? "ww-tier-default" : "")">
+                @if (!string.IsNullOrEmpty(plan.CustomBadgeText))
+                {
+                    <div class="ww-tier-default-badge">@plan.CustomBadgeText</div>
+                }
+                else if (highlighted)
+                {
+                    <div class="ww-tier-preselected-badge">Your Selection</div>
+                }
+
+                <div class="ww-tier-header">
+                    @if (!string.IsNullOrEmpty(plan.IconClass))
+                    {
+                        <span class="ww-tier-icon @plan.IconClass"></span>
+                    }
+                    <h3>@plan.Name</h3>
+                    <TierStatusBadge Status="@plan.Status" BadgeColor="@plan.BadgeColor" />
+
+                    @if (plan.ShowPrice)
+                    {
+                        <div class="ww-tier-price">
+                            @if (enterprise)
+                            {
+                                <span class="ww-tier-price-amount">Custom</span>
+                            }
+                            else if (plan.IsFreeTier && pricing is null)
+                            {
+                                @* "Free" is the tier card's own word, not a label: React's TierCardHeader
+                                   hard-codes it, and Labels.PlanFree is the DIFFERENT string the plan
+                                   summary card says where a price would otherwise go. *@
+                                <span class="ww-tier-price-amount">Free</span>
+                            }
+                            else if (pricing is not null)
+                            {
+                                <span class="ww-tier-price-amount">@CatalogHelpers.FormatPrice(plan, pricing.Price, Currency)</span>
+                                <span class="ww-tier-price-interval">/@(string.IsNullOrEmpty(pricing.BillingFrequency) ? "month" : pricing.BillingFrequency.ToLowerInvariant())</span>
+                            }
+                        </div>
+                    }
+
+                    @if (discount > 0)
+                    {
+                        <div class="ww-tier-discount">Save @discount%</div>
+                    }
+
+                    @if (trial.Length > 0)
+                    {
+                        <div class="ww-plan-trial">@trial</div>
+                    }
+                </div>
+
+                @if (!string.IsNullOrEmpty(plan.Description))
+                {
+                    <p class="ww-tier-description">@plan.Description</p>
+                }
+
+                @if (ShowFeatures && plan.Features.Count > 0)
+                {
+                    <ul class="ww-tier-features">
+                        @foreach (var feature in plan.Features)
+                        {
+                            <li class="ww-tier-feature-item @(!feature.IsEnabled ? "ww-tier-feature-disabled" : "")">
+                                @if (feature.IsEnabled)
+                                {
+                                    <svg class="ww-tier-feature-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                }
+                                else
+                                {
+                                    <svg class="ww-tier-feature-x" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <line x1="18" y1="6" x2="6" y2="18" />
+                                        <line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                }
+                                <span>@(string.IsNullOrEmpty(feature.DisplayName) ? feature.FeatureCode : feature.DisplayName)</span>
+                            </li>
+                        }
+                    </ul>
+                }
+
+                @if (ShowLimits && plan.Limits.Count > 0)
+                {
+                    <div class="ww-tier-limits">
+                        @foreach (var limit in plan.Limits)
+                        {
+                            <div class="ww-tier-limit-item">
+                                <span class="ww-tier-limit-value">@limit.MaxValueDisplay</span>
+                                <span class="ww-tier-limit-name">@(string.IsNullOrEmpty(limit.DisplayName) ? limit.LimitCode : limit.DisplayName)</span>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="ww-tier-footer">
+                    @if (plan.ShowContactButton && !string.IsNullOrEmpty(plan.ContactButtonUrl))
+                    {
+                        <a href="@plan.ContactButtonUrl"
+                           class="ww-btn @(plan.IsDefault ? "ww-btn-primary" : "ww-btn-outline") ww-btn-block"
+                           target="@ExternalTarget(plan.ContactButtonUrl)"
+                           rel="@ExternalRel(plan.ContactButtonUrl)">
+                            @* "Contact Us" is the tier card's own wording, hard-coded here exactly as
+                               React's TierCardFooter and the legacy PricingDisplayComponent write it.
+                               Labels.ContactUs ("Contact us") is a DIFFERENT string, used elsewhere. *@
+                            Contact Us
+                        </a>
+                    }
+                    else if (enterprise && !string.IsNullOrEmpty(ContactUrl))
+                    {
+                        <a href="@ContactUrl"
+                           class="ww-btn ww-btn-outline ww-btn-block"
+                           target="@ExternalTarget(ContactUrl)"
+                           rel="@ExternalRel(ContactUrl)">
+                            Contact Sales
+                        </a>
+                    }
+                    else if (enterprise)
+                    {
+                        <button type="button" class="ww-btn ww-btn-outline ww-btn-block" @onclick="() => HandleSelect(plan)">
+                            Contact Sales
+                        </button>
+                    }
+                    else if (plan.ShowSubscribeButton)
+                    {
+                        <button type="button"
+                                class="ww-btn @(highlighted || plan.IsDefault ? "ww-btn-primary" : "ww-btn-outline") ww-btn-block"
+                                @onclick="() => HandleSelect(plan)">
+                            @CallToAction(plan, highlighted)
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>

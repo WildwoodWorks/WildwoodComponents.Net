@@ -1,0 +1,37 @@
+@using WildwoodComponents.Razor.Models
+@model PricingPackCardViewModel
+
+@*
+    One pack card's contents. Phrasing content only, so the multi-select variant can make the whole
+    card a single button without producing invalid markup.
+
+    Every price is the live one off the catalog; a pack the operator has defined but not priced says
+    so instead of implying it is free. No icon is taken from the catalog: React's pack card never
+    renders the add-on's IconClass, so a catalog-sourced glyph here would put something on the Razor
+    card that the React card does not have.
+*@
+<span class="ww-pack-card-title">
+    <strong>@Model.AddOn.Name</strong>
+</span>
+
+@if (!string.IsNullOrEmpty(Model.AddOn.Description))
+{
+    <span class="ww-pack-card-blurb">@Model.AddOn.Description</span>
+}
+
+<span class="ww-pack-card-price @(Model.HasPrice ? "" : "ww-pack-card-unavailable")">@Model.PriceText</span>
+
+@if (Model.TrialText.Length > 0)
+{
+    <span class="ww-pack-card-trial">@Model.TrialText</span>
+}
+
+@if (Model.AddOn.Features.Count > 0)
+{
+    <span class="ww-pack-card-features">
+        @foreach (var feature in Model.AddOn.Features)
+        {
+            <span class="ww-pack-card-feature">@(string.IsNullOrEmpty(feature.DisplayName) ? feature.FeatureCode : feature.DisplayName)</span>
+        }
+    </span>
+}

@@ -12,6 +12,16 @@ namespace WildwoodComponents.Razor.Components.AppTier;
 /// Client-side JavaScript handles billing cycle toggle.
 /// Razor Pages equivalent of WildwoodComponents.Blazor PricingDisplayComponent.
 /// </summary>
+/// <remarks>
+/// <b>Superseded by <c>&lt;vc:registration-subscription-pricing /&gt;</c></b>
+/// (<see cref="WildwoodComponents.Razor.Components.RegistrationSubscription.RegistrationSubscriptionPricingViewComponent"/>),
+/// which renders the same price list off the public catalog with first-paint prices, pack
+/// selection, a JSON-LD offers graph and the cross-stack label set. Deprecated rather than
+/// removed: this one keeps working unchanged.
+/// </remarks>
+[Obsolete("Use <vc:registration-subscription-pricing /> (RegistrationSubscriptionPricingViewComponent): "
+    + "the same price list with first-paint prices, packs and JSON-LD. "
+    + "This component keeps working unchanged.", false)]
 public class PricingDisplayViewComponent : ViewComponent
 {
     private readonly IWildwoodAppTierService _appTierService;

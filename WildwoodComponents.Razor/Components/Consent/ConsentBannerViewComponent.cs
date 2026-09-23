@@ -36,12 +36,22 @@ public class ConsentBannerViewComponent : ViewComponent
     /// <param name="proxyBaseUrl">Optional same-origin proxy base (e.g. /api/wildwood-consent). When set, the engine calls the proxy instead of the API directly.</param>
     /// <param name="showReopenLink">Render a footer "Privacy choices" reopen link (default: true).</param>
     /// <param name="showFooterOptOut">Render standalone CCPA opt-out footer links (default: true).</param>
+    /// <param name="reserveSpace">
+    /// While the banner is up, add its height to the page's padding at the edge it is anchored to,
+    /// so the fixed banner cannot cover the host's own edge-anchored UI (default: true). Either
+    /// way the measured height is published as <c>--ww-consent-height</c> on the document element,
+    /// so a host that would rather place the room itself can turn this off and use the variable.
+    /// Only the two BAR positions reserve padding: a <c>corner</c> card is a small inset box, so
+    /// padding the whole page for it would leave a full-width blank strip under the content; it
+    /// publishes the height and pads nothing.
+    /// </param>
     public Task<IViewComponentResult> InvokeAsync(
         string appId,
         string? baseUrl = null,
         string? proxyBaseUrl = null,
         bool showReopenLink = true,
-        bool showFooterOptOut = true)
+        bool showFooterOptOut = true,
+        bool reserveSpace = true)
     {
         if (string.IsNullOrEmpty(appId))
         {
@@ -55,7 +65,8 @@ public class ConsentBannerViewComponent : ViewComponent
             BaseUrl = UrlHelpers.StripApiSuffix(string.IsNullOrEmpty(baseUrl) ? _options.BaseUrl : baseUrl),
             ProxyBaseUrl = (proxyBaseUrl ?? string.Empty).TrimEnd('/'),
             ShowReopenLink = showReopenLink,
-            ShowFooterOptOut = showFooterOptOut
+            ShowFooterOptOut = showFooterOptOut,
+            ReserveSpace = reserveSpace
         };
 
         return Task.FromResult<IViewComponentResult>(View(model));

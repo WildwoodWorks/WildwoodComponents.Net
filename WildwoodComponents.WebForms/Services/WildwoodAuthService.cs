@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using WildwoodComponents.Shared.Models;
+using WildwoodComponents.WebForms.Attribution;
 using WildwoodComponents.WebForms.Logging;
 using WildwoodComponents.WebForms.Models;
 using WildwoodComponents.WebForms.Session;
@@ -17,6 +18,7 @@ namespace WildwoodComponents.WebForms.Services
     public sealed class WildwoodAuthService : WildwoodServiceBase, IWildwoodAuthService
     {
         private readonly string _appVersion;
+        private readonly WildwoodAttributionStore? _attribution;
 
         /// <summary>Creates the service.</summary>
         /// <param name="httpClient">The shared client.</param>
@@ -24,15 +26,23 @@ namespace WildwoodComponents.WebForms.Services
         /// <param name="logger">Diagnostics sink.</param>
         /// <param name="appId">The Wildwood app id.</param>
         /// <param name="appVersion">Reported to the API for diagnostics.</param>
+        /// <param name="attribution">
+        /// Campaign Attribution captured server-side for this visit. Optional: when present,
+        /// <see cref="RegisterAsync"/> attaches its payload to a registration that carries none and
+        /// drops the touches once the signup is recorded, exactly as <c>@wildwood/core</c>'s
+        /// <c>register</c> does.
+        /// </param>
         public WildwoodAuthService(
             HttpClient httpClient,
             IWildwoodSessionManager sessionManager,
             IWildwoodLogger? logger,
             string? appId,
-            string appVersion = "1.0.0")
+            string appVersion = "1.0.0",
+            WildwoodAttributionStore? attribution = null)
             : base(httpClient, sessionManager, logger, appId)
         {
             _appVersion = appVersion;
+            _attribution = attribution;
         }
 
         /// <inheritdoc />
@@ -109,7 +119,10 @@ namespace WildwoodComponents.WebForms.Services
                     ConfirmPassword = request.ConfirmPassword,
                     FirstName = request.FirstName ?? string.Empty,
                     LastName = request.LastName ?? string.Empty,
-                    AppId = AppId
+                    AppId = AppId,
+                    // The caller's payload wins — the browser engine's, posted through the proxy — and
+                    // otherwise whatever this visit captured server-side is attached here.
+                    Attribution = request.Attribution ?? ResolveCapturedAttribution()
                 };
 
                 using (var response = await SendAsync(HttpMethod.Post, "auth/register", apiRequest, cancellationToken).ConfigureAwait(false))
@@ -124,6 +137,9 @@ namespace WildwoodComponents.WebForms.Services
                             var authResponse = AuthResponse.FromWildwoodResponse(wwResponse);
                             SessionManager.SetTokens(wwResponse.JwtToken, wwResponse.RefreshToken);
                             SessionManager.SetRequiresPasswordReset(wwResponse.RequiresPasswordReset);
+                            // Recorded with the account: a later signup in this session must not reuse
+                            // the same touches. A failed registration keeps them.
+                            ClearCapturedAttribution();
                             return AuthResult.Success(authResponse);
                         }
                     }
@@ -399,6 +415,46 @@ namespace WildwoodComponents.WebForms.Services
                 AllowRegistration = true,
                 EnableTwoFactor = false
             };
+        }
+
+        /// <summary>
+        /// What the server captured for this visit, or null when attribution is not wired up. Never
+        /// throws: measurement must not cost a signup.
+        /// </summary>
+        private AttributionPayloadModel? ResolveCapturedAttribution()
+        {
+            if (_attribution == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                return _attribution.GetForRegistration();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("Reading the captured attribution failed; registering without it. " + ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>Drops the captured touches after a recorded signup. Never throws.</summary>
+        private void ClearCapturedAttribution()
+        {
+            if (_attribution == null)
+            {
+                return;
+            }
+
+            try
+            {
+                _attribution.Clear();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("Clearing the captured attribution failed. " + ex.Message);
+            }
         }
 
         /// <summary>

@@ -91,13 +91,17 @@
                                     }
                                     else if (pricing != null)
                                     {
-                                        <span class="ww-tier-price-amount">@FormatPrice(pricing.Price)</span>
+                                        <span class="ww-tier-price-amount">@FormatPrice(tier, pricing.Price)</span>
                                         <span class="ww-tier-price-interval">/@(pricing.BillingFrequency?.ToLower() ?? "month")</span>
                                     }
                                 </div>
-                                @if (pricing != null && pricing.HasTrial)
+                                @* ww-plan-trial is the cross-stack class (React's TierCardHeader);
+                                   ww-tier-trial-badge stays so a host styling the old name still
+                                   does. One rule decides when the line appears, so the three grids
+                                   no longer disagree about a free or zero-priced plan. *@
+                                @if (CatalogHelpers.TierCardTrialLabel(tier, pricing, tier.ShowPrice) is { Length: > 0 } trialLabel)
                                 {
-                                    <div class="ww-tier-trial-badge">@pricing.TrialDays-day free trial</div>
+                                    <div class="ww-plan-trial ww-tier-trial-badge">@trialLabel</div>
                                 }
                             }
                         </div>
@@ -303,7 +307,7 @@
                                     @if (pricing != null && !isBundled)
                                     {
                                         <div class="ww-addon-price">
-                                            <strong>@GetCurrencySymbol(Currency)@pricing.Price.ToString("N2")</strong>
+                                            <strong>@AddOnRowRules.FormatPrice(addOn, pricing, Currency)</strong>
                                             <span class="ww-addon-price-interval">/ @pricing.BillingFrequency.ToLower()</span>
                                         </div>
                                     }
@@ -401,8 +405,7 @@
                                     }
                                     else if (_selectedPricing != null)
                                     {
-                                        <span class="price-currency">@GetCurrencySymbol(Currency)</span>
-                                        <span class="price-amount">@_selectedPricing.Price.ToString("N0")</span>
+                                        <span class="price-amount">@FormatPrice(_selectedTier, _selectedPricing.Price)</span>
                                         <span class="price-period">@GetPricePeriod(_selectedBillingCycle)</span>
                                     }
                                 </div>
@@ -466,7 +469,7 @@
                             {
                                 <div class="d-flex justify-content-between mb-2">
                                     <span>@_selectedTier.Name Plan</span>
-                                    <span>@GetCurrencySymbol(Currency)@GetPaymentAmount().ToString("N2")</span>
+                                    <span>@FormatPrice(_selectedTier, GetPaymentAmount())</span>
                                 </div>
                             }
                             @if (_selectedPricing != null)
@@ -478,7 +481,7 @@
                             <hr />
                             <div class="d-flex justify-content-between fw-bold">
                                 <span>Total</span>
-                                <span>@GetCurrencySymbol(Currency)@GetPaymentAmount().ToString("N2")</span>
+                                <span>@FormatPrice(_selectedTier, GetPaymentAmount())</span>
                             </div>
                         </div>
                     </div>

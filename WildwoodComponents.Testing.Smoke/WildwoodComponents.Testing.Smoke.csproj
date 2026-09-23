@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>WildwoodComponents.Testing.Smoke</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <!-- Not a test project: dotnet test must not try to run it. It needs a browser and a fixture
+         server, neither of which a build machine has, so it is run by hand - see README.md. -->
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <!-- Kestrel, for the fixture server the staged pages are served from. A real origin rather than
+       page.SetContentAsync, because one of the rules on trial here is the response watcher: the
+       accept POST has to be a genuine same-origin request the browser reports back. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- The shipped helpers, exactly as a host consumes them - public surface only, no
+       InternalsVisibleTo. Microsoft.Playwright arrives with them. This project ships nothing, so it
+       is outside the boundary TestingPackageBoundaryTests enforces. -->
+  <ItemGroup>
+    <ProjectReference Include="..\WildwoodComponents.Testing\WildwoodComponents.Testing.csproj" />
+  </ItemGroup>
+
+</Project>

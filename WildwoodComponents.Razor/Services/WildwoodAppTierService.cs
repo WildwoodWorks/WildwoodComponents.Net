@@ -11,7 +11,7 @@ namespace WildwoodComponents.Razor.Services;
 /// Razor Pages equivalent of WildwoodComponents.Blazor.Services.AppTierComponentService.
 /// Uses server-side session for JWT token management via IWildwoodSessionManager.
 /// </summary>
-public class WildwoodAppTierService : IWildwoodAppTierService
+public partial class WildwoodAppTierService : IWildwoodAppTierService
 {
     private readonly HttpClient _httpClient;
     private readonly IWildwoodSessionManager _sessionManager;
@@ -303,43 +303,26 @@ public class WildwoodAppTierService : IWildwoodAppTierService
 
     #region Add-On Subscription Actions
 
+    /// <summary>
+    /// Deprecated: use <see cref="SubscribeToAddOnDetailedAsync"/>, which reports WHY a
+    /// subscription was refused instead of a bare false.
+    /// </summary>
     public async Task<bool> SubscribeToAddOnAsync(string appId, string addOnId, string? pricingId, string? paymentTransactionId)
     {
-        try
-        {
-            _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            var body = new
-            {
-                AppId = appId,
-                AppTierAddOnId = addOnId,
-                AppTierAddOnPricingId = pricingId,
-                PaymentTransactionId = paymentTransactionId
-            };
-
-            var content = new StringContent(JsonSerializer.Serialize(body, JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync($"app-tier-addons/{appId}/subscribe", content);
-            return response.IsSuccessStatusCode;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error subscribing to add-on {AddOnId} for app {AppId}", addOnId, appId);
-            return false;
-        }
+        var result = await SubscribeToAddOnDetailedAsync(appId, addOnId, pricingId, paymentTransactionId);
+        return result.Success;
     }
 
+    /// <summary>
+    /// Deprecated: use <see cref="CancelAddOnDetailedAsync"/>, which says whether access continues
+    /// to the end of the period and why a cancellation was refused. Delegating also makes this send
+    /// <c>?immediate=false</c> explicitly, matching the JS SDK — the server's default was already
+    /// "schedule it", so the wire is now explicit rather than implied.
+    /// </summary>
     public async Task<bool> CancelAddOnSubscriptionAsync(string subscriptionId)
     {
-        try
-        {
-            _sessionManager.ApplyAuthorizationHeader(_httpClient);
-            using var response = await _httpClient.PostAsync($"app-tier-addons/subscriptions/{subscriptionId}/cancel", null);
-            return response.IsSuccessStatusCode;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error cancelling add-on subscription {SubscriptionId}", subscriptionId);
-            return false;
-        }
+        var result = await CancelAddOnDetailedAsync(subscriptionId);
+        return result.Success;
     }
 
     #endregion

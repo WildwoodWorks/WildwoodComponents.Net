@@ -1,0 +1,123 @@
+﻿@using WildwoodComponents.Razor.Models
+@model RegistrationSubscriptionPricingViewModel
+
+@*
+    The pricing view: what the app sells, at the price the server is quoting right now.
+
+    Every amount on this page was formatted on the server, off the catalog this request read. There
+    is no fallback price, no remembered price and no "from" price here or in regsub-pricing.js, and
+    a source guard greps both files for one. Each plan carries BOTH cycles' prices as sibling
+    elements and the script only swaps which one is hidden, so flipping the billing toggle never
+    asks the browser to format money.
+
+    If the catalog could not be read the whole grid is replaced by "Pricing is unavailable right
+    now" and a Retry — the prices go away with the answer that produced them, rather than standing
+    there as a quote nobody can vouch for any more.
+*@
+@{
+    var cid = Model.ComponentId;
+    var labels = Model.Labels;
+    var hasSelectUrl = Model.SelectUrl.HasValue;
+}
+
+<div id="ww-regsub-pricing-@cid"
+     class="ww-regsub ww-regsub-pricing"
+     data-ww-view="pricing"
+     data-component-id="@cid"
+     data-ww-app-id="@Model.AppId"
+     data-ww-billing="@Model.BillingCode"
+     data-ww-pack-max="@Model.MaxPackSelection"
+     data-ww-pack-order="@Model.PackOrderAttribute"
+     data-ww-packs-label-one="@labels.ContinueWithOnePack"
+     data-ww-packs-label-many="@labels.ContinueWithPacks"
+     data-ww-select-path="@(hasSelectUrl ? Model.SelectUrl.Path : null)"
+     data-ww-select-query="@(hasSelectUrl ? Model.SelectUrl.Query : null)"
+     data-ww-select-hash="@(hasSelectUrl ? Model.SelectUrl.Fragment : null)">
+
+    @if (Model.IsUnavailable)
+    {
+        @* Never a stale price and never an invented one. Retry reloads the page: this component is
+           server-rendered, so the server is the one source of truth for the markup, and a failed
+           load is never cached — the reload really does ask again. *@
+        <div class="ww-regsub-unavailable ww-alert ww-alert-danger" role="alert" data-ww-error-code="@Model.ErrorCode">
+            <span class="ww-regsub-unavailable-message">@Model.UnavailableMessage</span>
+            <button type="button" class="ww-btn ww-btn-outline" data-ww-action="retry">@labels.Retry</button>
+        </div>
+    }
+    else
+    {
+        @if (Model.HasPlans)
+        {
+            @* One plan grid, shared with the signup view's plan step: the toggle, both cycles'
+               server-formatted prices and the .ww-tier-grid / .ww-tier-card markup live in
+               _RegSubPlanGrid so the two surfaces cannot drift apart. *@
+            @await Html.PartialAsync("_RegSubPlanGrid", Model.PlanGrid)
+        }
+
+        @if (Model.HasPacks)
+        {
+            <div class="ww-regsub-packs">
+                @foreach (var group in Model.PackGroups)
+                {
+                    <section class="ww-regsub-pack-group" data-ww-group="@group.Id">
+                        @if (!string.IsNullOrEmpty(group.Title))
+                        {
+                            <h3 class="ww-regsub-pack-group-title">@group.Title</h3>
+                        }
+                        @if (!string.IsNullOrEmpty(group.Blurb))
+                        {
+                            <p class="ww-regsub-pack-group-blurb">@group.Blurb</p>
+                        }
+
+                        <div class="ww-pack-grid">
+                            @foreach (var addOn in group.AddOns)
+                            {
+                                var pack = Model.PackCard(addOn);
+
+                                @if (Model.IsMultiSelect)
+                                {
+                                    @* The whole card is the toggle, so its contents are phrasing content only. *@
+                                    <button type="button"
+                                            class="ww-pack-card"
+                                            aria-pressed="false"
+                                            data-ww-pack="@addOn.Id"
+                                            data-ww-action="toggle-pack">
+                                        @await Html.PartialAsync("_RegSubPackCardBody", pack)
+                                    </button>
+                                }
+                                else
+                                {
+                                    <div class="ww-pack-card" data-ww-pack="@addOn.Id">
+                                        @await Html.PartialAsync("_RegSubPackCardBody", pack)
+                                        <button type="button"
+                                                class="ww-btn ww-btn-outline ww-btn-block"
+                                                aria-label="@pack.SelectAriaLabel"
+                                                data-ww-action="choose-pack">@labels.PackSelect</button>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </section>
+                }
+
+                @if (Model.IsMultiSelect)
+                {
+                    <div class="ww-regsub-summary">
+                        <button type="button"
+                                class="ww-btn ww-btn-primary"
+                                disabled
+                                data-ww-action="continue-packs">@Model.ContinuePacksInitialLabel</button>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (Model.JsonLd.Length > 0)
+        {
+            @* Html.Raw is safe here and only here: the payload was serialised with System.Text.Json's
+               DEFAULT encoder, which turns '<' into its unicode escape, so a pack named with a
+               closing script tag cannot close this element. *@
+            <script type="application/ld+json">@Html.Raw(Model.JsonLd)</script>
+        }
+    }
+</div>

@@ -1,0 +1,47 @@
+@using WildwoodComponents.Blazor.Components.Base
+@inherits BaseWildwoodComponent
+
+@* The one card entry in the pack checkout: an account with no card on file saves one here, and the
+   purchase then charges it.
+
+   It confirms a SetupIntent, never a payment - the packs are bought by the server afterwards, so
+   this form can be shown once for a basket of any size. The Stripe instance is keyed to this
+   component, so it can stand beside PaymentComponent's own card field rather than fighting it for
+   the script's one slot. *@
+<div class="ww-stripe-card-section ww-regsub-card-setup @CssClass" @attributes="AdditionalAttributes">
+    <label class="ww-form-label">@Labels.CardDetails</label>
+
+    @if (IsPreparing)
+    {
+        <div class="ww-stripe-loading">
+            <span class="ww-spinner ww-spinner-sm"></span>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_setupError))
+    {
+        <div class="ww-alert ww-alert-danger">@_setupError</div>
+    }
+
+    <div id="@ElementId"
+         class="ww-stripe-card-element @(string.IsNullOrEmpty(_cardError) ? "" : "ww-stripe-card-error") @(_cardComplete ? "ww-stripe-card-complete" : "")"></div>
+
+    @if (!string.IsNullOrEmpty(_cardError))
+    {
+        <div class="ww-stripe-card-error-text">@_cardError</div>
+    }
+
+    <button type="button"
+            class="ww-btn ww-btn-primary ww-btn-block"
+            disabled="@(!CanConfirm)"
+            @onclick="ConfirmAsync">
+        @if (_confirming)
+        {
+            <span class="ww-spinner ww-spinner-sm"></span>
+        }
+        else
+        {
+            @Labels.SaveCard
+        }
+    </button>
+</div>

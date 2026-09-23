@@ -1,0 +1,342 @@
+@page "/test/registration-subscription"
+@rendermode InteractiveServer
+@using System.Text.Json
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.RegistrationSubscription
+@using WildwoodComponents.Shared.RegistrationSubscription
+@using WildwoodComponents.Shared.Utilities
+@inject ComponentLifecycleTracker LifecycleTracker
+@inject IConfiguration Configuration
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@* The four surfaces of RegistrationAndSubscriptionComponent: its three views plus the invite
+   preset (the signup view with TokenMode.Required). Mirrors the React harness page
+   WildwoodComponentsTestSuite.React/src/pages/RegistrationAndSubscriptionTest.tsx, including its
+   query parameters, so the same URL drives both suites. *@
+<ComponentTestPage PageTitle="RegistrationAndSubscriptionComponent Test"
+                   ComponentName="RegistrationAndSubscriptionComponent"
+                   IconClass="fas fa-cash-register"
+                   OnApplySettings="ApplySettings" OnResetSettings="ResetSettings">
+    <Settings>
+        <div class="mb-2">
+            <label class="form-label">AppId</label>
+            <input class="form-control form-control-sm" @bind="appId" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Registration token (signup / invite)</label>
+            <input class="form-control form-control-sm" @bind="registrationToken" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Prefill email (invite)</label>
+            <input class="form-control form-control-sm" @bind="prefillEmail" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Plan selection (signup)</label>
+            <select class="form-select form-select-sm" @bind="planSelection">
+                <option value="@SignupPlanSelection.Choose">Choose</option>
+                <option value="@SignupPlanSelection.Skip">Skip</option>
+            </select>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Pack selection (pricing / signup)</label>
+            <select class="form-select form-select-sm" @bind="packSelection">
+                <option value="@PricingPackSelection.Multi">Multi</option>
+                <option value="@PricingPackSelection.None">None</option>
+            </select>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Token mode (signup)</label>
+            <select class="form-select form-select-sm" @bind="tokenMode">
+                <option value="@SignupTokenMode.Auto">Auto</option>
+                <option value="@SignupTokenMode.Required">Required</option>
+            </select>
+        </div>
+        <div class="mb-2">
+            <label class="form-label">Layout (manage)</label>
+            <select class="form-select form-select-sm" @bind="layout">
+                <option value="@ManageLayout.Tabs">Tabs</option>
+                <option value="@ManageLayout.Stacked">Stacked</option>
+            </select>
+        </div>
+        <hr class="my-2" />
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="showAddOns" id="chkRegSubShowAddOns" />
+            <label class="form-check-label small" for="chkRegSubShowAddOns">Show add-ons (pricing / manage)</label>
+        </div>
+        <div class="form-check mb-1">
+            <input class="form-check-input" type="checkbox" @bind="allowPackSelfService" id="chkRegSubPackSelfService" />
+            <label class="form-check-label small" for="chkRegSubPackSelfService">Allow pack self-service (manage)</label>
+        </div>
+        <p class="small text-muted mt-2 mb-0">
+            Query parameters: <code>?view=</code>, <code>?appId=</code>, <code>?token=</code> or
+            <code>?invite=</code>, <code>?email=</code>. Prices come from the app's live public
+            catalog; the signup form's options come from its live authentication settings.
+        </p>
+    </Settings>
+    <Component>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            @foreach (var candidate in TestViews)
+            {
+                <button type="button"
+                        class="btn btn-sm @(view == candidate ? "btn-primary" : "btn-outline-secondary")"
+                        data-ww-test-view="@ViewSlug(candidate)"
+                        @onclick="() => SelectView(candidate)">
+                    @ViewLabel(candidate)
+                </button>
+            }
+        </div>
+
+        @if (view == TestView.Pricing)
+        {
+            <RegistrationAndSubscriptionComponent @key="renderKey"
+                                                  View="RegistrationSubscriptionView.Pricing"
+                                                  AppId="@appId"
+                                                  ContactUrl="/contact"
+                                                  ShowAddOns="showAddOns"
+                                                  PackSelection="packSelection"
+                                                  AddOnGroups="showAddOns ? PricingAddOnGroups : null"
+                                                  IncludeJsonLd="true"
+                                                  OnSelect="HandleSelect"
+                                                  OnError="HandleError" />
+        }
+        else if (view == TestView.Signup)
+        {
+            <RegistrationAndSubscriptionComponent @key="renderKey"
+                                                  View="RegistrationSubscriptionView.Signup"
+                                                  AppId="@appId"
+                                                  ContactUrl="/contact"
+                                                  RegistrationToken="@NullIfBlank(registrationToken)"
+                                                  PlanSelection="planSelection"
+                                                  PackSelection="packSelection"
+                                                  TokenMode="tokenMode"
+                                                  OnSignupComplete="HandleSignupComplete"
+                                                  OnEntitlementsChanged="HandleEntitlementsChanged"
+                                                  OnAlreadySignedIn="HandleAlreadySignedIn"
+                                                  OnCancel="HandleCancel"
+                                                  OnError="HandleError" />
+        }
+        else if (view == TestView.Invite)
+        {
+            @* Invite redemption: a token is the only way in, it decides the plan, and there is no
+               pack step. Exactly the preset the React harness calls "invite". *@
+            <RegistrationAndSubscriptionComponent @key="renderKey"
+                                                  View="RegistrationSubscriptionView.Signup"
+                                                  AppId="@appId"
+                                                  ContactUrl="/contact"
+                                                  TokenMode="SignupTokenMode.Required"
+                                                  RegistrationToken="@NullIfBlank(registrationToken)"
+                                                  PrefillEmail="@NullIfBlank(prefillEmail)"
+                                                  PlanSelection="SignupPlanSelection.Skip"
+                                                  PackSelection="PricingPackSelection.None"
+                                                  OnSignupComplete="HandleSignupComplete"
+                                                  OnEntitlementsChanged="HandleEntitlementsChanged"
+                                                  OnCancel="HandleCancel"
+                                                  OnError="HandleError" />
+        }
+        else
+        {
+            <RegistrationAndSubscriptionComponent @key="renderKey"
+                                                  View="RegistrationSubscriptionView.Manage"
+                                                  AppId="@appId"
+                                                  ContactUrl="/contact"
+                                                  Layout="layout"
+                                                  ShowStatusAboveTabs="true"
+                                                  ShowAddOns="showAddOns"
+                                                  AllowPackSelfService="allowPackSelfService"
+                                                  OnSubscriptionChanged="HandleSubscriptionChanged"
+                                                  OnEntitlementsChanged="HandleEntitlementsChanged"
+                                                  OnError="HandleError" />
+        }
+    </Component>
+    <EventLog>
+        @foreach (var evt in events)
+        {
+            <div class="event-entry">
+                <span class="event-timestamp">@evt.Time.ToString("HH:mm:ss.fff")</span>
+                <span class="ms-2">@evt.Message</span>
+            </div>
+        }
+    </EventLog>
+</ComponentTestPage>
+
+@code {
+    private enum TestView { Pricing, Signup, Manage, Invite }
+
+    private static readonly TestView[] TestViews =
+    {
+        TestView.Pricing, TestView.Signup, TestView.Manage, TestView.Invite
+    };
+
+    /// <summary>The demo grouping the React harness uses, so both suites show the same headings.</summary>
+    private static readonly List<AddOnGroup> PricingAddOnGroups = new()
+    {
+        new AddOnGroup { Id = "content", Title = "Content", Categories = { "Content", "Documents" } },
+        new AddOnGroup { Id = "analytics", Title = "Analytics", Categories = { "Analytics", "Insights" } }
+    };
+
+    [Parameter, SupplyParameterFromQuery(Name = "view")] public string? ViewQuery { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "appId")] public string? AppIdQuery { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "token")] public string? TokenQuery { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "invite")] public string? InviteQuery { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "email")] public string? EmailQuery { get; set; }
+
+    private TestView view = TestView.Pricing;
+    private string appId = "";
+    private string registrationToken = "";
+    private string prefillEmail = "";
+    private SignupPlanSelection planSelection = SignupPlanSelection.Choose;
+    private PricingPackSelection packSelection = PricingPackSelection.Multi;
+    private SignupTokenMode tokenMode = SignupTokenMode.Auto;
+    private ManageLayout layout = ManageLayout.Tabs;
+    private bool showAddOns = true;
+    private bool allowPackSelfService = true;
+
+    // Bumped whenever the surface or the settings change, so the view is re-created rather than
+    // re-parameterised: a catalog read once is what the harness is there to watch happen again.
+    private int renderKey;
+
+    private List<EventEntry> events = new();
+
+    protected override void OnInitialized()
+    {
+        appId = NullIfBlank(AppIdQuery) ?? Configuration["WildwoodAPI:AppId"] ?? "";
+        registrationToken = NullIfBlank(TokenQuery) ?? NullIfBlank(InviteQuery) ?? "";
+        prefillEmail = NullIfBlank(EmailQuery) ?? "";
+        view = ParseView(ViewQuery);
+
+        LifecycleTracker.TrackInitialized("RegistrationAndSubscriptionComponent");
+        AddEvent($"RegistrationAndSubscriptionComponent initialized - view: {ViewSlug(view)}");
+    }
+
+    private static TestView ParseView(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return TestView.Pricing;
+
+        foreach (var candidate in TestViews)
+        {
+            if (string.Equals(ViewSlug(candidate), value, StringComparison.OrdinalIgnoreCase))
+            {
+                return candidate;
+            }
+        }
+
+        return TestView.Pricing;
+    }
+
+    private static string ViewSlug(TestView value) => value switch
+    {
+        TestView.Signup => "signup",
+        TestView.Manage => "manage",
+        TestView.Invite => "invite",
+        _ => "pricing"
+    };
+
+    private static string ViewLabel(TestView value) => value switch
+    {
+        TestView.Signup => "Signup",
+        TestView.Manage => "Manage",
+        TestView.Invite => "Invite (token required)",
+        _ => "Pricing"
+    };
+
+    private static string? NullIfBlank(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private void SelectView(TestView candidate)
+    {
+        if (view == candidate) return;
+
+        view = candidate;
+        renderKey++;
+        AddEvent($"View switched to {ViewSlug(candidate)}");
+    }
+
+    private void HandleSelect(PricingSelection selection)
+    {
+        var msg = $"OnSelect {JsonSerializer.Serialize(selection)}";
+        AddEvent(msg);
+        LifecycleTracker.TrackCallback("RegistrationAndSubscriptionComponent", "OnSelect", msg);
+        StateHasChanged();
+    }
+
+    private void HandleSignupComplete(SignupOutcome outcome)
+    {
+        var msg = $"OnSignupComplete {JsonSerializer.Serialize(outcome)}";
+        AddEvent(msg);
+        LifecycleTracker.TrackCallback("RegistrationAndSubscriptionComponent", "OnSignupComplete", msg);
+        StateHasChanged();
+    }
+
+    private void HandleEntitlementsChanged(string reason)
+    {
+        var msg = $"OnEntitlementsChanged: {reason}";
+        AddEvent(msg);
+        LifecycleTracker.TrackCallback("RegistrationAndSubscriptionComponent", "OnEntitlementsChanged", msg);
+        StateHasChanged();
+    }
+
+    private void HandleSubscriptionChanged()
+    {
+        const string msg = "OnSubscriptionChanged";
+        AddEvent(msg);
+        LifecycleTracker.TrackCallback("RegistrationAndSubscriptionComponent", "OnSubscriptionChanged", msg);
+        StateHasChanged();
+    }
+
+    private void HandleAlreadySignedIn()
+    {
+        const string msg = "OnAlreadySignedIn";
+        AddEvent(msg);
+        LifecycleTracker.TrackCallback("RegistrationAndSubscriptionComponent", "OnAlreadySignedIn", msg);
+        StateHasChanged();
+    }
+
+    private void HandleCancel()
+    {
+        const string msg = "OnCancel";
+        AddEvent(msg);
+        LifecycleTracker.TrackCallback("RegistrationAndSubscriptionComponent", "OnCancel", msg);
+        StateHasChanged();
+    }
+
+    private void HandleError(ComponentErrorEventArgs args)
+    {
+        var msg = $"OnError [{args.Context}]: {args.Exception.Message}";
+        AddEvent(msg);
+        LifecycleTracker.TrackError("RegistrationAndSubscriptionComponent", msg);
+        StateHasChanged();
+    }
+
+    private void ApplySettings()
+    {
+        renderKey++;
+        AddEvent($"Settings applied - AppId: {appId}, view: {ViewSlug(view)}, packs: {packSelection}, " +
+                 $"token mode: {tokenMode}, layout: {layout}");
+        StateHasChanged();
+    }
+
+    private void ResetSettings()
+    {
+        appId = Configuration["WildwoodAPI:AppId"] ?? "";
+        registrationToken = "";
+        prefillEmail = "";
+        planSelection = SignupPlanSelection.Choose;
+        packSelection = PricingPackSelection.Multi;
+        tokenMode = SignupTokenMode.Auto;
+        layout = ManageLayout.Tabs;
+        showAddOns = true;
+        allowPackSelfService = true;
+        renderKey++;
+        events.Clear();
+        AddEvent("Settings reset to defaults");
+        StateHasChanged();
+    }
+
+    private void AddEvent(string message)
+    {
+        events.Insert(0, new EventEntry(DateTime.Now, message));
+        if (events.Count > 100) events.RemoveAt(events.Count - 1);
+    }
+
+    private record EventEntry(DateTime Time, string Message);
+}

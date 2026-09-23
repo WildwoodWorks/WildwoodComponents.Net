@@ -1,0 +1,38 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.Payment
+@inherits BaseWildwoodComponent
+
+@* The card an upgrade needs, in the component's own modal.
+
+   Every site on the platform hand-built this: an overlay, a PaymentComponent inside it, and a
+   transaction id handed back. They all got the same three things right and one of them wrong at
+   least once, so it lives here now: it answers EXACTLY once, a refused card leaves the modal up so
+   the customer can fix it without losing the priced change behind it, and a payment that succeeded
+   with no id to complete the change with is reported rather than passed off as a cancel.
+
+   The overlay carries ww-modal-overlay--stacked when it opens over the confirmation, so the two
+   modals do not fight over the same layer. *@
+<div class="@OverlayCssClass" data-ww-modal="payment" @onclick="HandleCancelAsync" @attributes="AdditionalAttributes">
+    <div class="ww-modal ww-regsub-payment-modal" @onclick:stopPropagation="true">
+        <div class="ww-modal-header">
+            <h3 class="ww-modal-title">@Title</h3>
+            <button type="button" class="ww-modal-close" aria-label="@Labels.ClosePayment" @onclick="HandleCancelAsync">&times;</button>
+        </div>
+
+        <div class="ww-modal-body">
+            <PaymentComponent AppId="@AppId"
+                              Amount="@Amount"
+                              Currency="@PaymentCurrency"
+                              Description="@Title"
+                              IsSubscription="true"
+                              PricingModelId="@Request.PricingModelId"
+                              TrialDays="@Request.TrialDays"
+                              CustomerId="@CustomerId"
+                              CustomerEmail="@CustomerEmail"
+                              ReturnUrl="@ReturnUrl"
+                              RequireBillingAddress="RequireBillingAddress"
+                              OnPaymentSuccess="HandlePaymentSuccessAsync"
+                              OnCancel="HandleCancelAsync" />
+        </div>
+    </div>
+</div>

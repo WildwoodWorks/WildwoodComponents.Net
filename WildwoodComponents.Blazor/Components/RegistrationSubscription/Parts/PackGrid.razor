@@ -1,0 +1,68 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.RegistrationSubscription
+@inherits BaseWildwoodComponent
+
+@* The pack grid: what an app sells alongside a plan. An EMPTY group is dropped rather than rendered
+   as a heading with nothing under it, and a pack whose category matches no group is NOT dropped -
+   it lands in a trailing catch-all, because a pack the company sells and has priced going silently
+   missing from the page that sells it is the one failure this must not have. *@
+@if (Groups.Count > 0)
+{
+    <div class="ww-regsub-packs @CssClass" @attributes="AdditionalAttributes">
+        @foreach (var group in Groups)
+        {
+            <section class="ww-regsub-pack-group" data-ww-group="@group.Id">
+                @if (!string.IsNullOrEmpty(group.Title))
+                {
+                    <h3 class="ww-regsub-pack-group-title">@group.Title</h3>
+                }
+                @if (!string.IsNullOrEmpty(group.Blurb))
+                {
+                    <p class="ww-regsub-pack-group-blurb">@group.Blurb</p>
+                }
+
+                <div class="ww-pack-grid">
+                    @foreach (var addOn in group.AddOns)
+                    {
+                        var pack = addOn;
+
+                        @if (IsMultiSelect)
+                        {
+                            <button type="button"
+                                    class="ww-pack-card @(IsSelected(pack.Id) ? "ww-pack-card--selected" : "")"
+                                    aria-pressed="@(IsSelected(pack.Id) ? "true" : "false")"
+                                    data-ww-pack="@pack.Id"
+                                    @onclick="() => HandleToggle(pack)">
+                                <PackCardBody AddOn="pack" Currency="@Currency" Labels="Labels" Describe="Describe" />
+                            </button>
+                        }
+                        else
+                        {
+                            <div class="ww-pack-card" data-ww-pack="@pack.Id">
+                                <PackCardBody AddOn="pack" Currency="@Currency" Labels="Labels" Describe="Describe" />
+                                <button type="button"
+                                        class="ww-btn ww-btn-outline ww-btn-block"
+                                        aria-label="@SelectAriaLabel(pack)"
+                                        @onclick="() => HandleChoose(pack)">
+                                    @Labels.PackSelect
+                                </button>
+                            </div>
+                        }
+                    }
+                </div>
+            </section>
+        }
+
+        @if (IsMultiSelect)
+        {
+            <div class="ww-regsub-summary">
+                <button type="button"
+                        class="ww-btn ww-btn-primary"
+                        disabled="@(SelectedCount == 0)"
+                        @onclick="HandleContinue">
+                    @ContinueLabel
+                </button>
+            </div>
+        }
+    </div>
+}

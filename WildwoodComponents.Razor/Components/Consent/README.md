@@ -60,6 +60,37 @@ public class WildwoodConsentProxyController : ControllerBase
 }
 ```
 
+## It does not cover your page
+
+The banner is `position: fixed` with a very high z-index, so anything anchored to the same edge —
+a chat composer, a sticky action bar — would otherwise sit underneath it and quietly take no
+clicks. While it is up, `consent.js` measures the banner, publishes `--ww-consent-height` on
+`<html>`, and adds that height to `<body>`'s padding at the edge it is anchored to. The page's own
+padding is added to, not replaced, and is restored exactly as found once the visitor decides — a
+page that had none inline gets the declaration removed, not zeroed over its own stylesheet.
+
+**Only the bars reserve room.** `bottomBar` pads the bottom and `topBar` the top. A `corner` card
+is a ~420px box inset from the bottom-right, so padding the whole page for it would leave a
+full-width blank strip under the content for as long as the banner is up: the corner publishes
+`--ww-consent-height` and pads nothing. Give a corner card room yourself if you need it, or use
+`bottomBar`.
+
+Several `<vc:consent-banner>` on one page do not fight over it: each holds its own reservation
+(the banner element is tagged `data-ww-consent-space`), the page reserves the tallest live one on
+each edge, and it gets its own padding back only when the last of them goes.
+
+```cshtml
+@* Place the room yourself: the height is still published as --ww-consent-height. *@
+<vc:consent-banner app-id="my-app" reserve-space="false" />
+```
+
+| Tag-helper attribute | Default | Meaning |
+|---|---|---|
+| `reserve-space` | `true` | Add the banner's measured height to the page's padding while it is up |
+
+Ported from `@wildwood/react`'s `ConsentBanner reserveSpace` prop; the Blazor `ConsentBanner` has
+the same parameter.
+
 ## Host-app control (`window.wildwoodConsent`)
 
 `consent.js` exposes a small API so app code can drive the banner outside the built-in UI:

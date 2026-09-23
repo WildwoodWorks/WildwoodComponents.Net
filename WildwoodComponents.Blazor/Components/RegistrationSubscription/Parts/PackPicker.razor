@@ -1,0 +1,52 @@
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.RegistrationSubscription
+@inherits BaseWildwoodComponent
+
+@* Buying packs from the manage view: tick what you want, pay once, see what happened.
+
+   It is the signup flow's pack step and the signup flow's checkout, reused whole - the same grid a
+   pricing page shows and the same one-quote-one-card purchase - because a pack bought a month after
+   signing up is the same transaction as a pack bought during it. The outcome list is shown rather
+   than swallowed: one pack failing must not look like all of them failing. *@
+<div class="ww-modal-overlay @CssClass" data-ww-modal="packs" @onclick="HandleOverlayClickAsync" @attributes="AdditionalAttributes">
+    <div class="ww-modal ww-regsub-pack-picker" @onclick:stopPropagation="true">
+        <div class="ww-modal-header">
+            <h3 class="ww-modal-title">@Labels.AddPacksTitle</h3>
+            <button type="button" class="ww-modal-close" aria-label="@Labels.Cancel" @onclick="HandleCloseAsync">&times;</button>
+        </div>
+
+        <div class="ww-modal-body">
+            @if (_outcomes is not null)
+            {
+                <PackOutcomeList Packs="_outcomes" Labels="Labels" />
+            }
+            else if (_items is not null)
+            {
+                <PackCheckout AppId="@AppId"
+                              Items="_items"
+                              Names="PackNames"
+                              Labels="Labels"
+                              OnFinished="HandleFinishedAsync"
+                              OnError="OnError" />
+            }
+            else
+            {
+                <PackGrid AddOns="AddOns"
+                          Currency="@Currency"
+                          Selection="PricingPackSelection.Multi"
+                          SelectedIds="_selectedIds"
+                          Labels="Labels"
+                          OnToggle="HandleToggleAsync"
+                          OnChoose="HandleChooseAsync"
+                          OnContinue="HandleContinueAsync" />
+            }
+        </div>
+
+        @if (_outcomes is not null)
+        {
+            <div class="ww-modal-footer">
+                <button type="button" class="ww-btn ww-btn-primary" @onclick="HandleCloseAsync">@Labels.ContinueLabel</button>
+            </div>
+        }
+    </div>
+</div>

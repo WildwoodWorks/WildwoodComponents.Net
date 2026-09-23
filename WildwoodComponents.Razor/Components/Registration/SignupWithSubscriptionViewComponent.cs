@@ -12,6 +12,17 @@ namespace WildwoodComponents.Razor.Components.Registration;
 /// Client-side JavaScript handles step transitions, form validation, and AJAX calls.
 /// Razor Pages equivalent of WildwoodComponents.Blazor SignupWithSubscriptionComponent.
 /// </summary>
+/// <remarks>
+/// <b>Superseded by <c>&lt;vc:registration-subscription-signup /&gt;</c></b>
+/// (<see cref="WildwoodComponents.Razor.Components.RegistrationSubscription.RegistrationSubscriptionSignupViewComponent"/>),
+/// which is PAY-FIRST and works: this component's paid step is a hand-rolled card form whose
+/// "Complete Payment" button ships disabled and has no handler, so a paid plan dead-ends unless
+/// the host mounts a payment component itself. It keeps working for the flows that do not touch
+/// it, and is deprecated rather than removed so no host breaks at compile time.
+/// </remarks>
+[Obsolete("Use <vc:registration-subscription-signup /> (RegistrationSubscriptionSignupViewComponent): "
+    + "pay-first, no raw card fields, and the plan's payment actually completes. "
+    + "This component keeps working but its paid step does not.", false)]
 public class SignupWithSubscriptionViewComponent : ViewComponent
 {
     private readonly IWildwoodAuthService _authService;

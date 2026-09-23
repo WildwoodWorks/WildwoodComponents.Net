@@ -17,6 +17,14 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         [Parameter] public string? UserId { get; set; }
         [Parameter] public bool IsCompanyMode { get; set; }
         [Parameter] public bool IsAdmin { get; set; }
+
+        /// <summary>
+        /// Marks a feature an override GRANTS rather than one the plan carries. A granted feature
+        /// badged only "Enabled" reads as part of a plan that does not have it, so everyone — not
+        /// just an admin — is told it is included in this account.
+        /// </summary>
+        [Parameter] public string IncludedLabel { get; set; } = "Included";
+
         [Parameter] public EventCallback OnOverrideToggled { get; set; }
 
         private List<AppFeatureDefinitionModel> _features = new();
@@ -245,6 +253,16 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         private bool HasOverride(string featureCode)
         {
             return _overrideMap.ContainsKey(featureCode);
+        }
+
+        /// <summary>
+        /// Whether an override is what grants this feature. Only an ENABLED override counts: one
+        /// that takes a feature away is not an inclusion, and the row is locked anyway.
+        /// </summary>
+        private bool IsIncluded(string featureCode)
+        {
+            AppFeatureOverrideModel? found;
+            return _overrideMap.TryGetValue(featureCode, out found) && found is not null && found.IsEnabled;
         }
 
         private string GetOverrideTooltip(string featureCode)

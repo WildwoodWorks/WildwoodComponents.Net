@@ -1,7 +1,10 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Shared.Models;
+using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Razor.Services;
 
@@ -289,5 +292,90 @@ public class WildwoodAIChatService : IWildwoodAIChatService
             _logger.LogError(ex, "Failed to synthesize speech");
         }
         return null;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Wire-identical to Blazor's <c>AIService.TranscribeAudioAsync</c>: one multipart POST, the
+    /// audio in a part named <c>file</c> called <c>speech.&lt;ext&gt;</c> and carrying the BARE
+    /// media type, with <c>configurationId</c> and <c>language</c> present only when they have a
+    /// value. The shared rules live in <see cref="SpeechAudioFormats"/>.
+    /// <para>
+    /// The bearer goes on the REQUEST, not on <c>DefaultRequestHeaders</c>: the named client is
+    /// shared by the scope's services, so a default header is another user's token waiting to
+    /// happen. (The older methods above still use <c>ApplyAuthorizationHeader</c>; that is the
+    /// deferred hazard the September sync recorded, not a pattern to copy.)
+    /// </para>
+    /// </remarks>
+    public async Task<SpeechTranscriptionResult> TranscribeAudioAsync(byte[] audio, string contentType, string? configurationId = null, string? language = null)
+    {
+        if (audio is null || audio.Length == 0)
+        {
+            return SpeechAudioFormats.Failure(SpeechAudioFormats.NoAudioMessage);
+        }
+
+        try
+        {
+            var mediaType = SpeechAudioFormats.BareMediaType(contentType);
+
+            // No manual request Content-Type: MultipartFormDataContent sets multipart/form-data
+            // with the boundary itself.
+            using var form = new MultipartFormDataContent();
+            var filePart = new ByteArrayContent(audio);
+            if (mediaType is not null && MediaTypeHeaderValue.TryParse(mediaType, out var partType))
+            {
+                filePart.Headers.ContentType = partType;
+            }
+            form.Add(filePart, "file", SpeechAudioFormats.FileNameFor(mediaType));
+
+            if (!string.IsNullOrEmpty(configurationId))
+            {
+                form.Add(new StringContent(configurationId, Encoding.UTF8), "configurationId");
+            }
+            if (!string.IsNullOrEmpty(language))
+            {
+                form.Add(new StringContent(language, Encoding.UTF8), "language");
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "stt/transcribe")
+            {
+                Content = form
+            };
+            var token = _sessionManager.GetAccessToken();
+            if (!string.IsNullOrEmpty(token))
+            {
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            using var response = await _httpClient.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+
+            SpeechTranscriptionResult? parsed = null;
+            try
+            {
+                parsed = JsonSerializer.Deserialize<SpeechTranscriptionResult>(body, JsonOptions);
+            }
+            catch (JsonException)
+            {
+                // Non-JSON body (e.g. a 413 from the web server) — reported by status code below.
+            }
+
+            if (response.IsSuccessStatusCode && parsed is not null && parsed.Success)
+            {
+                return SpeechAudioFormats.Success(parsed.Text);
+            }
+
+            var message = !string.IsNullOrEmpty(parsed?.ErrorMessage)
+                ? parsed!.ErrorMessage!
+                : SpeechAudioFormats.FailureMessageForStatus((int)response.StatusCode);
+            _logger.LogWarning("Transcription unsuccessful. Status: {StatusCode}, Error: {Error}",
+                response.StatusCode, message);
+            return SpeechAudioFormats.Failure(message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to transcribe audio");
+            return SpeechAudioFormats.Failure(SpeechAudioFormats.GenericFailureMessage);
+        }
     }
 }

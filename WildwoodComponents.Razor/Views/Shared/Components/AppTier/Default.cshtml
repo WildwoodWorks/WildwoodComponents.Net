@@ -1,5 +1,6 @@
 @using WildwoodComponents.Razor.Models
 @using WildwoodComponents.Razor.Helpers
+@using WildwoodComponents.Shared.Utilities
 @model WildwoodComponents.Razor.Models.AppTierViewModel
 
 <div class="ww-app-tier-component" id="ww-app-tier-component"
@@ -99,9 +100,12 @@
                                                   data-price="@pricing.Price"
                                                   data-is-default="@pricing.IsDefault.ToString().ToLower()"
                                                   style="display:none;">
-                                                <span class="ww-price-currency">@ViewHelpers.GetCurrencySymbol(Model.Currency)</span>
-                                                <span class="ww-price-amount">@pricing.Price.ToString("N0")</span>
+                                                <span class="ww-price-amount">@CatalogHelpers.FormatPrice(tier, pricing.Price, Model.Currency)</span>
                                                 <span class="ww-price-period">/@pricing.BillingFrequencyLabel.ToLower()</span>
+                                                @if (CatalogHelpers.TierCardTrialLabel(tier, pricing, tier.ShowPrice) is { Length: > 0 } trialLabel)
+                                                {
+                                                    <span class="ww-plan-trial">@trialLabel</span>
+                                                }
                                             </span>
                                         }
                                     }
@@ -307,7 +311,7 @@
                                     @if (pricing != null && !isBundled)
                                     {
                                         <p class="mb-2">
-                                            <strong>@ViewHelpers.GetCurrencySymbol(Model.Currency)@pricing.Price.ToString("N2")</strong>
+                                            <strong>@AddOnRowRules.FormatPrice(addOn, pricing, Model.Currency)</strong>
                                             <span class="text-muted small">/ @pricing.BillingFrequency.ToLower()</span>
                                         </p>
                                     }

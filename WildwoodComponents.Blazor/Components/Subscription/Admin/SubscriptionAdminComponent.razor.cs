@@ -4,15 +4,44 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Blazor.Components.Base;
+using WildwoodComponents.Blazor.Components.RegistrationSubscription;
 using WildwoodComponents.Blazor.Models;
 using WildwoodComponents.Blazor.Services;
 using WildwoodComponents.Shared.Models;
+using WildwoodComponents.Shared.RegistrationSubscription;
+using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 {
-    public partial class SubscriptionAdminComponent : BaseWildwoodComponent
+    /// <summary>
+    /// The subscription admin surface: status, plans, features, packs, usage and overrides.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Behaviour change (JS 27daa30, ported here):</b> the plan change now runs through the
+    /// shared <see cref="PlanChangeDriver"/>, the same flow
+    /// <c>RegistrationSubscriptionManage</c> uses, so the two cannot drift. A change that needs a
+    /// card and has no <see cref="OnPaymentRequired"/> handler used to fail with "Payment is
+    /// required for this tier change. Wire the OnPaymentRequired callback to collect payment.";
+    /// it now opens the component's OWN payment modal instead. A host that passes
+    /// <see cref="OnPaymentRequired"/> keeps exactly the old behaviour — its handler still wins,
+    /// and a null or empty answer still abandons the change.
+    /// </para>
+    /// <para>
+    /// Two other things came with the shared flow: a prorated charge the bank wants to see is now
+    /// authenticated and the parked change completed (it used to be refused outright), and the
+    /// confirmation modal renders in every display mode rather than only in the tabbed one.
+    /// </para>
+    /// <para>
+    /// Disposal is asynchronous because the Stripe instance the 3-D Secure path creates is dropped
+    /// through JS interop. See <see cref="DisposeAsync"/> for why the base's synchronous clean-up
+    /// is called by hand from there.
+    /// </para>
+    /// </remarks>
+    public partial class SubscriptionAdminComponent : BaseWildwoodComponent, IAsyncDisposable
     {
         [Inject] private IAppTierComponentService AppTierService { get; set; } = default!;
+        [Inject] private IPaymentProviderService PaymentProviderService { get; set; } = default!;
         [Inject] private IFeatureEntitlementService EntitlementService { get; set; } = default!;
 
         #region Parameters
@@ -30,12 +59,36 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         [Parameter] public EventCallback<AppTierSubscriptionChangedEventArgs> OnSubscriptionChanged { get; set; }
 
         /// <summary>
+        /// Raised after every mutation here that changes what the user is entitled to, carrying one
+        /// of <see cref="EntitlementsChangedReasons"/>. Additive: the panel already invalidates the
+        /// shared entitlement cache, and a host that only needs that can keep ignoring this.
+        /// </summary>
+        /// <remarks>
+        /// React reaches the same place two ways — <c>useSubscriptionAdmin</c> emits
+        /// <c>entitlementsChanged</c> on the client's emitter, and the manage view forwards it to an
+        /// <c>onEntitlementsChanged</c> prop. .NET has both: <c>IFeatureEntitlementService</c>'s
+        /// <c>EntitlementsChangedDetailed</c> is the emitter, and this is the prop.
+        /// </remarks>
+        [Parameter] public EventCallback<string> OnEntitlementsChanged { get; set; }
+
+        /// <summary>
         /// Called when the server confirms a tier change requires payment and no card is on file.
         /// Return a payment transaction id to complete the change, or null/empty to cancel.
         /// Consumers typically wire this to a modal containing PaymentFormComponent.
-        /// When not wired, a payment-required change surfaces an error via the alert banner.
         /// </summary>
+        /// <remarks>
+        /// A handler passed here still wins, exactly as it always has. What changed is the
+        /// UNWIRED case: the component now opens its own payment modal rather than reporting
+        /// "wire the OnPaymentRequired callback". See the remarks on the component itself.
+        /// </remarks>
         [Parameter] public Func<PaymentRequiredArgs, Task<string?>>? OnPaymentRequired { get; set; }
+
+        /// <summary>
+        /// Copy for the plan change's own messages — the confirmation's failure notice and the
+        /// built-in payment modal. Defaults to the shipped words, which are the same strings every
+        /// stack ships.
+        /// </summary>
+        [Parameter] public RegistrationSubscriptionLabels? Labels { get; set; }
 
         /// <summary>Override the internally-fetched limit statuses (e.g. with locally-merged real-time usage data).</summary>
         [Parameter] public IReadOnlyList<AppTierLimitStatusModel>? LimitStatusesOverride { get; set; }
@@ -54,8 +107,50 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         private string? _cancelActionUrl;
         private bool _isCompanyMode;
         private int _overrideCount;
-        private TierChangePreviewModel? _preview;
+
+        /// <summary>The shared plan-change flow: preview, confirm, card, 3-D Secure, completion.</summary>
+        private PlanChangeDriver? _flow;
+
+        /// <summary>The plan the flow is changing to, for the host's "changed"/"subscribed" notice.</summary>
         private TierSelectedEventArgs? _pendingArgs;
+
+        private bool _disposedAsync;
+
+        internal PlanChangeDriver? Flow
+        {
+            get { return _flow; }
+        }
+
+        /// <summary>
+        /// The copy the plan-change parts render from: the host's instance, or the shipped words.
+        /// </summary>
+        private RegistrationSubscriptionLabels ResolvedLabels
+        {
+            get { return RegistrationSubscriptionLabels.Resolve(Labels); }
+        }
+
+        /// <summary>
+        /// The script instance this component's 3-D Secure challenges run on. Unique per
+        /// component, so a plan change's authentication never touches a card form's instance or
+        /// <c>PaymentComponent</c>'s default one.
+        /// </summary>
+        internal string PaymentInstanceKey
+        {
+            get { return "ww-sub-admin-" + ComponentId; }
+        }
+
+        /// <summary>
+        /// The data layer's own error, unless the plan change already said what went wrong — its
+        /// notice carries a failed change's message, so it is not shown a second time.
+        /// </summary>
+        private bool ShowErrorAlert
+        {
+            get
+            {
+                if (!(ErrorMessage is { Length: > 0 })) return false;
+                return _flow is null || _flow.Step != PlanChangeStep.Failed;
+            }
+        }
 
         // References to child panels for refreshing
         private SubscriptionStatusPanel? _statusPanel;
@@ -83,12 +178,75 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
             // Fetch the tracking mode setting to determine user vs company scoping
             await LoadTrackingModeAsync();
+
+            // Built after the tracking mode is known: the scope decides which endpoints the change
+            // goes through, and an admin-scoped change never collects a card.
+            _flow = new PlanChangeDriver(
+                AppTierService,
+                PaymentProviderService,
+                new StripePaymentActions(JSRuntime, PaymentInstanceKey),
+                new PlanChangeSettings
+                {
+                    AppId = AppId,
+                    UserId = UseUserScope ? UserId : null,
+                    CompanyId = UseCompanyScope ? CompanyId : null,
+                    Labels = ResolvedLabels
+                },
+                EntitlementService,
+                Logger)
+            {
+                StateChanged = StateHasChanged,
+                PaymentRequested = OnPaymentRequired,
+                Changed = HandleTierChangedAsync,
+                EntitlementsChanged = ForwardEntitlementsChangedAsync,
+                ErrorReported = ReportPlanChangeAsync
+            };
+
             await LoadSubscriptionAsync();
 
             if (IsAdmin)
             {
                 await LoadOverrideCountAsync();
             }
+        }
+
+        /// <summary>
+        /// The host may wire its own card modal after the first render, and the driver reads that
+        /// handler at the moment a card is needed — so the two are kept in step here.
+        /// </summary>
+        protected override void OnParametersSet()
+        {
+            base.OnParametersSet();
+
+            if (_flow is not null) _flow.PaymentRequested = OnPaymentRequired;
+        }
+
+        /// <summary>
+        /// Detaches the plan change from this component and drops the Stripe instance its 3-D
+        /// Secure challenges created.
+        /// </summary>
+        /// <remarks>
+        /// The driver's own disposal returns straight away when a bank challenge is still in
+        /// flight — it drains that change to its completion in the background and drops the script
+        /// instance afterwards — so leaving the page is never held up behind a customer finishing
+        /// a challenge.
+        ///
+        /// The base's <see cref="BaseWildwoodComponent.Dispose()"/> is called by hand at the end:
+        /// Blazor calls <c>DisposeAsync</c> INSTEAD of <c>Dispose</c> on a component that
+        /// implements <see cref="IAsyncDisposable"/>, so without this the base's
+        /// <c>ThemeChanged</c> unsubscription would never run.
+        /// </remarks>
+        public async ValueTask DisposeAsync()
+        {
+            if (_disposedAsync) return;
+            _disposedAsync = true;
+
+            var flow = _flow;
+            _flow = null;
+
+            if (flow is not null) await flow.DisposeAsync();
+
+            Dispose();
         }
 
         private async Task LoadTrackingModeAsync()
@@ -164,169 +322,93 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
         #region Tier Selection Handler
 
-        private async Task HandleTierSelected(TierSelectedEventArgs args)
+        /// <summary>
+        /// A plan was picked. Every change is PRICED and confirmed first, in every display mode —
+        /// the shared flow's rule, and the reason a stacked layout no longer previews and then
+        /// shows nothing.
+        /// </summary>
+        private Task HandleTierSelected(TierSelectedEventArgs args)
         {
-            if (_isProcessing) return;
+            if (_isProcessing) return Task.CompletedTask;
 
-            if (args.IsChange)
-            {
-                // Show preview modal for tier changes
-                _isProcessing = true;
-                StateHasChanged();
+            _pendingArgs = args;
+            ClearError();
 
-                try
-                {
-                    // Admin managing a specific user previews against that user; self/company
-                    // mode falls back to the self preview (no company-scoped preview endpoint).
-                    var preview = UseUserScope
-                        ? await AppTierService.PreviewTierChangeAdminAsync(AppId, UserId!, args.TierId, args.PricingId)
-                        : await AppTierService.PreviewTierChangeAsync(AppId, args.TierId, args.PricingId);
-                    if (preview != null)
-                    {
-                        _preview = preview;
-                        _pendingArgs = args;
-                    }
-                    else
-                    {
-                        await HandleErrorAsync(new Exception("Failed to load tier change preview"), "Previewing tier change");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    await HandleErrorAsync(ex, "Previewing tier change");
-                }
-                finally
-                {
-                    _isProcessing = false;
-                    StateHasChanged();
-                }
-            }
-            else
-            {
-                // New subscription - execute directly (no preview needed)
-                await ExecuteTierChange(args, true, null);
-            }
+            return _flow is null ? Task.CompletedTask : _flow.SelectTierAsync(args);
         }
 
-        private async Task HandleConfirmChange(TierChangeConfirmOptions options)
+        private Task HandleConfirmChange(TierChangeConfirmOptions options)
         {
-            if (_pendingArgs == null) return;
+            ClearError();
+            return _flow is null ? Task.CompletedTask : _flow.ConfirmAsync(options);
+        }
+
+        /// <summary>
+        /// What the host needs to collect payment for a tier change. The rule itself lives on
+        /// <see cref="PlanChangeDriver"/>, which is what both this component and the manage view
+        /// build their request from; this stays as the name callers and tests already use.
+        /// </summary>
+        internal static PaymentRequiredArgs BuildPaymentRequiredArgs(
+            TierSelectedEventArgs args, TierChangePreviewModel preview)
+        {
+            return PlanChangeDriver.BuildPaymentRequiredArgs(args, preview);
+        }
+
+        private Task HandleCancelConfirmation()
+        {
+            return _flow is null ? Task.CompletedTask : _flow.CancelAsync();
+        }
+
+        private Task HandlePaymentSettledAsync(string? paymentTransactionId)
+        {
+            return _flow is null ? Task.CompletedTask : _flow.ProvidePaymentAsync(paymentTransactionId);
+        }
+
+        private Task HandleRetryChangeAsync()
+        {
+            return _flow is null ? Task.CompletedTask : _flow.RetryAsync();
+        }
+
+        private Task HandleDismissChangeAsync()
+        {
+            return _flow is null ? Task.CompletedTask : _flow.ResetAsync();
+        }
+
+        /// <summary>
+        /// The change landed: reload every panel and tell the host. The entitlement cache was
+        /// already dropped by the driver, which has to own it — a change drained after this
+        /// component has gone has no callback left to do it.
+        /// </summary>
+        private async Task HandleTierChangedAsync()
+        {
+            await RefreshAllPanels();
 
             var args = _pendingArgs;
-            var preview = _preview;
-            _preview = null;
-            _pendingArgs = null;
-            StateHasChanged();
-
-            // When the server says payment is required (and the admin didn't bypass it),
-            // collect a payment transaction id via the OnPaymentRequired extension point
-            // before committing the change. Mirrors the React preview -> payment -> change flow.
-            string? paymentTransactionId = null;
-            if (preview != null && preview.PaymentRequired && !options.BypassPayment)
-            {
-                if (OnPaymentRequired == null)
-                {
-                    await HandleErrorAsync(
-                        new Exception("Payment is required for this tier change. Wire the OnPaymentRequired callback to collect payment."),
-                        "Tier change");
-                    return;
-                }
-
-                paymentTransactionId = await OnPaymentRequired(new PaymentRequiredArgs
-                {
-                    TierId = args.TierId,
-                    TierName = args.TierName,
-                    PricingId = args.PricingId,
-                    Price = preview.ProratedChargeToday ?? preview.NewPrice ?? 0m,
-                });
-
-                // Null/empty transaction id means the consumer cancelled payment collection.
-                if (string.IsNullOrEmpty(paymentTransactionId)) return;
-            }
-
-            await ExecuteTierChange(args, options.Immediate, paymentTransactionId);
+            await NotifySubscriptionChanged(
+                args?.TierName ?? string.Empty,
+                args is not null && args.IsChange ? "changed" : "subscribed");
         }
 
-        private void HandleCancelConfirmation()
+        private Task ForwardEntitlementsChangedAsync(string reason)
         {
-            _preview = null;
-            _pendingArgs = null;
-            StateHasChanged();
+            return OnEntitlementsChanged.HasDelegate
+                ? OnEntitlementsChanged.InvokeAsync(reason)
+                : Task.CompletedTask;
         }
 
-        private async Task ExecuteTierChange(TierSelectedEventArgs args, bool immediate, string? paymentTransactionId)
+        /// <summary>
+        /// A failed plan change. The flow's own notice says it on screen; this keeps the existing
+        /// host contract, where the exception reaches the logger and <c>OnError</c>.
+        /// </summary>
+        private Task ReportPlanChangeAsync(string code, string message)
         {
-            if (_isProcessing) return;
-            _isProcessing = true;
-            StateHasChanged();
+            return InvokeOnErrorAsync(new InvalidOperationException(message), code);
+        }
 
-            try
-            {
-                AppTierChangeResultModel result;
-
-                if (args.IsChange)
-                {
-                    // Change existing tier. Admin/company-scoped changes route through the admin
-                    // endpoints (no self-service payment token); self-service forwards the token.
-                    if (UseCompanyScope)
-                    {
-                        result = await AppTierService.ChangeCompanyTierAsync(
-                            AppId, CompanyId!, args.TierId, args.PricingId, immediate);
-                    }
-                    else if (UseUserScope)
-                    {
-                        result = await AppTierService.ChangeUserTierAsync(
-                            AppId, UserId!, args.TierId, args.PricingId, immediate);
-                    }
-                    else
-                    {
-                        result = await AppTierService.ChangeTierAsync(
-                            AppId, args.TierId, args.PricingId, immediate, paymentTransactionId);
-                    }
-                }
-                else
-                {
-                    // New subscription
-                    if (UseCompanyScope)
-                    {
-                        result = await AppTierService.SubscribeCompanyToTierAsync(
-                            AppId, CompanyId!, args.TierId, args.PricingId);
-                    }
-                    else if (UseUserScope)
-                    {
-                        result = await AppTierService.SubscribeUserToTierAsync(
-                            AppId, UserId!, args.TierId, args.PricingId);
-                    }
-                    else
-                    {
-                        result = await AppTierService.SubscribeToTierAsync(
-                            AppId, args.TierId, args.PricingId, paymentTransactionId);
-                    }
-                }
-
-                if (result.Success)
-                {
-                    _subscription = result.Subscription;
-                    await RefreshAllPanels();
-                    // Entitlements changed with the plan — refresh FeatureGate instances
-                    // elsewhere in the app so they don't serve the old plan for the cache TTL.
-                    EntitlementService.Invalidate();
-                    await NotifySubscriptionChanged(args.TierName, args.IsChange ? "changed" : "subscribed");
-                }
-                else
-                {
-                    await HandleErrorAsync(new Exception(result.ErrorMessage), "Assigning tier");
-                }
-            }
-            catch (Exception ex)
-            {
-                await HandleErrorAsync(ex, "Assigning tier");
-            }
-            finally
-            {
-                _isProcessing = false;
-                StateHasChanged();
-            }
+        /// <summary>A child part's failure is this component's failure: it is re-raised as one.</summary>
+        private Task HandleChildErrorAsync(ComponentErrorEventArgs args)
+        {
+            return InvokeOnErrorAsync(args.Exception, args.Context);
         }
 
         #endregion
@@ -360,7 +442,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                     // A scheduled cancellation keeps the subscription (status PendingCancellation)
                     // until the period ends — the refresh reloads whatever state the server has now.
                     await RefreshAllPanels();
-                    EntitlementService.Invalidate();
+                    await RaiseEntitlementsChangedAsync(EntitlementsChangedReasons.Cancel);
                     BuildCancelNotice(result);
                     await NotifySubscriptionChanged("", "cancelled");
                 }
@@ -410,7 +492,12 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 
         #region Add-On Change Handler
 
-        private async Task HandleAddOnChanged()
+        /// <summary>
+        /// A pack row finished. The panel says WHICH action it was, because the three do not share
+        /// one reason: buying is <c>addOn</c>, cancelling is <c>cancel</c> and taking a scheduled
+        /// cancellation back is <c>reactivate</c> — the same split JS's <c>wrapMutation</c> makes.
+        /// </summary>
+        private async Task HandleAddOnChanged(string reason)
         {
             // Refresh features and status after add-on changes
             await LoadSubscriptionAsync();
@@ -425,7 +512,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             }
 
             // Add-ons grant features — refresh FeatureGate instances elsewhere in the app.
-            EntitlementService.Invalidate();
+            await RaiseEntitlementsChangedAsync(reason);
             await NotifySubscriptionChanged("", "addon_changed");
         }
 
@@ -441,7 +528,8 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 await _featuresPanel.LoadFeaturesAsync();
             }
             await LoadOverrideCountAsync();
-            EntitlementService.Invalidate();
+            // An override is granted or revoked by hand, outside any plan — JS's "manual".
+            await RaiseEntitlementsChangedAsync(EntitlementsChangedReasons.Manual);
             StateHasChanged();
         }
 
@@ -453,7 +541,7 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
                 await _overridesPanel.LoadDataAsync();
             }
             await LoadOverrideCountAsync();
-            EntitlementService.Invalidate();
+            await RaiseEntitlementsChangedAsync(EntitlementsChangedReasons.Manual);
             StateHasChanged();
         }
 
@@ -484,6 +572,22 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
             if (_usagePanel != null)
             {
                 await _usagePanel.LoadDataAsync();
+            }
+        }
+
+        /// <summary>
+        /// Drops the shared entitlement cache with the reason attached, then tells the host. Both
+        /// halves always happen together: a cache that is dropped without saying why leaves a host
+        /// unable to tell a plan change from a pack purchase, and a callback without the eviction
+        /// leaves every FeatureGate in the circuit serving the old plan for the cache TTL.
+        /// </summary>
+        private async Task RaiseEntitlementsChangedAsync(string reason)
+        {
+            EntitlementService.Invalidate(AppId, reason);
+
+            if (OnEntitlementsChanged.HasDelegate)
+            {
+                await OnEntitlementsChanged.InvokeAsync(reason);
             }
         }
 
@@ -519,11 +623,35 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
     /// Details passed to <see cref="SubscriptionAdminComponent.OnPaymentRequired"/> when a tier
     /// change requires payment. The handler returns a payment transaction id (or null to cancel).
     /// </summary>
+    /// <summary>
+    /// What the host needs to collect payment for a tier change. Additive since the first release:
+    /// a caller that only reads TierId/TierName/PricingId/Price keeps working.
+    /// </summary>
     public class PaymentRequiredArgs
     {
         public string TierId { get; set; } = string.Empty;
         public string TierName { get; set; } = string.Empty;
+
+        /// <summary>The tier's pricing option (AppTierPricing id). Not a pricing model id.</summary>
         public string? PricingId { get; set; }
+
+        /// <summary>
+        /// The pricing model behind that option — what <c>PaymentComponent.PricingModelId</c>
+        /// needs. Hosts used to wire <see cref="PricingId"/> there; the server found no pricing
+        /// model for it and charged the prorated amount once, with no recurring subscription,
+        /// renewal or trial.
+        /// </summary>
+        public string? PricingModelId { get; set; }
+
+        /// <summary>
+        /// The amount the plan's subscription charges (the pricing option's price) — NOT the
+        /// prorated one-time charge, which is not what the new subscription bills.
+        /// </summary>
         public decimal Price { get; set; }
+
+        /// <summary>
+        /// Free-trial days on the pricing option; pass to <c>PaymentComponent.TrialDays</c>.
+        /// </summary>
+        public int? TrialDays { get; set; }
     }
 }

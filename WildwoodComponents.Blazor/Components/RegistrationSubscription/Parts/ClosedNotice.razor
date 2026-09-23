@@ -1,0 +1,18 @@
+@using WildwoodComponents.Blazor.Components.Base
+@inherits BaseWildwoodComponent
+
+@* What a visitor sees when an app is not taking registrations.
+
+   Its own part because two very different screens need exactly the same words: the signup view when
+   the app's authentication settings say registration is closed, and any host that wants to say so on
+   a landing page without mounting the signup flow. *@
+<div class="ww-regsub-closed @CssClass" role="status" @attributes="AdditionalAttributes">
+    <p class="ww-regsub-closed-message">@Message</p>
+    @if (!string.IsNullOrEmpty(ContactUrl) && !string.IsNullOrEmpty(ContactLabel))
+    {
+        <a class="ww-btn ww-btn-outline"
+           href="@ContactUrl"
+           target="@ExternalTarget"
+           rel="@ExternalRel">@ContactLabel</a>
+    }
+</div>

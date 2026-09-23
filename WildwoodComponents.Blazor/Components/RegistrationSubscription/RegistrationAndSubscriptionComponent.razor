@@ -1,0 +1,98 @@
+@using WildwoodComponents.Blazor.Components.Base
+@inherits BaseWildwoodComponent
+
+@* One entry point for the price list, signing up, and managing what was bought.
+
+   A switch and nothing else: no element of its own, so the active view owns the root, its
+   data-ww-view hook, CssClass and any splatted attribute, exactly as it does when a host mounts it
+   directly. Only the parameters the active view declares are forwarded; one set for another view
+   is ignored rather than raised. *@
+@if (View == RegistrationSubscriptionView.Signup)
+{
+    <RegistrationSubscriptionSignup AppId="@AppId"
+                                    Currency="@Currency"
+                                    Labels="Labels"
+                                    ContactUrl="@ContactUrl"
+                                    PreSelectedTierId="@PreSelectedTierId"
+                                    PreSelectedPricingId="@PreSelectedPricingId"
+                                    PreSelectedAddOnIds="PreSelectedAddOnIds"
+                                    RegistrationToken="@RegistrationToken"
+                                    PrefillEmail="@PrefillEmail"
+                                    PlanSelection="PlanSelection"
+                                    PlanDefault="PlanDefault"
+                                    PackSelection="PackSelection"
+                                    TokenMode="TokenMode"
+                                    RequireBillingAddress="RequireBillingAddress"
+                                    ReturnUrl="@ReturnUrl"
+                                    AddOnGroups="AddOnGroups"
+                                    DescribeAddOn="DescribeAddOn"
+                                    RenderClosed="RenderClosed"
+                                    PreloadedCatalog="PreloadedCatalog"
+                                    OnAlreadySignedIn="OnAlreadySignedIn"
+                                    OnSignupComplete="OnSignupComplete"
+                                    OnCancel="OnCancel"
+                                    OnEntitlementsChanged="OnEntitlementsChanged"
+                                    CssClass="@CssClass"
+                                    ShowLoadingStates="ShowLoadingStates"
+                                    EnableErrorHandling="EnableErrorHandling"
+                                    OnError="OnError"
+                                    OnLoadingStateChanged="OnLoadingStateChanged"
+                                    AdditionalAttributes="AdditionalAttributes" />
+}
+else if (View == RegistrationSubscriptionView.Manage)
+{
+    <RegistrationSubscriptionManage AppId="@AppId"
+                                    Currency="@Currency"
+                                    Labels="Labels"
+                                    ContactUrl="@ContactUrl"
+                                    Layout="Layout"
+                                    Sections="Sections"
+                                    ShowStatusAboveTabs="ShowStatusAboveTabs"
+                                    IsAdmin="IsAdmin"
+                                    UserId="@UserId"
+                                    CompanyId="@CompanyId"
+                                    AllowPackSelfService="AllowPackSelfService"
+                                    AllowCancel="AllowCancel"
+                                    ShowAddOns="ManageShowAddOns"
+                                    OnMergeUsage="OnMergeUsage"
+                                    OnPaymentRequired="OnPaymentRequired"
+                                    OnSubscriptionChanged="OnSubscriptionChanged"
+                                    OnEntitlementsChanged="OnEntitlementsChanged"
+                                    ReturnUrl="@ReturnUrl"
+                                    CssClass="@CssClass"
+                                    ShowLoadingStates="ShowLoadingStates"
+                                    EnableErrorHandling="EnableErrorHandling"
+                                    OnError="OnError"
+                                    OnLoadingStateChanged="OnLoadingStateChanged"
+                                    AdditionalAttributes="AdditionalAttributes" />
+}
+else
+{
+    <RegistrationSubscriptionPricing AppId="@AppId"
+                                     Currency="@Currency"
+                                     Labels="Labels"
+                                     ContactUrl="@ContactUrl"
+                                     ShowPlans="ShowPlans"
+                                     ShowAddOns="PricingShowAddOns"
+                                     OfferFreeTierChoice="OfferFreeTierChoice"
+                                     PackSelection="PackSelection"
+                                     AddOnGroups="AddOnGroups"
+                                     DescribeAddOn="DescribeAddOn"
+                                     ShowBillingToggle="ShowBillingToggle"
+                                     DefaultBilling="DefaultBilling"
+                                     ShowFeatureComparison="ShowFeatureComparison"
+                                     ShowLimits="ShowLimits"
+                                     HighlightTierId="@HighlightTierId"
+                                     IncludeJsonLd="IncludeJsonLd"
+                                     JsonLdUrl="@JsonLdUrl"
+                                     PreloadedCatalog="PreloadedCatalog"
+                                     LoadingFallback="LoadingFallback"
+                                     ErrorFallback="ErrorFallback"
+                                     OnSelect="OnSelect"
+                                     CssClass="@CssClass"
+                                     ShowLoadingStates="ShowLoadingStates"
+                                     EnableErrorHandling="EnableErrorHandling"
+                                     OnError="OnError"
+                                     OnLoadingStateChanged="OnLoadingStateChanged"
+                                     AdditionalAttributes="AdditionalAttributes" />
+}

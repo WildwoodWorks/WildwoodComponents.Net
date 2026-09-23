@@ -1,44 +1,59 @@
 using System;
 using System.Collections.Generic;
-using System.Net.Http;
-using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using WildwoodComponents.Blazor.Components.Base;
 using WildwoodComponents.Blazor.Models;
-using WildwoodComponents.Blazor.Extensions;
 using WildwoodComponents.Blazor.Services;
 using WildwoodComponents.Shared.Models;
 using static WildwoodComponents.Blazor.Components.Registration.TokenRegistrationComponent;
 
 namespace WildwoodComponents.Blazor.Components.Registration
 {
+    /// <summary>
+    /// The original signup-and-subscribe wizard. Superseded by
+    /// <see cref="RegistrationSubscription.RegistrationSubscriptionSignup"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Deprecated in step with the JS package (commit 541e446), so the same component is called
+    /// legacy on every stack. Nothing has been removed and nothing behaves differently: the
+    /// <c>[Obsolete]</c> below is a WARNING, and this component still compiles, renders and ships.
+    /// </para>
+    /// <para>
+    /// It mounts <c>PricingDisplayComponent</c>, which is deprecated too. That raises no warning:
+    /// C# does not report an obsolete member used from inside an obsolete type, which is exactly
+    /// the right answer here — one legacy surface built out of another is not a new call site.
+    /// </para>
+    /// </remarks>
+    [Obsolete(
+        "Use RegistrationAndSubscriptionComponent with View=\"RegistrationSubscriptionView.Signup\" " +
+        "(or RegistrationSubscriptionSignup directly). The view keeps this wizard's step copy and " +
+        "locators but reads the app's registration settings itself (no RequireToken / " +
+        "AllowOpenRegistration / ShowOptionalTokenEntry to resolve), validates a registration token's " +
+        "plan before anything is charged, takes the card before the account exists, buys packs after " +
+        "the login on the card already taken, reports a structured SignupOutcome, and handles invite " +
+        "redemption (TokenMode.Required). This component stays supported and behaves exactly as " +
+        "before; nothing has been removed.",
+        error: false)]
     public partial class SignupWithSubscriptionComponent : BaseWildwoodComponent
     {
         #region Injected Services
 
         [Inject] private IAuthenticationService AuthService { get; set; } = default!;
         [Inject] private IAppTierComponentService AppTierService { get; set; } = default!;
-        [Inject] private IPaymentProviderService PaymentProviderService { get; set; } = default!;
+        [Inject] private IFeatureEntitlementService EntitlementService { get; set; } = default!;
         [Inject] private IDisclaimerService DisclaimerService { get; set; } = default!;
-        [Inject] private IWildwoodSessionManager SessionManager { get; set; } = default!;
-        [Inject] private IHttpClientFactory HttpClientFactory { get; set; } = default!;
-        [Inject] private IOptions<WildwoodComponentsOptions> OptionsAccessor { get; set; } = default!;
+
+        /// <summary>
+        /// The four server calls that make the account, shared with the newer
+        /// <c>RegistrationSubscriptionSignup</c> view so both create accounts by one route. It also
+        /// owns the Campaign Attribution payload this wizard used to attach itself.
+        /// </summary>
+        [Inject] private ISignupAccountCreator AccountCreator { get; set; } = default!;
+
         [Inject] private new ILogger<SignupWithSubscriptionComponent> Logger { get; set; } = default!;
-        [Inject] private System.IServiceProvider ServiceProvider { get; set; } = default!;
-
-        // Campaign Attribution, resolved optionally so hosts that register services by hand keep working.
-        private IAttributionService? AttributionEngine => ServiceProvider.GetService(typeof(IAttributionService)) as IAttributionService;
-
-        private async Task<WildwoodComponents.Shared.Models.AttributionPayloadModel?> GetAttributionPayloadAsync()
-            => AttributionEngine is { } attribution ? await attribution.GetForRegistrationAsync() : null;
-
-        private async Task ClearAttributionAsync()
-        {
-            if (AttributionEngine is { } attribution) await attribution.ClearAsync();
-        }
 
         #endregion
 
@@ -89,16 +104,29 @@ namespace WildwoodComponents.Blazor.Components.Registration
         private string? _processingStatus;
         private string? _processingError;
 
-        // Track completed sub-steps for retry logic
-        private bool _registered;
-        private bool _loggedIn;
-        private bool _subscriptionFailed;
-        private AuthenticationResponse? _authResponse;
-        private RegistrationSuccessResponse? _registrationResponse;
+        // Track completed sub-steps for retry logic. Owned by the shared account creator, which
+        // reads it to resume rather than register the same person twice.
+        private readonly SignupAccountAttempt _attempt = new SignupAccountAttempt();
+
+        /// <summary>The sign-in response, once there is one. Carries the JWT and the new user's id.</summary>
+        private AuthenticationResponse? AuthResponse => _attempt.AuthResponse;
+
+        /// <summary>The account exists but its plan could not be started.</summary>
+        private bool SubscriptionFailed => _attempt.SubscriptionFailed;
+
+        /// <summary>
+        /// The plan a registration token gives this app. Registering with the token subscribes the
+        /// user to it, so the wizard skips plan selection and payment, and must not self-subscribe
+        /// over it — that call replaced the subscription the token had just created.
+        /// </summary>
+        private RegistrationTokenAppGrant? _tokenGrant;
 
         // Payment tracking (deferred flow: payment before user creation)
         private string? _paymentTransactionId;
         private string? _paymentExternalId;
+
+        // One signup at a time — see ProcessSignupAsync.
+        private bool _signupInFlight;
 
         // Registration disclaimers gated in front of the Success step (populated
         // after login once the session JWT is stored)
@@ -217,16 +245,29 @@ namespace WildwoodComponents.Blazor.Components.Registration
         private bool HasPreSelectedTier => _preSelectedTier != null && !_showFullTierSelection;
 
         /// <summary>
-        /// Whether tier selection should be skipped (either explicitly or via pre-selected tier).
+        /// Whether the registration token already decided the plan for this app.
         /// </summary>
-        private bool EffectiveSkipTierSelection => SkipTierSelection || HasPreSelectedTier;
+        private bool HasTokenPlan => _tokenGrant != null;
 
         /// <summary>
-        /// Whether the selected tier requires payment.
+        /// Whether tier selection should be skipped (explicitly, via a pre-selected tier, or
+        /// because the token carries the plan).
+        /// </summary>
+        private bool EffectiveSkipTierSelection => SkipTierSelection || HasPreSelectedTier || HasTokenPlan;
+
+        /// <summary>
+        /// Whether the selected tier requires payment. A token's plan is already paid for (or free
+        /// by grant), so it collects nothing.
         /// </summary>
         private bool RequiresPayment =>
-            _selectedTier != null && !_selectedTier.IsFreeTier
+            !HasTokenPlan
+            && _selectedTier != null && !_selectedTier.IsFreeTier
             && _selectedPricing != null && _selectedPricing.Price > 0;
+
+        /// <summary>
+        /// Free-trial days on the plan being paid for, 0 when there is no trial or no payment.
+        /// </summary>
+        private int SelectedTrialDays => RequiresPayment ? (_selectedPricing?.TrialDays ?? 0) : 0;
 
         private void BuildStepConfig()
         {
@@ -253,9 +294,46 @@ namespace WildwoodComponents.Blazor.Components.Registration
 
         #region Event Handlers
 
-        private void HandleFormDataCollected(RegistrationFormData formData)
+        private async Task HandleFormDataCollected(RegistrationFormData formData)
         {
             _collectedFormData = formData;
+
+            // A token that carries a plan for this app decides the plan itself: registering with it
+            // subscribes the user, so there is nothing to choose or pay for. When the details cannot
+            // be read the wizard falls through to the normal flow — the token still grants access,
+            // and "unreadable" must not be reported as "invalid".
+            if (!string.IsNullOrEmpty(formData.Token))
+            {
+                _processingError = null;
+                _processingStatus = "Checking your registration token...";
+                _currentStep = SignupStep.Processing;
+                StateHasChanged();
+
+                RegistrationTokenDetails? details = null;
+                try
+                {
+                    details = await AuthService.GetRegistrationTokenDetailsAsync(formData.Token!, AppId);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Could not read registration token details; continuing with the normal flow");
+                }
+
+                _tokenGrant = SignupPlanDecisions.FindGrantForApp(details, AppId);
+                if (_tokenGrant != null)
+                {
+                    BuildStepConfig();
+                    await ProcessSignupAsync();
+                    return;
+                }
+
+                _processingStatus = null;
+                _currentStep = SignupStep.Register;
+            }
+            else
+            {
+                _tokenGrant = null;
+            }
 
             if (EffectiveSkipTierSelection)
             {
@@ -266,7 +344,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
                 }
                 else
                 {
-                    _ = ProcessSignupAsync();
+                    await ProcessSignupAsync();
                     return;
                 }
             }
@@ -277,7 +355,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
             StateHasChanged();
         }
 
-        private void HandleTierSelected(PricingTierSelectedEventArgs args)
+        private async Task HandleTierSelected(PricingTierSelectedEventArgs args)
         {
             _selectedTierId = args.Tier.Id;
             _selectedPricingId = args.SelectedPricing?.Id;
@@ -294,18 +372,37 @@ namespace WildwoodComponents.Blazor.Components.Registration
             }
             else
             {
-                _ = ProcessSignupAsync();
+                await ProcessSignupAsync();
             }
         }
 
-        private void HandlePaymentSuccess(PaymentSuccessEventArgs args)
+        private async Task HandlePaymentSuccess(PaymentSuccessEventArgs args)
         {
             _paymentTransactionId = args.TransactionId ?? args.PaymentIntentId;
             _paymentExternalId = args.PaymentIntentId;
 
             if (_collectedFormData != null)
             {
-                _ = ProcessSignupAsync();
+                await ProcessSignupAsync();
+            }
+        }
+
+        /// <summary>
+        /// The payment component's Continue button. Payment success already starts the signup, so
+        /// this only has work to do if the wizard is somehow still on the payment step — and it can
+        /// never start a second signup, because <see cref="ProcessSignupAsync"/> refuses to run twice
+        /// at once.
+        /// </summary>
+        private async Task HandlePaymentContinue(PaymentSuccessEventArgs args)
+        {
+            if (_currentStep != SignupStep.Payment) return;
+
+            _paymentTransactionId ??= args.TransactionId ?? args.PaymentIntentId;
+            _paymentExternalId ??= args.PaymentIntentId;
+
+            if (_collectedFormData != null)
+            {
+                await ProcessSignupAsync();
             }
         }
 
@@ -367,14 +464,15 @@ namespace WildwoodComponents.Blazor.Components.Registration
         {
             _currentStep = SignupStep.Register;
             _collectedFormData = null;
-            _registered = false;
-            _loggedIn = false;
-            _authResponse = null;
-            _registrationResponse = null;
             _processingError = null;
             _processingStatus = null;
+            // A fresh start must not carry the previous attempt's payment, plan or outcome into the
+            // next one: a stale grant would skip plan selection, and a stale failure flag would make
+            // a healthy signup read "Plan activation is pending".
+            _attempt.Reset();
             _paymentTransactionId = null;
             _paymentExternalId = null;
+            _tokenGrant = null;
             _pendingDisclaimers = null;
             BuildStepConfig();
             StateHasChanged();
@@ -386,6 +484,11 @@ namespace WildwoodComponents.Blazor.Components.Registration
 
         private async Task ProcessSignupAsync()
         {
+            // One signup at a time. Payment success and the success panel's Continue can both ask
+            // for one, and two concurrent runs would register the same person twice.
+            if (_signupInFlight) return;
+            _signupInFlight = true;
+
             _currentStep = SignupStep.Processing;
             _processingError = null;
             StateHasChanged();
@@ -399,151 +502,41 @@ namespace WildwoodComponents.Blazor.Components.Registration
                     return;
                 }
 
-                // Step 1: Register (if not already registered from a retry)
-                if (!_registered)
-                {
-                    _processingStatus = "Creating your account...";
-                    StateHasChanged();
-
-                    var httpClient = GetHttpClient();
-
-                    HttpResponseMessage response;
-                    if (!string.IsNullOrEmpty(_collectedFormData.Token))
+                // Steps 1-4 — register, sign in, attach the payment, start the plan — are the
+                // shared account creator's, so this wizard and the newer
+                // RegistrationSubscriptionSignup view create accounts by exactly one route. The
+                // attempt is handed in so a retry resumes rather than registering again.
+                var result = await AccountCreator.CreateAsync(
+                    new SignupAccountRequest
                     {
-                        var request = new TokenRegistrationRequest
-                        {
-                            Token = _collectedFormData.Token,
-                            FirstName = _collectedFormData.FirstName ?? string.Empty,
-                            LastName = _collectedFormData.LastName ?? string.Empty,
-                            Username = _collectedFormData.Username ?? string.Empty,
-                            Email = _collectedFormData.Email ?? string.Empty,
-                            Password = _collectedFormData.Password ?? string.Empty,
-                            AppId = AppId,
-                            Platform = "Web",
-                            DeviceInfo = "Browser",
-                            Attribution = await GetAttributionPayloadAsync()
-                        };
-                        response = await httpClient.PostAsJsonAsync("api/userregistration/register-with-token", request);
-                    }
-                    else
-                    {
-                        var request = new OpenRegistrationRequest
-                        {
-                            FirstName = _collectedFormData.FirstName ?? string.Empty,
-                            LastName = _collectedFormData.LastName ?? string.Empty,
-                            Username = _collectedFormData.Username ?? string.Empty,
-                            Email = _collectedFormData.Email ?? string.Empty,
-                            Password = _collectedFormData.Password ?? string.Empty,
-                            AppId = AppId,
-                            Platform = "Web",
-                            DeviceInfo = "Browser",
-                            PricingModelId = _collectedFormData.PricingModelId,
-                            Attribution = await GetAttributionPayloadAsync()
-                        };
-                        response = await httpClient.PostAsJsonAsync("api/userregistration/register", request);
-                    }
-
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        var errorContent = await response.Content.ReadAsStringAsync();
-                        Logger.LogError("Registration failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
-
-                        try
-                        {
-                            var errorResult = System.Text.Json.JsonSerializer.Deserialize<RegistrationSuccessResponse>(
-                                errorContent,
-                                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                            _processingError = errorResult?.Message ?? $"Registration failed: {response.StatusCode}";
-                        }
-                        catch
-                        {
-                            _processingError = $"Registration failed: {response.StatusCode}";
-                        }
-
-                        StateHasChanged();
-                        return;
-                    }
-
-                    _registrationResponse = await response.Content.ReadFromJsonAsync<RegistrationSuccessResponse>();
-                    if (_registrationResponse?.Success != true)
-                    {
-                        _processingError = _registrationResponse?.Message ?? "Registration failed. Please try again.";
-                        StateHasChanged();
-                        return;
-                    }
-
-                    _registered = true;
-                    // Recorded with the account: a later signup from this browser must not reuse the touches.
-                    await ClearAttributionAsync();
-                }
-
-                // Step 2: Login (if not already logged in from a retry)
-                if (!_loggedIn)
-                {
-                    _processingStatus = "Signing you in...";
-                    StateHasChanged();
-
-                    var loginRequest = new LoginRequest
-                    {
-                        Username = _collectedFormData.Username ?? string.Empty,
-                        Email = _collectedFormData.Email ?? string.Empty,
-                        Password = _collectedFormData.Password,
                         AppId = AppId,
-                        Platform = "Web",
-                        DeviceInfo = "Browser"
-                    };
+                        FormData = _collectedFormData,
+                        TierId = _selectedTierId,
+                        PricingId = _selectedPricingId,
+                        PaymentTransactionId = _paymentTransactionId,
+                        PaymentExternalId = _paymentExternalId,
+                        TokenGrant = _tokenGrant,
+                        OnStatus = status =>
+                        {
+                            _processingStatus = status;
+                            StateHasChanged();
+                        }
+                    },
+                    _attempt);
 
-                    _authResponse = await AuthService.LoginAsync(loginRequest);
-
-                    if (_authResponse == null || string.IsNullOrEmpty(_authResponse.JwtToken))
-                    {
-                        _processingError = "Login failed after registration. Please try logging in manually.";
-                        StateHasChanged();
-                        return;
-                    }
-
-                    // Persist session so the user stays logged in after signup completes
-                    await SessionManager.LoginAsync(_authResponse);
-
-                    // Set the auth token on the tier service so subscription calls are authenticated
-                    AppTierService.SetAuthToken(_authResponse.JwtToken);
-                    _loggedIn = true;
-
-                    // Clear password from memory now that login is complete
-                    if (_collectedFormData != null)
-                    {
-                        _collectedFormData.Password = null;
-                    }
-                }
-
-                // Step 3: Link payment transaction to newly created user (if payment was made before registration)
-                var linkId = _paymentExternalId ?? _paymentTransactionId;
-                if (!string.IsNullOrEmpty(linkId) && _authResponse != null && !string.IsNullOrEmpty(_authResponse.Id))
+                if (!result.Success)
                 {
-                    try
-                    {
-                        await PaymentProviderService.LinkTransactionToUserAsync(linkId, _authResponse.Id);
-                    }
-                    catch (Exception linkEx)
-                    {
-                        // Non-fatal — payment was successful, linking can be retried
-                        Logger.LogWarning(linkEx, "Failed to link payment transaction to user");
-                    }
-                }
-
-                // Step 4: Subscribe to selected tier (if a tier was selected)
-                if (!string.IsNullOrEmpty(_selectedTierId))
-                {
-                    _processingStatus = "Activating your plan...";
+                    _processingError = result.ErrorMessage;
                     StateHasChanged();
-
-                    var result = await AppTierService.SubscribeToTierAsync(AppId, _selectedTierId, _selectedPricingId, _paymentTransactionId);
-                    if (!result.Success)
-                    {
-                        Logger.LogWarning("Tier subscription failed: {Message}", result.ErrorMessage);
-                        _subscriptionFailed = true;
-                    }
+                    return;
                 }
+
+                // A new account is entitled to whatever it just signed up for — the token's
+                // grant, the plan it bought, or the free tier. JS calls this reason "signup", and
+                // it is the signup flow's only one: it fires once, here, whether the plan came
+                // from a token grant or a self-subscribe, and even when neither happened, because
+                // the account itself is new.
+                EntitlementService.Invalidate(AppId, EntitlementsChangedReasons.Signup);
 
                 // Step 5: Gate the terminal Success transition on any pending registration
                 // disclaimers. The account exists and the session JWT is stored, so the
@@ -553,10 +546,13 @@ namespace WildwoodComponents.Blazor.Components.Registration
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error during signup processing");
+                // Never empty: the error view only renders when there is a message, so a blank one
+                // would leave the user on the spinner.
                 _processingError = "An error occurred. Please try again.";
             }
             finally
             {
+                _signupInFlight = false;
                 _processingStatus = null;
                 StateHasChanged();
             }
@@ -574,8 +570,8 @@ namespace WildwoodComponents.Blazor.Components.Registration
             // Reading them directly avoids a second, fallible fetch that could fail OPEN and let a
             // user with pending disclaimers through on a transient error, and avoids a showOn filter
             // that could surface a different set than the auth system flagged.
-            var pending = _authResponse?.PendingDisclaimers;
-            if (_authResponse?.RequiresDisclaimerAcceptance == true && pending != null && pending.Count > 0)
+            var pending = AuthResponse?.PendingDisclaimers;
+            if (AuthResponse?.RequiresDisclaimerAcceptance == true && pending != null && pending.Count > 0)
             {
                 _pendingDisclaimers = pending;
                 _currentStep = SignupStep.Disclaimers;
@@ -598,7 +594,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
                 if (acceptances.Count > 0)
                 {
                     // accept-bulk is [Authorize]; the signup response carries the JWT for the new user.
-                    DisclaimerService.SetAuthToken(_authResponse?.JwtToken);
+                    DisclaimerService.SetAuthToken(AuthResponse?.JwtToken);
 
                     var result = await DisclaimerService.AcceptDisclaimersAsync(AppId, acceptances);
                     if (!result.Success)
@@ -619,22 +615,6 @@ namespace WildwoodComponents.Blazor.Components.Registration
         #endregion
 
         #region Helpers
-
-        private HttpClient? _httpClient;
-
-        private HttpClient GetHttpClient()
-        {
-            if (_httpClient == null)
-            {
-                _httpClient = HttpClientFactory.CreateClient(Extensions.ServiceCollectionExtensions.WildwoodHttpClientName);
-                var baseUrl = OptionsAccessor.Value.BaseUrl;
-                if (!string.IsNullOrEmpty(baseUrl))
-                {
-                    _httpClient.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
-                }
-            }
-            return _httpClient;
-        }
 
         private int GetStepIndex(SignupStep step)
         {
@@ -663,15 +643,14 @@ namespace WildwoodComponents.Blazor.Components.Registration
             return GetStepIndex(_currentStep);
         }
 
-        private string GetCurrencySymbol(string currency = "USD")
+        /// <summary>
+        /// A plan's price in the plan's own currency, falling back to the USD this wizard has always
+        /// quoted (React's signup component still hard-codes 'USD' here). It used to print a dollar
+        /// sign for every currency it did not recognise, and a whole number for every price.
+        /// </summary>
+        private static string FormatPlanPrice(AppTierModel? tier, decimal amount)
         {
-            return currency switch
-            {
-                "EUR" => "\u20AC",
-                "GBP" => "\u00A3",
-                "JPY" => "\u00A5",
-                _ => "$"
-            };
+            return CatalogHelpers.FormatPrice(tier, amount, "USD");
         }
 
         #endregion

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Razor.Models;
 using WildwoodComponents.Razor.Services;
@@ -37,6 +37,11 @@ public class PaymentViewComponent : ViewComponent
     /// <param name="subscriptionId">Optional subscription ID for recurring payments</param>
     /// <param name="pricingModelId">Optional pricing model ID</param>
     /// <param name="isSubscription">Whether this is a subscription payment</param>
+    /// <param name="trialDays">
+    /// Free-trial days the subscription starts with. The button offers the trial instead of a
+    /// charge and, with Stripe, the card is saved as a SetupIntent rather than charged today — a
+    /// trial that collects nothing leaves the processor with nothing to bill at trial end.
+    /// </param>
     /// <param name="showAmount">Whether to display the amount (default: true)</param>
     /// <param name="requireBillingAddress">Whether billing address is required</param>
     /// <param name="returnUrl">Return URL for redirect-based providers (BNPL)</param>
@@ -44,6 +49,11 @@ public class PaymentViewComponent : ViewComponent
     /// <param name="metadata">Optional metadata dictionary to attach to the payment</param>
     /// <param name="preloadedProviders">Pre-loaded providers to skip API discovery call</param>
     /// <param name="preselectedProviderId">Provider ID to pre-select as default</param>
+    /// <param name="componentId">
+    /// A stable id for the root element, so a host script can address this instance through
+    /// <c>wwPayment.init</c>/<c>update</c>/<c>getInstance</c>. Generated when omitted, which is
+    /// what every existing usage gets.
+    /// </param>
     public async Task<IViewComponentResult> InvokeAsync(
         string appId,
         decimal amount,
@@ -56,13 +66,15 @@ public class PaymentViewComponent : ViewComponent
         string? subscriptionId = null,
         string? pricingModelId = null,
         bool isSubscription = false,
+        int? trialDays = null,
         bool showAmount = true,
         bool requireBillingAddress = false,
         string? returnUrl = null,
         string? cancelUrl = null,
         Dictionary<string, string>? metadata = null,
         List<PaymentProviderDto>? preloadedProviders = null,
-        string? preselectedProviderId = null)
+        string? preselectedProviderId = null,
+        string? componentId = null)
     {
         List<PaymentProviderDto> providers;
         PaymentProviderDto? defaultProvider = null;
@@ -115,6 +127,7 @@ public class PaymentViewComponent : ViewComponent
             SubscriptionId = subscriptionId,
             PricingModelId = pricingModelId,
             IsSubscription = isSubscription,
+            TrialDays = trialDays,
             ShowAmount = showAmount,
             RequireBillingAddress = requireBillingAddress,
             ReturnUrl = returnUrl,
@@ -123,6 +136,10 @@ public class PaymentViewComponent : ViewComponent
             PreloadedProviders = providers,
             PreselectedProviderId = defaultProvider?.Id
         };
+
+        // A host that has to address this instance from its own script needs its id to be
+        // predictable; the signup view drives one this way. Omitted, the id stays generated.
+        if (componentId is { Length: > 0 }) model.ComponentId = componentId;
 
         return View(model);
     }

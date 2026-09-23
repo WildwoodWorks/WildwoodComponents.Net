@@ -3,6 +3,7 @@
     margin: 0 auto;
 }
 
+.ww-plan-trial,
 .ww-tier-trial-badge {
     color: var(--ww-success, #198754);
     font-size: 0.85rem;

@@ -266,3 +266,13 @@
         max-width: 100%;
     }
 }
+
+/* The tier card's free-trial line (React's TierCardHeader, .ww-plan-trial). Inside the pricing
+   <span> the cycle toggle shows and hides, so it needs display:block to sit on its own line. */
+.ww-plan-trial {
+    display: block;
+    color: var(--ww-success, #198754);
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-top: 0.25rem;
+}

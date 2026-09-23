@@ -1,4 +1,5 @@
 @using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Blazor.Components.RegistrationSubscription.Parts
 @using WildwoodComponents.Blazor.Models
 @using WildwoodComponents.Shared.Models
 @inherits BaseWildwoodComponent
@@ -64,8 +65,9 @@ else if (ShouldShowSinglePanel())
                          IsCompanyMode="@_isCompanyMode"
                          UserId="@UserId"
                          IsAdmin="@IsAdmin"
+                         Currency="@Currency"
                          CurrentTierId="@_subscription?.AppTierId"
-                         OnSubscriptionChanged="HandleAddOnChanged" />
+                         OnEntitlementsChanged="HandleAddOnChanged" />
             break;
 
         case SubscriptionDisplayMode.Usage:
@@ -198,8 +200,9 @@ else
                                                  IsCompanyMode="@_isCompanyMode"
                                                  UserId="@UserId"
                                                  IsAdmin="@IsAdmin"
+                                                 Currency="@Currency"
                                                  CurrentTierId="@_subscription?.AppTierId"
-                                                 OnSubscriptionChanged="HandleAddOnChanged" />
+                                                 OnEntitlementsChanged="HandleAddOnChanged" />
                                 </div>
                             </div>
                         </div>
@@ -241,13 +244,36 @@ else
     </div>
 }
 
-@if (_preview != null)
+@* The plan change, in EVERY display mode: a tier picked in a single-panel layout previewed and
+   then showed nothing when only the tabbed return carried the modal. The card modal behind it is
+   this component's own unless the host brought one through OnPaymentRequired. *@
+@if (Flow is not null)
+{
+    <PlanChangeNotice Step="Flow.Step"
+                      Error="@Flow.Error"
+                      CanRetry="Flow.CanRetry"
+                      Labels="ResolvedLabels"
+                      OnRetry="HandleRetryChangeAsync"
+                      OnDismiss="HandleDismissChangeAsync" />
+}
+
+@if (Flow?.Preview != null)
 {
     <TierChangeConfirmationModal
-        Preview="_preview"
+        Preview="Flow.Preview"
         OnConfirm="HandleConfirmChange"
         OnCancel="HandleCancelConfirmation"
-        IsProcessing="_isProcessing" />
+        IsProcessing="Flow.Busy" />
+}
+
+@if (Flow?.PaymentRequest != null)
+{
+    <PaymentModal AppId="@AppId"
+                  Request="Flow.PaymentRequest"
+                  Currency="@Currency"
+                  Labels="ResolvedLabels"
+                  OnSettled="HandlePaymentSettledAsync"
+                  OnError="HandleChildErrorAsync" />
 }
 
 @if (!string.IsNullOrEmpty(_cancelNotice))
@@ -268,7 +294,8 @@ else
     </div>
 }
 
-@if (!string.IsNullOrEmpty(ErrorMessage))
+@* A failed plan change speaks through the notice above, not twice. *@
+@if (ShowErrorAlert)
 {
     <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
         <i class="fas fa-exclamation-circle me-2"></i>@ErrorMessage

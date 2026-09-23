@@ -6,7 +6,8 @@
     @* Consent banner *@
     @if (ShowBanner)
     {
-        <div class="ww-consent-banner ww-consent-pos-@BannerPosition" role="region" aria-label="Cookie consent">
+        <div class="ww-consent-banner ww-consent-pos-@BannerPosition" role="region" aria-label="Cookie consent"
+             @ref="_bannerRef">
             <div class="ww-consent-banner-text">
                 <strong class="ww-consent-title">@BannerTitle</strong>
                 <p class="ww-consent-body">

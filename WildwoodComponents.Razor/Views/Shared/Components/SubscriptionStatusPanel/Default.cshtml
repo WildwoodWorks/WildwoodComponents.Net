@@ -52,11 +52,13 @@
                             <div class="fw-semibold">@sub.CurrentPeriodEnd.Value.ToString("MMM d, yyyy")</div>
                         </div>
                     }
-                    @if (sub.TrialEndDate.HasValue)
+                    @* The server keeps a finished trial's end date on the row, so the date shows
+                       only while that trial is still running — never on a plan already being paid for. *@
+                    @if (Model.ShowTrialEnd)
                     {
                         <div class="col-sm-6 col-md-3">
                             <div class="small text-muted">Trial Ends</div>
-                            <div class="fw-semibold">@sub.TrialEndDate.Value.ToString("MMM d, yyyy")</div>
+                            <div class="fw-semibold">@sub.TrialEndDate!.Value.ToString("MMM d, yyyy")</div>
                         </div>
                     }
                     @if (sub.GracePeriodEndDate.HasValue)

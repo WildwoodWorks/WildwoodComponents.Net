@@ -1,0 +1,991 @@
+/* WildwoodComponents.Razor - Registration & Subscription styles
+ *
+ * One stylesheet for the whole registration-and-subscription surface; the pricing view is what it
+ * covers today, and the signup and manage views extend it.
+ *
+ * The class families are ported from the JS SDK (packages/wildwood-react/src/styles/components.css)
+ * and the Blazor RegistrationSubscriptionPricing scoped CSS. The names are the cross-stack hook
+ * every stack's end-to-end suite locates by, so they are identical here.
+ *
+ * Every colour, radius and shadow is a --ww-* custom property WITH a fallback value, so the
+ * component looks right in a host that never imported wildwood-razor-themes.css and follows the
+ * host's theme in one that did. A custom property used without a fallback is a defect class in
+ * this project, so there are none here.
+ *
+ * Button, badge and toggle primitives are scoped under .ww-regsub so they cannot collide with a
+ * host's own .ww-btn* rules (same approach as notification-inbox.css).
+ */
+
+/* ========================================
+   The view itself
+   ======================================== */
+
+.ww-regsub {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-regsub-pricing {
+    width: 100%;
+}
+
+.ww-regsub-plans,
+.ww-regsub-packs {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.ww-regsub-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    border: 1px solid var(--ww-border-light, rgba(0, 0, 0, 0.125));
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+/* Shown in place of prices when the catalog cannot be read. Carries a Retry, never a price. */
+.ww-regsub-unavailable {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.ww-regsub-notice {
+    margin: 0;
+    color: var(--ww-text-secondary, #495057);
+}
+
+/* ========================================
+   Button primitives (scoped)
+   ======================================== */
+
+.ww-regsub .ww-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0.5rem 1rem;
+    font: inherit;
+    line-height: 1.2;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-radius: var(--ww-border-radius, 0.375rem);
+    background: transparent;
+    color: inherit;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.ww-regsub .ww-btn-primary {
+    border-color: var(--ww-primary, #0d6efd);
+    background: var(--ww-primary, #0d6efd);
+    color: var(--ww-btn-primary-text, #ffffff);
+}
+
+.ww-regsub .ww-btn-primary:hover:not(:disabled) {
+    background: var(--ww-primary-dark, #0b5ed7);
+    border-color: var(--ww-primary-dark, #0b5ed7);
+}
+
+.ww-regsub .ww-btn-outline {
+    border-color: var(--ww-border-color, #dee2e6);
+    background: var(--ww-bg-primary, #ffffff);
+    color: var(--ww-primary, #0d6efd);
+    text-decoration: none;
+}
+
+.ww-regsub .ww-btn-outline:hover:not(:disabled) {
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+.ww-regsub .ww-btn-block {
+    display: flex;
+    width: 100%;
+}
+
+.ww-regsub .ww-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* ========================================
+   Badge primitives (scoped)
+   ======================================== */
+
+.ww-regsub .ww-badge {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    background: var(--ww-bg-tertiary, #e9ecef);
+    color: var(--ww-text-primary, #212529);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.ww-regsub .ww-badge-success {
+    background: var(--ww-success, #198754);
+    color: var(--ww-btn-success-text, #ffffff);
+}
+
+.ww-regsub .ww-badge-sm {
+    font-size: 0.7rem;
+}
+
+/* ========================================
+   Billing toggle
+   ======================================== */
+
+.ww-apptier-billing-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    color: var(--ww-text-secondary, #495057);
+}
+
+.ww-billing-active {
+    color: var(--ww-text-primary, #212529);
+    font-weight: 600;
+}
+
+.ww-regsub .ww-toggle {
+    position: relative;
+    width: 3rem;
+    height: 1.5rem;
+    padding: 0;
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: 1rem;
+    background: var(--ww-bg-tertiary, #e9ecef);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.ww-regsub .ww-toggle-on {
+    background: var(--ww-primary, #0d6efd);
+    border-color: var(--ww-primary, #0d6efd);
+}
+
+.ww-regsub .ww-toggle-slider {
+    position: absolute;
+    top: 0.125rem;
+    left: 0.125rem;
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 50%;
+    background: var(--ww-bg-primary, #ffffff);
+    box-shadow: var(--ww-shadow-sm, 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075));
+    transition: transform 0.2s;
+}
+
+.ww-regsub .ww-toggle-on .ww-toggle-slider {
+    transform: translateX(1.5rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ww-regsub .ww-toggle,
+    .ww-regsub .ww-toggle-slider,
+    .ww-regsub .ww-btn {
+        transition: none;
+    }
+}
+
+/* ========================================
+   Plan cards
+   ======================================== */
+
+.ww-regsub .ww-tier-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+}
+
+.ww-regsub .ww-tier-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.25rem;
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    background: var(--ww-bg-primary, #ffffff);
+}
+
+.ww-regsub .ww-tier-card.ww-tier-default {
+    border-color: var(--ww-primary-light, #6ea8fe);
+}
+
+/* The plan the visitor arrived having already chosen. */
+.ww-regsub .ww-tier-preselected {
+    border-color: var(--ww-primary, #0d6efd);
+    box-shadow: var(--ww-shadow-sm, 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075));
+}
+
+.ww-regsub .ww-tier-preselected-badge,
+.ww-regsub .ww-tier-default-badge {
+    align-self: flex-start;
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    background: var(--ww-primary, #0d6efd);
+    color: var(--ww-btn-primary-text, #ffffff);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.ww-regsub .ww-tier-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.ww-regsub .ww-tier-header h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-regsub .ww-tier-icon {
+    color: var(--ww-primary, #0d6efd);
+}
+
+.ww-regsub .ww-tier-price {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-regsub .ww-tier-price-amount {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.ww-regsub .ww-tier-price-interval {
+    color: var(--ww-text-muted, #6c757d);
+    font-size: 0.875rem;
+}
+
+.ww-regsub .ww-tier-discount {
+    color: var(--ww-success, #198754);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.ww-plan-trial {
+    color: var(--ww-success, #198754);
+    font-size: 0.875rem;
+}
+
+.ww-regsub .ww-tier-description {
+    margin: 0;
+    color: var(--ww-text-secondary, #495057);
+}
+
+.ww-regsub .ww-tier-features {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ww-regsub .ww-tier-feature-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--ww-text-secondary, #495057);
+    font-size: 0.9rem;
+}
+
+.ww-regsub .ww-tier-feature-disabled {
+    color: var(--ww-text-muted, #6c757d);
+    text-decoration: line-through;
+}
+
+.ww-regsub .ww-tier-feature-check {
+    color: var(--ww-success, #198754);
+    flex: none;
+}
+
+.ww-regsub .ww-tier-feature-x {
+    color: var(--ww-text-muted, #6c757d);
+    flex: none;
+}
+
+.ww-regsub .ww-tier-limits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.ww-regsub .ww-tier-limit-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.ww-regsub .ww-tier-limit-value {
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-regsub .ww-tier-limit-name {
+    color: var(--ww-text-muted, #6c757d);
+    font-size: 0.8rem;
+}
+
+.ww-regsub .ww-tier-footer {
+    margin-top: auto;
+    padding-top: 0.5rem;
+}
+
+/* ========================================
+   Pack groups and cards
+   ======================================== */
+
+.ww-regsub-pack-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ww-regsub-pack-group-title {
+    margin: 0;
+    font-size: 1.05rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-regsub-pack-group-blurb {
+    margin: 0;
+    color: var(--ww-text-secondary, #495057);
+}
+
+.ww-pack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+}
+
+.ww-pack-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    background: var(--ww-bg-primary, #ffffff);
+    color: var(--ww-text-primary, #212529);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.ww-pack-card:hover {
+    border-color: var(--ww-primary, #0d6efd);
+    box-shadow: var(--ww-shadow-sm, 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075));
+}
+
+.ww-pack-card--selected {
+    border-color: var(--ww-primary, #0d6efd);
+    box-shadow: var(--ww-shadow-sm, 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075));
+    background: var(--ww-hover-bg, rgba(13, 110, 253, 0.08));
+}
+
+.ww-pack-card--granted {
+    border-color: var(--ww-success, #198754);
+    background: var(--ww-success-bg, #d1e7dd);
+    cursor: default;
+}
+
+/* Card internals. Every child is phrasing content so the multi-select card can be a button. */
+
+.ww-pack-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-pack-card-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--ww-primary, #0d6efd);
+}
+
+.ww-pack-card-blurb {
+    color: var(--ww-text-secondary, #495057);
+}
+
+.ww-pack-card-meter {
+    color: var(--ww-text-muted, #6c757d);
+    font-size: 0.875rem;
+}
+
+.ww-pack-card-price {
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+/* A pack the operator has defined but not priced. Says so; never implies free. */
+.ww-pack-card-unavailable {
+    font-weight: 400;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-pack-card-trial {
+    color: var(--ww-success, #198754);
+    font-size: 0.875rem;
+}
+
+.ww-pack-card-features {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.ww-pack-card-feature {
+    color: var(--ww-text-secondary, #495057);
+    font-size: 0.875rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ww-pack-card {
+        transition: none;
+    }
+}
+
+/* ========================================
+   Registration & Subscription - signup view
+   ========================================
+
+   Every custom property carries a fallback, so the surface looks right in a host that never
+   imported wildwood-razor-themes.css. A source guard greps this file for a bare var(--ww-...).
+
+   All of the step containers are rendered and only one is ever visible; regsub-signup.js flips
+   `hidden`, which is why nothing here uses display to hide a step. */
+
+.ww-regsub-signup {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    max-width: 44rem;
+}
+
+.ww-signup-step {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.ww-regsub-step-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-signup-step-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.ww-signup-processing {
+    align-items: center;
+    text-align: center;
+    padding: 2rem 1rem;
+}
+
+.ww-signup-processing h3,
+.ww-signup-success h3 {
+    margin: 0;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-signup-processing-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+.ww-signup-success {
+    align-items: center;
+    text-align: center;
+    padding: 2rem 1rem;
+}
+
+.ww-regsub .ww-reg-success-icon {
+    color: var(--ww-success, #198754);
+}
+
+.ww-regsub .ww-text-muted {
+    color: var(--ww-text-muted, #6c757d);
+}
+
+/* ---------- Alerts and the spinner ---------- */
+
+.ww-regsub .ww-alert {
+    padding: 0.75rem 1rem;
+    border: 1px solid transparent;
+    border-radius: var(--ww-border-radius, 0.375rem);
+    font-size: 0.9375rem;
+}
+
+.ww-regsub .ww-alert-danger {
+    color: var(--ww-danger-text, #842029);
+    background: var(--ww-danger-bg, #f8d7da);
+    border-color: var(--ww-danger-border, #f5c2c7);
+}
+
+.ww-regsub .ww-alert-warning {
+    color: var(--ww-warning-text, #664d03);
+    background: var(--ww-warning-bg, #fff3cd);
+    border-color: var(--ww-warning-border, #ffecb5);
+}
+
+.ww-regsub .ww-spinner {
+    display: inline-block;
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid var(--ww-border-color, #dee2e6);
+    border-top-color: var(--ww-primary, #0d6efd);
+    border-radius: 50%;
+    animation: ww-regsub-spin 0.8s linear infinite;
+}
+
+.ww-regsub .ww-spinner-lg {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-width: 3px;
+}
+
+@keyframes ww-regsub-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ww-regsub .ww-spinner {
+        animation-duration: 3s;
+    }
+}
+
+/* ---------- What a registration token grants ---------- */
+
+.ww-regsub-token-plan {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    border: 1px solid var(--ww-success-border, #badbcc);
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    background: var(--ww-success-bg, #d1e7dd);
+}
+
+.ww-regsub-token-plan-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-regsub-token-plan-tier {
+    margin: 0;
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-regsub-token-plan-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.ww-regsub-token-plan-label {
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-regsub-token-plan-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ww-regsub-token-plan-list li {
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--ww-border-radius-sm, 0.25rem);
+    background: var(--ww-bg-primary, #fff);
+    font-size: 0.875rem;
+    color: var(--ww-text-secondary, #495057);
+}
+
+/* ---------- The plan a signup is carrying ---------- */
+
+.ww-plan-summary-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--ww-border-light, rgba(0, 0, 0, 0.125));
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+.ww-plan-summary-name {
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-plan-summary-price {
+    font-weight: 600;
+    color: var(--ww-primary, #0d6efd);
+}
+
+.ww-plan-summary-period,
+.ww-payment-summary-period {
+    font-size: 0.875rem;
+    font-weight: 400;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-plan-summary-trial,
+.ww-order-summary-trial {
+    flex-basis: 100%;
+    font-size: 0.875rem;
+    color: var(--ww-success-text, #0f5132);
+}
+
+/* ---------- The register form ---------- */
+
+.ww-signup-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.ww-regsub .ww-form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.ww-regsub .ww-form-row > .ww-form-group {
+    flex: 1 1 12rem;
+}
+
+.ww-regsub .ww-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.ww-regsub .ww-form-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ww-text-secondary, #495057);
+}
+
+.ww-regsub .ww-form-control {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius, 0.375rem);
+    background: var(--ww-bg-primary, #fff);
+    color: var(--ww-text-primary, #212529);
+    font: inherit;
+}
+
+.ww-regsub .ww-form-control:focus {
+    outline: none;
+    border-color: var(--ww-primary, #0d6efd);
+    box-shadow: 0 0 0 0.2rem var(--ww-primary-focus, rgba(13, 110, 253, 0.25));
+}
+
+.ww-regsub .ww-form-help {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+/* ---------- Order summary and the card forms ---------- */
+
+.ww-regsub .ww-payment-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    border: 1px solid var(--ww-border-light, rgba(0, 0, 0, 0.125));
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+    background: var(--ww-bg-secondary, #f8f9fa);
+}
+
+.ww-regsub .ww-payment-summary-header h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-regsub .ww-payment-summary-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.ww-regsub .ww-payment-summary-price {
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-regsub .ww-payment-summary-card {
+    font-size: 0.875rem;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-pack-card-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--ww-border-light, rgba(0, 0, 0, 0.125));
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+}
+
+.ww-pack-card-form h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+/* Stripe mounts its own iframe here; only the box around it belongs to this package. */
+.ww-stripe-card-element {
+    padding: 0.625rem 0.75rem;
+    border: 1px solid var(--ww-border-color, #dee2e6);
+    border-radius: var(--ww-border-radius, 0.375rem);
+    background: var(--ww-bg-primary, #fff);
+}
+
+.ww-signup-pack-status {
+    margin: 0;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+/* ---------- What became of each pack ---------- */
+
+.ww-pack-outcome-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    text-align: left;
+}
+
+.ww-pack-outcome {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--ww-border-light, rgba(0, 0, 0, 0.125));
+    border-radius: var(--ww-border-radius, 0.375rem);
+}
+
+.ww-pack-outcome-name {
+    font-weight: 500;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-pack-outcome-status {
+    font-size: 0.875rem;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-pack-outcome--failed {
+    border-color: var(--ww-danger-border, #f5c2c7);
+}
+
+.ww-pack-outcome-error {
+    flex-basis: 100%;
+    font-size: 0.875rem;
+    color: var(--ww-danger-text, #842029);
+}
+
+/* ---------- The disclaimer gate ---------- */
+
+.ww-signup-disclaimers-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-disclaimers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.ww-disclaimer-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    border: 1px solid var(--ww-border-light, rgba(0, 0, 0, 0.125));
+    border-radius: var(--ww-border-radius-lg, 0.5rem);
+}
+
+.ww-disclaimer-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+.ww-disclaimer-content {
+    max-height: 16rem;
+    overflow-y: auto;
+    font-size: 0.9375rem;
+    color: var(--ww-text-secondary, #495057);
+}
+
+.ww-disclaimer-accept {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9375rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ========================================
+   HIDING
+   ======================================== */
+
+/* A class that sets `display` outranks the browser's own [hidden] rule, and this surface hides
+   nearly everything with the `hidden` attribute - steps, the card form, the pack picker. One rule
+   settles it for all of them, so a new flex container can never become a panel that will not go
+   away. */
+.ww-regsub [hidden],
+.ww-regsub[hidden] {
+    display: none !important;
+}
+
+/* ========================================
+   MANAGE VIEW
+   ========================================
+
+   The panels are the platform's own and keep subscription-admin.css - load it too. What is here is
+   only what the manage view adds around them: the section headings of the stacked layout, the
+   plan-change notice, and the pack picker. */
+
+.ww-regsub-manage {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.ww-regsub-manage-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.ww-regsub-manage-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ww-regsub-manage-section-title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--ww-text-primary, #212529);
+}
+
+/* React's own active-tab class, alongside whatever the host's CSS framework marks the tab with. */
+.ww-sub-admin-tab-active {
+    font-weight: 600;
+}
+
+/* ---------- The plan-change notice ---------- */
+
+.ww-regsub-plan-change-notice {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.ww-regsub-plan-change-status {
+    margin: 0;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-regsub-plan-change-alert {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.ww-regsub-plan-change-title {
+    color: var(--ww-danger, #dc3545);
+}
+
+.ww-regsub-plan-change-message {
+    flex: 1 1 12rem;
+    color: var(--ww-text-primary, #212529);
+}
+
+/* ---------- The pack picker ---------- */
+
+/* Wider than the confirmation modal: it holds a grid of pack cards. */
+.ww-regsub-pack-picker {
+    max-width: 44rem;
+}
+
+.ww-regsub-pack-picker .ww-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.ww-regsub-pack-picker .ww-modal-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.ww-regsub-pack-status {
+    margin: 0;
+    color: var(--ww-text-muted, #6c757d);
+}
+
+.ww-regsub-pack-retry {
+    display: flex;
+    gap: 0.5rem;
+    margin-right: auto;
+}

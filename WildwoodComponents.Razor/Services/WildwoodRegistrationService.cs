@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Shared.Models;
+using WildwoodComponents.Shared.Utilities;
 using WildwoodComponents.Razor.Models;
 
 namespace WildwoodComponents.Razor.Services;
@@ -36,20 +37,76 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
 
     public async Task<TokenValidationResponse?> ValidateTokenAsync(string token)
     {
+        var body = await ReadTokenValidationAsync(token, null, "Token validation");
+        if (body is null) return null;
+
         try
         {
-            using var response = await _httpClient.GetAsync($"registrationtokens/validate-detailed/{token}");
-            if (response.IsSuccessStatusCode)
+            return JsonSerializer.Deserialize<TokenValidationResponse>(body, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse the token validation response");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// What a registration token grants (tier, pricing, packs and features per app), from the same
+    /// <c>registrationtokens/validate-detailed/{token}</c> answer
+    /// <see cref="ValidateTokenAsync"/> reads — this projection keeps the AppGrants, which the
+    /// server-render model drops.
+    ///
+    /// Returns <c>null</c> when the details cannot be READ — an older server without the route, or
+    /// a transport failure — which is NOT the same as an invalid token: callers fall back to the
+    /// plain validity check instead of telling the registrant their token is bad. An invalid token
+    /// comes back as details with <c>IsValid=false</c> and the server's message.
+    /// </summary>
+    public async Task<RegistrationTokenDetails?> GetRegistrationTokenDetailsAsync(string token, string? appId = null)
+    {
+        var body = await ReadTokenValidationAsync(token, appId, "Registration token details");
+        if (body is null) return null;
+
+        try
+        {
+            var details = JsonSerializer.Deserialize<RegistrationTokenDetails>(body, JsonOptions);
+            if (details is null) return null;
+
+            details.AppGrants ??= new List<RegistrationTokenAppGrant>();
+            return details;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse the registration token details");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// One GET of the detailed token validation, returning the raw body or null when it could not
+    /// be read. Both token readers share it so the route, the URL-encoding of the token (a token
+    /// carrying a slash must stay ONE path segment) and the optional <c>?appId=</c> scope are
+    /// written once.
+    /// </summary>
+    private async Task<string?> ReadTokenValidationAsync(string token, string? appId, string operation)
+    {
+        try
+        {
+            var encodedToken = Uri.EscapeDataString(token ?? string.Empty);
+            var appQuery = string.IsNullOrEmpty(appId) ? string.Empty : $"?appId={Uri.EscapeDataString(appId!)}";
+            using var response = await _httpClient.GetAsync($"registrationtokens/validate-detailed/{encodedToken}{appQuery}");
+
+            if (!response.IsSuccessStatusCode)
             {
-                return await response.Content.ReadFromJsonAsync<TokenValidationResponse>(JsonOptions);
+                _logger.LogWarning("{Operation} failed with status {StatusCode}", operation, response.StatusCode);
+                return null;
             }
 
-            _logger.LogWarning("Token validation failed with status {StatusCode}", response.StatusCode);
-            return null;
+            return await response.Content.ReadAsStringAsync();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating registration token");
+            _logger.LogError(ex, "Error reading registration token validation ({Operation})", operation);
             return null;
         }
     }
@@ -316,5 +373,56 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
             _logger.LogError(ex, "Auto-login failed for user {Email}", email);
             return AuthResult.Failure($"Auto-login failed: {ex.Message}");
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<SignupRegistrationSettings?> GetSignupRegistrationSettingsAsync(string? appId = null)
+    {
+        var resolved = appId is { Length: > 0 } ? appId : _appId;
+        if (!(resolved is { Length: > 0 })) return null;
+
+        try
+        {
+            // Anonymous: a signup screen has no session yet, and this is the same route the
+            // Blazor authentication service reads before the visitor has one. No bearer is put on
+            // the shared client, so nothing leaks into the rest of the request's calls either.
+            using var response = await _httpClient.GetAsync(
+                $"AppComponentConfigurations/{Uri.EscapeDataString(resolved!)}/auth-configuration");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "Auth configuration for app {AppId} returned {StatusCode}", resolved, response.StatusCode);
+                return null;
+            }
+
+            var config = await response.Content.ReadFromJsonAsync<SignupAuthConfigurationSlice>(JsonOptions);
+            if (config is null) return null;
+
+            // Two flags out of a configuration with a dozen: the rest is an operator's business.
+            return new SignupRegistrationSettings
+            {
+                AllowOpenRegistration = config.AllowOpenRegistration,
+                AllowTokenRegistration = config.AllowTokenRegistration
+            };
+        }
+        catch (Exception ex)
+        {
+            // Unreadable is not closed. The caller falls back to open sign-up with the optional
+            // token card, which the server refuses with a clear message if it is not on.
+            _logger.LogWarning(ex, "Could not read the auth configuration for app {AppId}", resolved);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The only two properties of WildwoodAPI's auth-configuration answer this package binds, so
+    /// the rest cannot be relayed by accident.
+    /// </summary>
+    private sealed class SignupAuthConfigurationSlice
+    {
+        public bool AllowOpenRegistration { get; set; }
+
+        public bool AllowTokenRegistration { get; set; }
     }
 }
