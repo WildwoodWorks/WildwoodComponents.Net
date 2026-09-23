@@ -156,6 +156,11 @@ namespace WildwoodComponents.Blazor.Services
         private readonly ILocalStorageService _localStorage;
         private readonly ILogger<AuthenticationService> _logger;
 
+        // WildwoodAPI answers in camelCase ({ "message": ... }). Without case-insensitive matching the
+        // server's message never binds, and the user sees "Login failed with status Unauthorized"
+        // instead of what actually went wrong (e.g. an expired temporary password).
+        private static readonly JsonSerializerOptions ErrorJsonOptions = new() { PropertyNameCaseInsensitive = true };
+
         /// <summary>
         /// The Campaign Attribution engine, when the host registered one. Optional so a host that builds
         /// this service by hand keeps working; every use is best-effort and never breaks a signup.
@@ -335,7 +340,7 @@ namespace WildwoodComponents.Blazor.Services
 
                 try
                 {
-                    var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent);
+                    var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, ErrorJsonOptions);
                     throw new AuthenticationException(errorResponse?.Message ?? $"Login failed with status {response.StatusCode}");
                 }
                 catch (JsonException)
@@ -398,7 +403,7 @@ namespace WildwoodComponents.Blazor.Services
                 
                 try
                 {
-                    var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent);
+                    var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, ErrorJsonOptions);
                     throw new AuthenticationException(errorResponse?.Message ?? $"Registration failed with status {response.StatusCode}");
                 }
                 catch (JsonException)
@@ -610,7 +615,7 @@ namespace WildwoodComponents.Blazor.Services
                         // If we can't parse as RegistrationResponseDto, try generic ErrorResponse
                         try
                         {
-                            var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent);
+                            var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, ErrorJsonOptions);
                             throw new AuthenticationException(errorResponse?.Message ?? $"Token registration failed with status {response.StatusCode}");
                         }
                         catch (JsonException)

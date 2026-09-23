@@ -137,4 +137,22 @@ public class AuthenticationServiceTests
         using var body = JsonDocument.Parse(request.Body!);
         Assert.Equal("tok-1", body.RootElement.GetProperty("resetToken").GetString());
     }
+
+    // ── A failed login shows the server's message ────────────────────────────────
+
+    [Fact]
+    public async Task LoginAsync_Failure_SurfacesTheServersCamelCaseMessage()
+    {
+        // WildwoodAPI answers in camelCase. A case-sensitive parse left Message null, so the
+        // user saw "Login failed with status Unauthorized" instead of the real reason — for an
+        // expired temporary password, the one thing they needed to know.
+        var (service, handler, _, _) = CreateService();
+        handler.When("auth/login", System.Net.HttpStatusCode.Unauthorized,
+            """{"error":"TemporaryPasswordExpired","code":"TEMP_PASSWORD_EXPIRED","message":"Your temporary password has expired.","details":"Ask your administrator."}""");
+
+        var ex = await Assert.ThrowsAsync<AuthenticationException>(() =>
+            service.LoginAsync(new LoginRequest { Username = "invitee", Password = "TempPass123!", AppId = "app-1" }));
+
+        Assert.Equal("Your temporary password has expired.", ex.Message);
+    }
 }
