@@ -155,4 +155,28 @@ public class AuthenticationServiceTests
 
         Assert.Equal("Your temporary password has expired.", ex.Message);
     }
+
+    // ── A token registration keeps the whole session, not just the JWT ───────────
+
+    [Fact]
+    public async Task RegisterWithTokenAsync_BindsTheWholeCamelCaseSession()
+    {
+        // The success body is parsed by hand. Case-sensitively only the attributed JwtToken
+        // bound, so the stored session had no refresh token, user id or roles.
+        var (service, handler, _, _) = CreateService();
+        handler.WhenOk("userregistration/register-with-token",
+            """{"jwtToken":"jwt-1","refreshToken":"refresh-1","userId":"user-1","email":"a@b.test","roles":["User"]}""");
+
+        var response = await service.RegisterWithTokenAsync(new RegistrationRequest
+        {
+            RegistrationToken = "tok-1",
+            Email = "a@b.test",
+            AppId = "app-1"
+        });
+
+        Assert.Equal("jwt-1", response.JwtToken);
+        Assert.Equal("refresh-1", response.RefreshToken);
+        Assert.Equal("user-1", response.UserId);
+        Assert.Equal(["User"], response.Roles);
+    }
 }

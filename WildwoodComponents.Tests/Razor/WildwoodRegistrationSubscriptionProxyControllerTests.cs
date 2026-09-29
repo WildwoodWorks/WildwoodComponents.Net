@@ -586,6 +586,26 @@ public class WildwoodRegistrationSubscriptionProxyControllerTests
         Assert.False(result.Success);
         Assert.Equal("That email is already registered.", result.Message);
         Assert.Equal("registration_refused", result.ErrorCode);
+        Assert.Null(result.Status);
+    }
+
+    /// <summary>
+    /// The server's own code and status reach the page, so the signup_error funnel category is
+    /// username_taken rather than unknown, as it is in @wildwood/react-shared.
+    /// </summary>
+    [Fact]
+    public async Task Register_RelaysTheServersCodeAndStatus()
+    {
+        var (controller, handler) = CreateController(accessToken: null);
+        handler.When("userregistration/register", System.Net.HttpStatusCode.Conflict,
+            """{"success":false,"errorCode":"USERNAME_EXISTS","message":"That username is taken."}""");
+
+        var result = OkValue<SignupRegisterResultModel>(await controller.Register(
+            new SignupRegisterProxyRequest { Email = "a@b.test" }, null));
+
+        Assert.False(result.Success);
+        Assert.Equal("USERNAME_EXISTS", result.ErrorCode);
+        Assert.Equal(409, result.Status);
     }
 
     /// <summary>

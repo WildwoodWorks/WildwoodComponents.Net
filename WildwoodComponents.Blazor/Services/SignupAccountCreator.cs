@@ -74,7 +74,10 @@ namespace WildwoodComponents.Blazor.Services
     /// <summary>Codes <see cref="SignupAccountCreator"/> reports a refusal under.</summary>
     public static class SignupAccountErrorCodes
     {
-        /// <summary>The server would not create the account. JS spells this one the same way.</summary>
+        /// <summary>
+        /// The server would not create the account and sent no code of its own. JS spells this one
+        /// the same way, and falls back to it under the same rule.
+        /// </summary>
         public const string RegistrationRefused = "registration_refused";
 
         /// <summary>The account was created but the sign-in that follows it did not answer a token.</summary>
@@ -159,8 +162,17 @@ namespace WildwoodComponents.Blazor.Services
         /// <summary>The refusal, in the server's own words where it sent any.</summary>
         public string? ErrorMessage { get; set; }
 
-        /// <summary>One of <see cref="SignupAccountErrorCodes"/>, when the attempt was refused.</summary>
+        /// <summary>
+        /// When the attempt was refused: the server's own error code where it sent one (e.g.
+        /// <c>USERNAME_EXISTS</c>), otherwise one of <see cref="SignupAccountErrorCodes"/>.
+        /// </summary>
         public string? ErrorCode { get; set; }
+
+        /// <summary>
+        /// The HTTP status of a registration the server refused with a non-success status; null
+        /// otherwise. Read by the signup_error funnel category when the code alone says nothing.
+        /// </summary>
+        public int? HttpStatus { get; set; }
 
         /// <summary>The sign-in response, on success.</summary>
         public AuthenticationResponse? AuthResponse { get; set; }
@@ -321,19 +333,24 @@ namespace WildwoodComponents.Blazor.Services
                 _logger?.LogError("Registration failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
 
                 string message;
+                string? serverCode = null;
                 try
                 {
                     var errorResult = System.Text.Json.JsonSerializer.Deserialize<RegistrationSuccessResponse>(
                         errorContent,
                         new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                     message = errorResult?.Message ?? $"Registration failed: {response.StatusCode}";
+                    serverCode = errorResult?.ErrorCode;
                 }
                 catch
                 {
                     message = $"Registration failed: {response.StatusCode}";
                 }
 
-                return Refused(message, SignupAccountErrorCodes.RegistrationRefused);
+                // The server's own code when it sent one, as JS's toFailure does: a 409
+                // USERNAME_EXISTS is a different problem from a 403 RegistrationNotAllowed, and both
+                // a host routing on the code and the signup_error funnel category need to see it.
+                return Refused(message, RefusalCode(serverCode), (int)response.StatusCode);
             }
 
             attempt.RegistrationResponse = await response.Content.ReadFromJsonAsync<RegistrationSuccessResponse>();
@@ -341,7 +358,7 @@ namespace WildwoodComponents.Blazor.Services
             {
                 return Refused(
                     attempt.RegistrationResponse?.Message ?? "Registration failed. Please try again.",
-                    SignupAccountErrorCodes.RegistrationRefused);
+                    RefusalCode(attempt.RegistrationResponse?.ErrorCode));
             }
 
             attempt.Registered = true;
@@ -448,9 +465,15 @@ namespace WildwoodComponents.Blazor.Services
 
         #region Helpers
 
-        private static SignupAccountResult Refused(string message, string code)
+        private static SignupAccountResult Refused(string message, string code, int? httpStatus = null)
         {
-            return new SignupAccountResult { Success = false, ErrorMessage = message, ErrorCode = code };
+            return new SignupAccountResult { Success = false, ErrorMessage = message, ErrorCode = code, HttpStatus = httpStatus };
+        }
+
+        /// <summary>The server's refusal code, or <see cref="SignupAccountErrorCodes.RegistrationRefused"/> when it sent none.</summary>
+        private static string RefusalCode(string? serverCode)
+        {
+            return string.IsNullOrWhiteSpace(serverCode) ? SignupAccountErrorCodes.RegistrationRefused : serverCode.Trim();
         }
 
         private async Task<AttributionPayloadModel?> GetAttributionPayloadAsync()

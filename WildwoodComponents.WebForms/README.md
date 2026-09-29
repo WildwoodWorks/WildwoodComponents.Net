@@ -126,8 +126,11 @@ kept in session state (a session ends after 30 minutes without activity), the cu
 touch, and the request's path (never its query string). The device class is omitted unless you
 pass `deviceClass` (`mobile`, `tablet` or `desktop`). It follows the same consent decision as
 `Capture`: `Denied` sends nothing and drops what was held. Server-only names (`signup_complete`,
-`trial_started`, `purchase`) and malformed names are never sent; a custom name the app does not
-allow is dropped by the server. `Track` never throws, and a registration made through
+`trial_started`, `purchase`) and malformed names are never sent. Like the JS SDK, nothing is sent
+until the app's attribution config says so: the config (`api/attribution/config`, cached for five
+minutes, a failed load never cached) must have funnel tracking on, a custom name must be one the app
+allows, and the four signup steps need **Track signup steps**. `Track` returns true once the event is
+queued, and the config check happens in the background with the send. `Track` never throws, and a registration made through
 `WildwoodWebForms.Auth` carries the same session key, which joins the account to its funnel.
 Because session state belongs to the visit, a server-side session counts as returning only after
 30 idle minutes within the same ASP.NET session; the browser engine, which keeps its keys in

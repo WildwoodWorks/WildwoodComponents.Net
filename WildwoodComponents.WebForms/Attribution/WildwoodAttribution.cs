@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -128,9 +129,10 @@ namespace WildwoodComponents.WebForms.Attribution
         /// <summary>
         /// Records a Campaign Attribution funnel event from the server (the counterpart of the browser
         /// engines' <c>track()</c>), fire-and-forget: the request is built from session state now and
-        /// sent in the background, so the page never waits on it. Returns whether an event was sent;
+        /// sent in the background, so the page never waits on it. Returns whether an event was queued;
         /// false when there is no request, consent was declined, the name is malformed or server-only,
-        /// or the app id is not configured. Never throws.
+        /// or the app id is not configured. A queued event is still dropped, in the background, when
+        /// the app's attribution config does not accept it (see <see cref="GetConfigAsync"/>). Never throws.
         /// </summary>
         /// <example>
         /// <code>
@@ -160,7 +162,7 @@ namespace WildwoodComponents.WebForms.Attribution
 
                 // Read everything request-bound above, before anything awaits; the send outlives the request.
                 var client = WildwoodWebForms.HttpClient;
-                _ = SendEventsAsync(client, body);
+                _ = SendIfAcceptedAsync(client, body);
                 return true;
             }
             catch (Exception)
@@ -189,12 +191,121 @@ namespace WildwoodComponents.WebForms.Attribution
                     return false;
                 }
 
-                return await SendEventsAsync(WildwoodWebForms.HttpClient, body, cancellationToken).ConfigureAwait(false);
+                return await SendIfAcceptedAsync(WildwoodWebForms.HttpClient, body, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception)
             {
                 return false;
             }
+        }
+
+        /// <summary>How long a loaded attribution config is reused before it is fetched again.</summary>
+        public static readonly TimeSpan ConfigCacheDuration = TimeSpan.FromMinutes(5);
+
+        private static readonly ConcurrentDictionary<string, CachedConfig> ConfigCache =
+            new ConcurrentDictionary<string, CachedConfig>(StringComparer.Ordinal);
+
+        private static readonly JsonSerializerOptions ConfigJsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+
+        /// <summary>
+        /// Sends the event only when the app's attribution config accepts it — funnel tracking on, the
+        /// name allowed, signup steps only while <c>TrackSignupSteps</c> is on — which is
+        /// <c>@wildwood/core</c>'s rule: nothing is sent until the config says so. A config that could
+        /// not be loaded accepts nothing. What <see cref="Track"/> and <see cref="TrackAsync"/> send
+        /// through; <see cref="SendEventsAsync"/> is the unchecked post beneath it. Never throws.
+        /// </summary>
+        public static async Task<bool> SendIfAcceptedAsync(
+            HttpClient client,
+            AttributionEventsRequestModel body,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var config = await GetConfigAsync(client, body.AppId, cancellationToken).ConfigureAwait(false);
+                foreach (var e in body.Events)
+                {
+                    if (!AttributionRules.IsFunnelEventAcceptedBy(config, e.Name))
+                    {
+                        return false;
+                    }
+                }
+
+                return await SendEventsAsync(client, body, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// The app's public attribution config (<c>GET attribution/config?appId=</c>), cached for
+        /// <see cref="ConfigCacheDuration"/>. A failure is never cached, so the next event tries again.
+        /// Null when it could not be loaded. Never throws.
+        /// </summary>
+        public static async Task<AttributionConfigModel?> GetConfigAsync(
+            HttpClient client,
+            string? appId,
+            CancellationToken cancellationToken = default)
+        {
+            if (client is null || appId is null || appId.Trim().Length == 0)
+            {
+                return null;
+            }
+
+            var key = appId.Trim();
+            if (ConfigCache.TryGetValue(key, out var cached) && DateTimeOffset.UtcNow - cached.LoadedAt < ConfigCacheDuration)
+            {
+                return cached.Config;
+            }
+
+            try
+            {
+                using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+                {
+                    timeout.CancelAfter(EventsTimeout);
+                    var escapedAppId = Uri.EscapeDataString(key);
+                    using (var response = await client.GetAsync($"attribution/config?appId={escapedAppId}", timeout.Token).ConfigureAwait(false))
+                    {
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            return null;
+                        }
+
+                        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        var config = JsonSerializer.Deserialize<AttributionConfigModel>(json, ConfigJsonOptions);
+                        if (config is not null)
+                        {
+                            ConfigCache[key] = new CachedConfig(config, DateTimeOffset.UtcNow);
+                        }
+
+                        return config;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>Forgets every cached config, so the next event reloads it. For tests and config changes.</summary>
+        public static void ResetConfigCache()
+        {
+            ConfigCache.Clear();
+        }
+
+        private sealed class CachedConfig
+        {
+            public CachedConfig(AttributionConfigModel config, DateTimeOffset loadedAt)
+            {
+                Config = config;
+                LoadedAt = loadedAt;
+            }
+
+            public AttributionConfigModel Config { get; }
+
+            public DateTimeOffset LoadedAt { get; }
         }
 
         /// <summary>

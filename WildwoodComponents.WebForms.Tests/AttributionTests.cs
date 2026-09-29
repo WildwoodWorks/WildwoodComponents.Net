@@ -418,6 +418,47 @@ namespace WildwoodComponents.WebForms.Tests
             Assert.False(await WildwoodAttribution.SendEventsAsync(null!, body!));
         }
 
+        private const string FunnelOnConfig =
+            "{\"appId\":\"cfg-app\",\"isEnabled\":true,\"funnelTrackingEnabled\":true,\"trackSignupSteps\":false,\"customEventNames\":[\"demo_booked\"]}";
+
+        [Fact]
+        public async Task SendIfAccepted_sends_only_what_the_apps_config_accepts()
+        {
+            // @wildwood/core sends nothing the config does not accept; WebForms used to post regardless.
+            WildwoodAttribution.ResetConfigCache();
+            var handler = new FakeHttpMessageHandler().WhenOk("attribution/config", FunnelOnConfig);
+            var client = handler.CreateClient();
+            var store = new WildwoodAttributionStore(new InMemoryTokenStore());
+
+            Assert.True(await WildwoodAttribution.SendIfAcceptedAsync(client, store.CreateEventsRequest("cfg-app", "cta_click", "hero")!));
+            Assert.True(await WildwoodAttribution.SendIfAcceptedAsync(client, store.CreateEventsRequest("cfg-app", "demo_booked")!));
+            Assert.False(await WildwoodAttribution.SendIfAcceptedAsync(client, store.CreateEventsRequest("cfg-app", "other_custom")!));
+            Assert.False(await WildwoodAttribution.SendIfAcceptedAsync(client, store.CreateEventsRequest("cfg-app", "signup_view")!));
+
+            Assert.Equal(2, handler.CountFor("attribution/events"));
+            // Loaded once, then served from the cache.
+            Assert.Equal(1, handler.CountFor("attribution/config"));
+            Assert.Equal("GET https://api.example.test/api/attribution/config?appId=cfg-app", handler.UrlsSeen()[0]);
+        }
+
+        [Fact]
+        public async Task SendIfAccepted_sends_nothing_when_funnel_tracking_is_off_or_the_config_fails()
+        {
+            WildwoodAttribution.ResetConfigCache();
+            var off = new FakeHttpMessageHandler().WhenOk("attribution/config", "{\"isEnabled\":true,\"funnelTrackingEnabled\":false}");
+            var store = new WildwoodAttributionStore(new InMemoryTokenStore());
+            Assert.False(await WildwoodAttribution.SendIfAcceptedAsync(off.CreateClient(), store.CreateEventsRequest("off-app", "page_view")!));
+            Assert.Equal(0, off.CountFor("attribution/events"));
+
+            var failing = new FakeHttpMessageHandler().When("attribution/config", System.Net.HttpStatusCode.InternalServerError, "{}");
+            var client = failing.CreateClient();
+            Assert.False(await WildwoodAttribution.SendIfAcceptedAsync(client, store.CreateEventsRequest("down-app", "page_view")!));
+            Assert.False(await WildwoodAttribution.SendIfAcceptedAsync(client, store.CreateEventsRequest("down-app", "page_view")!));
+            Assert.Equal(0, failing.CountFor("attribution/events"));
+            // A failure is never cached: the second event asked again.
+            Assert.Equal(2, failing.CountFor("attribution/config"));
+        }
+
         [Fact]
         public async Task Track_without_a_request_sends_nothing_rather_than_throwing()
         {

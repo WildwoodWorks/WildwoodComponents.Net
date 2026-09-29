@@ -168,6 +168,14 @@ public class RegistrationSuccessResponse
     public bool Success { get; set; }
     public string? UserId { get; set; }
     public string? Message { get; set; }
+    /// <summary>WildwoodAPI's machine-readable error code on a refusal (e.g. <c>USERNAME_EXISTS</c>).</summary>
+    public string? ErrorCode { get; set; }
+    /// <summary>
+    /// The HTTP status when the server refused with a non-success status; null otherwise. Set by
+    /// <see cref="Services.WildwoodRegistrationService"/>, never read from the body.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public int? HttpStatus { get; set; }
     public bool RequiresStripeSetup { get; set; }
     public bool RequiresPaymentSetup { get; set; }
     public bool IsSubscription { get; set; }

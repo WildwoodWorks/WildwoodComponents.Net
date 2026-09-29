@@ -103,6 +103,19 @@ public class AttributionServiceTests
     }
 
     [Fact]
+    public async Task TrackAsync_WithAPath_PassesItInTheOptionsObject()
+    {
+        var js = new FakeJsRuntime();
+
+        await Create(js).TrackAsync("demo_booked", "pricing", null, "/pricing");
+
+        var call = Assert.Single(js.Module.Calls);
+        var options = System.Text.Json.JsonSerializer.Serialize(
+            call.Args?[1], new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        Assert.Equal("{\"label\":\"pricing\",\"value\":null,\"path\":\"/pricing\"}", options);
+    }
+
+    [Fact]
     public async Task TrackCtaAsync_AndFlushAsync_CallTheEngine()
     {
         var js = new FakeJsRuntime();
