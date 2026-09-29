@@ -29,5 +29,21 @@ namespace WildwoodComponents.Blazor.Services
 
         /// <summary>The engine's current state, or null when unavailable.</summary>
         Task<AttributionStateModel?> GetStateAsync();
+
+        /// <summary>
+        /// Tracks a funnel event (<c>cta_click</c>, <c>signup_start</c>, a configured custom name...). The engine
+        /// buffers it until the app config loads and drops it when funnel tracking is off, the name is not
+        /// allowed, or it is a one-shot already sent this session. Never throws.
+        /// </summary>
+        /// <param name="name">A standard client event or one of the app's custom names (<c>^[a-z0-9_]{1,40}$</c>).</param>
+        /// <param name="label">Optional label (CTA name, plan id, error category); trimmed and capped at 100 characters.</param>
+        /// <param name="value">Optional number.</param>
+        Task TrackAsync(string name, string? label = null, double? value = null) => Task.CompletedTask;
+
+        /// <summary>Tracks a <c>cta_click</c> with this label. Never throws.</summary>
+        Task TrackCtaAsync(string label) => Task.CompletedTask;
+
+        /// <summary>Sends the queued funnel events now, for example before a hard navigation. Never throws.</summary>
+        Task FlushAsync() => Task.CompletedTask;
     }
 }

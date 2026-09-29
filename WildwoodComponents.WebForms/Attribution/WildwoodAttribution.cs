@@ -1,4 +1,10 @@
 using System;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Web;
 using WildwoodComponents.Shared.Models;
 using WildwoodComponents.Shared.Utilities;
@@ -108,6 +114,147 @@ namespace WildwoodComponents.WebForms.Attribution
             {
                 // Best-effort.
             }
+        }
+
+        /// <summary>How long a funnel event may take before it is abandoned. Tracking must never hold up a page.</summary>
+        public static readonly TimeSpan EventsTimeout = TimeSpan.FromSeconds(3);
+
+        private static readonly JsonSerializerOptions EventsJsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        };
+
+        /// <summary>
+        /// Records a Campaign Attribution funnel event from the server (the counterpart of the browser
+        /// engines' <c>track()</c>), fire-and-forget: the request is built from session state now and
+        /// sent in the background, so the page never waits on it. Returns whether an event was sent;
+        /// false when there is no request, consent was declined, the name is malformed or server-only,
+        /// or the app id is not configured. Never throws.
+        /// </summary>
+        /// <example>
+        /// <code>
+        /// WildwoodAttribution.Track(new HttpContextWrapper(HttpContext.Current), "signup_view");
+        /// WildwoodAttribution.Track(context, "plan_selected", label: tierId);
+        /// </code>
+        /// </example>
+        /// <param name="context">The current request; its path becomes the event's page path.</param>
+        /// <param name="name">A standard client event (page_view, cta_click, signup_start...) or one of the app's custom names.</param>
+        /// <param name="label">Optional label: a CTA name, a plan id, a signup_error category. Never personal data.</param>
+        /// <param name="value">Optional number.</param>
+        /// <param name="deviceClass"><c>mobile</c>, <c>tablet</c> or <c>desktop</c> when the host knows it; omitted otherwise.</param>
+        public static bool Track(
+            HttpContextBase? context,
+            string name,
+            string? label = null,
+            double? value = null,
+            string? deviceClass = null)
+        {
+            try
+            {
+                var body = BuildEventsRequest(context, name, label, value, deviceClass);
+                if (body is null)
+                {
+                    return false;
+                }
+
+                // Read everything request-bound above, before anything awaits; the send outlives the request.
+                var client = WildwoodWebForms.HttpClient;
+                _ = SendEventsAsync(client, body);
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// <see cref="Track"/>, awaited: true when the server accepted the event. Never throws; a timeout
+        /// (<see cref="EventsTimeout"/>) or an error answers false.
+        /// </summary>
+        public static async Task<bool> TrackAsync(
+            HttpContextBase? context,
+            string name,
+            string? label = null,
+            double? value = null,
+            string? deviceClass = null,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var body = BuildEventsRequest(context, name, label, value, deviceClass);
+                if (body is null)
+                {
+                    return false;
+                }
+
+                return await SendEventsAsync(WildwoodWebForms.HttpClient, body, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Posts a funnel event body to <c>attribution/events?appId=</c> on <paramref name="client"/>, whose base
+        /// address is the WildwoodAPI root ending in <c>/api/</c>. Answers whether the server accepted it. Never
+        /// throws, and gives up after <see cref="EventsTimeout"/>.
+        /// </summary>
+        public static async Task<bool> SendEventsAsync(
+            HttpClient client,
+            AttributionEventsRequestModel body,
+            CancellationToken cancellationToken = default)
+        {
+            if (client is null || body is null || string.IsNullOrWhiteSpace(body.AppId))
+            {
+                return false;
+            }
+
+            try
+            {
+                using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+                {
+                    timeout.CancelAfter(EventsTimeout);
+
+                    // appId rides in the query string too: the server's rate-limit partition reads it.
+                    using (var request = new HttpRequestMessage(
+                               HttpMethod.Post,
+                               "attribution/events?appId=" + Uri.EscapeDataString(body.AppId)))
+                    {
+                        request.Content = new StringContent(
+                            JsonSerializer.Serialize(body, EventsJsonOptions), Encoding.UTF8, "application/json");
+
+                        using (var response = await client.SendAsync(request, timeout.Token).ConfigureAwait(false))
+                        {
+                            return response.IsSuccessStatusCode;
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Measurement: a lost event costs nothing.
+                return false;
+            }
+        }
+
+        private static AttributionEventsRequestModel? BuildEventsRequest(
+            HttpContextBase? context,
+            string name,
+            string? label,
+            double? value,
+            string? deviceClass)
+        {
+            var request = context?.Request;
+            if (request is null)
+            {
+                return null;
+            }
+
+            var appId = WildwoodWebForms.Options.AppId;
+            return Store.CreateEventsRequest(appId, name, label, value, request.Url?.AbsolutePath, deviceClass);
         }
     }
 }

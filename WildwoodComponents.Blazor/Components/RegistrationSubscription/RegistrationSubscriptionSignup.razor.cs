@@ -54,6 +54,9 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
 
         [Inject] private IWildwoodSessionManager SessionManager { get; set; } = default!;
 
+        // Campaign Attribution, resolved optionally so hosts that register services by hand keep working.
+        [Inject] private IServiceProvider Services { get; set; } = default!;
+
         #region Parameters — common to every view
 
         /// <summary>The app the account is being created for.</summary>
@@ -362,7 +365,8 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
                 ErrorReported = ReportAsync,
                 AlreadySignedInDetected = RaiseAlreadySignedInAsync,
                 EntitlementsChanged = RaiseEntitlementsChangedAsync,
-                SignupCompleted = RaiseSignupCompleteAsync
+                SignupCompleted = RaiseSignupCompleteAsync,
+                Funnel = new SignupFunnel(Services?.GetService(typeof(IAttributionService)) as IAttributionService)
             };
 
             await _flow.StartAsync();

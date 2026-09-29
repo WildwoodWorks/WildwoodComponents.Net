@@ -59,6 +59,39 @@ namespace WildwoodComponents.Blazor.Services
 
         public Task<AttributionStateModel?> GetStateAsync() => InvokeAsync<AttributionStateModel>("getState");
 
+        public Task TrackAsync(string name, string? label = null, double? value = null)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return Task.CompletedTask;
+            // The engine takes @wildwood/core's options object: { label, value }.
+            return InvokeVoidAsync("track", name, new FunnelTrackOptions { Label = label, Value = value });
+        }
+
+        public Task TrackCtaAsync(string label)
+            => string.IsNullOrWhiteSpace(label) ? Task.CompletedTask : InvokeVoidAsync("trackCta", label);
+
+        public Task FlushAsync() => InvokeVoidAsync("flush");
+
+        private async Task InvokeVoidAsync(string fn, params object?[] args)
+        {
+            try
+            {
+                var module = await GetModuleAsync();
+                await module.InvokeVoidAsync(fn, args);
+            }
+            catch (Exception ex)
+            {
+                // Prerendering, a disconnected circuit or a blocked module: funnel tracking is best-effort.
+                _logger.LogDebug(ex, "Attribution engine call '{Fn}' failed", fn);
+            }
+        }
+
+        /// <summary>The engine's track options, serialized as <c>{ label, value }</c>.</summary>
+        internal sealed class FunnelTrackOptions
+        {
+            public string? Label { get; set; }
+            public double? Value { get; set; }
+        }
+
         private async Task<T?> InvokeAsync<T>(string fn, params object?[] args) where T : class
         {
             try

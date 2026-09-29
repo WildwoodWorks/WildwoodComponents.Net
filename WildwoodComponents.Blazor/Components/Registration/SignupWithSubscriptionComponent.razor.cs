@@ -55,6 +55,18 @@ namespace WildwoodComponents.Blazor.Components.Registration
 
         [Inject] private new ILogger<SignupWithSubscriptionComponent> Logger { get; set; } = default!;
 
+        // Campaign Attribution, resolved optionally so hosts that register services by hand keep working.
+        [Inject] private IServiceProvider Services { get; set; } = default!;
+
+        private SignupFunnel? _funnel;
+
+        /// <summary>
+        /// The plan and checkout funnel events. The embedded TokenRegistrationComponent reports the form's
+        /// own steps (view, start, submit, error).
+        /// </summary>
+        private SignupFunnel Funnel
+            => _funnel ??= new SignupFunnel(Services?.GetService(typeof(IAttributionService)) as IAttributionService);
+
         #endregion
 
         #region Parameters
@@ -341,6 +353,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
                 {
                     _currentStep = SignupStep.Payment;
                     BuildStepConfig();
+                    await Funnel.CheckoutStartAsync(_selectedPricing?.Id, _selectedTier?.Id, _selectedTier?.Name);
                 }
                 else
                 {
@@ -361,6 +374,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
             _selectedPricingId = args.SelectedPricing?.Id;
             _selectedTier = args.Tier;
             _selectedPricing = args.SelectedPricing;
+            await Funnel.PlanSelectedAsync(args.Tier.Id, args.Tier.Name);
 
             // Check if this tier requires payment
             var isPaid = !args.Tier.IsFreeTier && args.SelectedPricing != null && args.SelectedPricing.Price > 0;
@@ -368,6 +382,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
             {
                 BuildStepConfig();
                 _currentStep = SignupStep.Payment;
+                await Funnel.CheckoutStartAsync(args.SelectedPricing?.Id, args.Tier.Id, args.Tier.Name);
                 StateHasChanged();
             }
             else
@@ -527,6 +542,8 @@ namespace WildwoodComponents.Blazor.Components.Registration
                 if (!result.Success)
                 {
                     _processingError = result.ErrorMessage;
+                    // The category only: never the visitor's input or the server's words.
+                    await Funnel.ErrorFromCodeAsync(result.ErrorCode);
                     StateHasChanged();
                     return;
                 }

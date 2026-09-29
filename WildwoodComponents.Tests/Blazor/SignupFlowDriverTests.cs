@@ -518,6 +518,60 @@ public class SignupFlowDriverTests
         Assert.Equal(SignupStep.Payment, driver.State.Step);
     }
 
+    /// <summary>
+    /// The flow's funnel events, as @wildwood/react-shared useSignupFlow sends them: signup_view on the
+    /// form, signup_submit on submit, plan_selected with the tier id, and checkout_start with the pricing
+    /// id when the paid plan's card step opens.
+    /// </summary>
+    [Fact]
+    public async Task ReportsTheFunnelSteps()
+    {
+        var harness = Ready();
+        var attribution = new RecordingFunnelAttribution();
+        var driver = harness.Build(settings => settings.PreSelectedTierId = "tier-free");
+        driver.Funnel = new SignupFunnel(attribution);
+
+        await driver.StartAsync();
+        await driver.ChangePlanAsync();
+        await driver.ChoosePlanAsync(driver.Catalog!.Tiers[1]);
+        await driver.SubmitFormAsync(Form());
+
+        Assert.Equal(SignupStep.Payment, driver.State.Step);
+        Assert.Equal(
+            new[] { "signup_view", "plan_selected:tier-pro", "signup_start", "signup_submit", "checkout_start:price-pro" },
+            attribution.Calls.Select(c => c.Label is null ? c.Name : c.Name + ":" + c.Label));
+    }
+
+    [Fact]
+    public async Task ARejectedTokenReportsTheInvalidTokenCategory()
+    {
+        var harness = Ready();
+        var attribution = new RecordingFunnelAttribution();
+        var driver = harness.Build();
+        driver.Funnel = new SignupFunnel(attribution);
+        harness.Handler.On(TokenDetailsRoute, """{"isValid":false,"errorMessage":"Expired for jane@example.com"}""");
+
+        await driver.StartAsync();
+        await driver.SubmitFormAsync(Form("BAD-TOKEN"));
+
+        Assert.Contains(attribution.Calls, c => c.Name == "signup_error" && c.Label == "invalid_token");
+        Assert.DoesNotContain(attribution.Calls, c => c.Label is not null && c.Label.Contains("jane"));
+    }
+
+    [Fact]
+    public async Task ADetachedFlowReportsNothingMore()
+    {
+        var harness = Ready();
+        var attribution = new RecordingFunnelAttribution();
+        var driver = harness.Build();
+        driver.Funnel = new SignupFunnel(attribution);
+
+        await driver.StartAsync();
+        driver.Stop();
+
+        Assert.Null(driver.Funnel);
+    }
+
     [Fact]
     public async Task WhenTheServerRefusesTheSubscription_TheSignupStillFinishes_AndSaysItIsPending()
     {

@@ -104,6 +104,35 @@ existing session cookie. `Denied` drops anything held and captures nothing furth
 SDK rule that stored touches are removed once consent no longer grants them. The browser engine
 applies its own gate from the app's consent configuration and needs no wiring here.
 
+**Funnel events.** When the app turns funnel tracking on, the browser engine records page views,
+scroll depth, engagement and `data-ww-cta` clicks by itself, and exposes
+`window.wildwoodAttribution.track(name, { label, value })`, `trackCta(label)` and `flush()`
+(see the Razor attribution README). A server-rendered page can record the same events from
+code-behind:
+
+```csharp
+// Fire-and-forget: built from session state now, sent in the background (3 s timeout).
+WildwoodAttribution.Track(new HttpContextWrapper(HttpContext.Current), "signup_view");
+WildwoodAttribution.Track(context, "plan_selected", label: tierId);
+WildwoodAttribution.Track(context, "signup_error",
+    label: AttributionRules.SignupErrorCategoryFromCode(result.ErrorCode, statusCode));
+
+// Or awaited, when the answer matters (true when the server accepted the event):
+bool sent = await WildwoodAttribution.TrackAsync(context, "demo_booked", value: 1);
+```
+
+`Track` posts one event to `api/attribution/events` with the visitor key and the funnel session
+kept in session state (a session ends after 30 minutes without activity), the current last
+touch, and the request's path (never its query string). The device class is omitted unless you
+pass `deviceClass` (`mobile`, `tablet` or `desktop`). It follows the same consent decision as
+`Capture`: `Denied` sends nothing and drops what was held. Server-only names (`signup_complete`,
+`trial_started`, `purchase`) and malformed names are never sent; a custom name the app does not
+allow is dropped by the server. `Track` never throws, and a registration made through
+`WildwoodWebForms.Auth` carries the same session key, which joins the account to its funnel.
+Because session state belongs to the visit, a server-side session counts as returning only after
+30 idle minutes within the same ASP.NET session; the browser engine, which keeps its keys in
+`localStorage` once consent allows, is the better source for returning visitors.
+
 ## How it is put together
 
 **The browser never talks to the WildwoodAPI.** A control renders a shell carrying

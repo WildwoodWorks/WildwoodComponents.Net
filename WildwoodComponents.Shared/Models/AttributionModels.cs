@@ -49,6 +49,18 @@ namespace WildwoodComponents.Shared.Models
 
         /// <summary><c>js</c>, <c>dotnet</c>, or <c>swift</c>.</summary>
         public string Sdk { get; set; } = "dotnet";
+
+        /// <summary>
+        /// The funnel session the registration happened in, joining the account to that session's funnel
+        /// events. Optional: null when the engine keeps no session.
+        /// </summary>
+        public string? SessionKey { get; set; }
+
+        /// <summary><c>mobile</c>, <c>tablet</c> or <c>desktop</c>; null when unknown.</summary>
+        public string? DeviceClass { get; set; }
+
+        /// <summary>Sessions this visitor has started, counting the current one; null when unknown.</summary>
+        public int? SessionCount { get; set; }
     }
 
     /// <summary>
@@ -71,7 +83,10 @@ namespace WildwoodComponents.Shared.Models
                 FirstTouch = payload.FirstTouch,
                 LastTouch = payload.LastTouch,
                 Platform = payload.Platform,
-                Sdk = payload.Sdk
+                Sdk = payload.Sdk,
+                SessionKey = payload.SessionKey,
+                DeviceClass = payload.DeviceClass,
+                SessionCount = payload.SessionCount
             };
         }
     }
@@ -104,6 +119,68 @@ namespace WildwoodComponents.Shared.Models
         public bool CaptureReferrer { get; set; } = true;
         public List<string> ExtraAllowedParamNames { get; set; } = new();
         public bool BeaconEnabled { get; set; }
+
+        /// <summary>Funnel event tracking. Always false when <see cref="IsEnabled"/> is false.</summary>
+        public bool FunnelTrackingEnabled { get; set; }
+
+        /// <summary>Auto-track <c>scroll_depth</c> milestones (25/50/75/100) per page.</summary>
+        public bool TrackScrollDepth { get; set; }
+
+        /// <summary>Auto-track <c>engaged</c> (once per session) and <c>time_on_page</c>.</summary>
+        public bool TrackEngagement { get; set; }
+
+        /// <summary>Auto-track clicks on elements carrying <c>data-ww-cta</c> as <c>cta_click</c>.</summary>
+        public bool AutoTrackCtaClicks { get; set; }
+
+        /// <summary>Accept the <c>signup_view</c>, <c>signup_start</c>, <c>signup_submit</c> and <c>signup_error</c> steps.</summary>
+        public bool TrackSignupSteps { get; set; }
+
+        /// <summary>Extra event names (<c>^[a-z0-9_]{1,40}$</c>) the app allows on top of the standard client events.</summary>
+        public List<string> CustomEventNames { get; set; } = new();
+
+        /// <summary>
+        /// Before consent, mirror the touch, visitor key and session key to sessionStorage
+        /// (<c>ww_attribution_session</c>) so a reload in the same tab keeps them.
+        /// </summary>
+        public bool SessionStoragePersistenceBeforeConsent { get; set; }
+    }
+
+    /// <summary>One funnel event inside <see cref="AttributionEventsRequestModel"/> (mirrors @wildwood/core FunnelEvent).</summary>
+    public class AttributionFunnelEventModel
+    {
+        /// <summary>A standard client event or one of the app's custom names (<c>^[a-z0-9_]{1,40}$</c>).</summary>
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>CTA name, plan, error category. At most 100 characters.</summary>
+        public string? Label { get; set; }
+
+        public double? Value { get; set; }
+
+        /// <summary>The page path, never a query string. At most 500 characters.</summary>
+        public string? Path { get; set; }
+
+        /// <summary>ISO-8601 time the event happened on the client.</summary>
+        public string? ClientTimestamp { get; set; }
+    }
+
+    /// <summary>
+    /// The body of POST /api/attribution/events?appId= (anonymous; at most 25 events), mirroring
+    /// @wildwood/core AttributionEventsRequest. <see cref="Touch"/> is the visitor's current last touch, or
+    /// null for a direct visit.
+    /// </summary>
+    public class AttributionEventsRequestModel
+    {
+        public string AppId { get; set; } = string.Empty;
+        public string VisitorKey { get; set; } = string.Empty;
+        public string SessionKey { get; set; } = string.Empty;
+        public bool IsReturning { get; set; }
+
+        /// <summary><c>mobile</c>, <c>tablet</c> or <c>desktop</c>; null (omitted) when unknown.</summary>
+        public string? DeviceClass { get; set; }
+
+        public string Platform { get; set; } = "web";
+        public AttributionTouchModel? Touch { get; set; }
+        public List<AttributionFunnelEventModel> Events { get; set; } = new();
     }
 
     /// <summary>The attribution engine's current state (deserialized from JS interop).</summary>
