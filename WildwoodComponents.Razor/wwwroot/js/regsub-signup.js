@@ -678,14 +678,15 @@
                     var message = (error && error.message) || labels.signupFailed;
                     report((error && error.code) || CODE_SIGNUP_FAILED, message);
                     // The category only: never the visitor's input or the server's words.
-                    trackFunnel('signup_error', error instanceof TypeError ? 'network' : funnelErrorCategory(error && error.code));
+                    trackFunnel('signup_error', error instanceof TypeError ? 'network' : funnelErrorCategory(error && error.code, error && error.status));
                     dispatch({ type: 'ACCOUNT_FAILED', token: stepToken, message: message });
                 });
         }
 
-        function refusal(message, code) {
+        function refusal(message, code, status) {
             var error = new Error(message);
             error.code = code;
+            if (typeof status === 'number') error.status = status;
             return error;
         }
 
@@ -706,7 +707,12 @@
 
             return proxyPost(appQuery('/register'), body).then(function (result) {
                 if (!result || !result.success) {
-                    throw refusal(refusalMessage(result, labels.signupFailed), 'registration_refused');
+                    // The server's own code when the proxy relayed one (USERNAME_EXISTS, ...), as
+                    // @wildwood/react-shared's signup does; registration_refused otherwise.
+                    throw refusal(
+                        refusalMessage(result, labels.signupFailed),
+                        (result && typeof result.errorCode === 'string' && result.errorCode) || 'registration_refused',
+                        result && result.status);
                 }
                 attempt.registered = true;
                 clearAttribution();
@@ -793,10 +799,10 @@
             }
         }
 
-        /** The signup_error category for an error code (attribution.js holds the map). */
-        function funnelErrorCategory(code) {
+        /** The signup_error category for an error code, then its status (attribution.js holds the map). */
+        function funnelErrorCategory(code, status) {
             if (window.wildwoodAttribution && typeof window.wildwoodAttribution.signupErrorCategory === 'function') {
-                try { return window.wildwoodAttribution.signupErrorCategory(code); } catch (e) { /* fall through */ }
+                try { return window.wildwoodAttribution.signupErrorCategory(code, status); } catch (e) { /* fall through */ }
             }
             return 'unknown';
         }

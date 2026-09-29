@@ -158,8 +158,10 @@ namespace WildwoodComponents.Blazor.Services
 
         // WildwoodAPI answers in camelCase ({ "message": ... }). Without case-insensitive matching the
         // server's message never binds, and the user sees "Login failed with status Unauthorized"
-        // instead of what actually went wrong (e.g. an expired temporary password).
-        private static readonly JsonSerializerOptions ErrorJsonOptions = new() { PropertyNameCaseInsensitive = true };
+        // instead of what actually went wrong (e.g. an expired temporary password). The same holds
+        // for success bodies read by hand: a token registration's AuthenticationResponse bound only
+        // the attributed JwtToken, leaving RefreshToken, UserId, Roles and the rest empty.
+        private static readonly JsonSerializerOptions CaseInsensitiveJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
         /// <summary>
         /// The Campaign Attribution engine, when the host registered one. Optional so a host that builds
@@ -340,7 +342,7 @@ namespace WildwoodComponents.Blazor.Services
 
                 try
                 {
-                    var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, ErrorJsonOptions);
+                    var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, CaseInsensitiveJsonOptions);
                     throw new AuthenticationException(errorResponse?.Message ?? $"Login failed with status {response.StatusCode}");
                 }
                 catch (JsonException)
@@ -403,7 +405,7 @@ namespace WildwoodComponents.Blazor.Services
                 
                 try
                 {
-                    var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, ErrorJsonOptions);
+                    var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, CaseInsensitiveJsonOptions);
                     throw new AuthenticationException(errorResponse?.Message ?? $"Registration failed with status {response.StatusCode}");
                 }
                 catch (JsonException)
@@ -480,7 +482,7 @@ namespace WildwoodComponents.Blazor.Services
                     {
                         // Try to parse as AuthenticationResponse first
                         _logger.LogDebug("Attempting to parse response as AuthenticationResponse");
-                        var authResponse = JsonSerializer.Deserialize<AuthenticationResponse>(responseContent);
+                        var authResponse = JsonSerializer.Deserialize<AuthenticationResponse>(responseContent, CaseInsensitiveJsonOptions);
                         _logger.LogDebug("AuthenticationResponse parsed: JwtToken={HasJwtToken}", !string.IsNullOrEmpty(authResponse?.JwtToken));
                         
                         if (authResponse != null && !string.IsNullOrEmpty(authResponse.JwtToken))
@@ -615,7 +617,7 @@ namespace WildwoodComponents.Blazor.Services
                         // If we can't parse as RegistrationResponseDto, try generic ErrorResponse
                         try
                         {
-                            var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, ErrorJsonOptions);
+                            var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(errorContent, CaseInsensitiveJsonOptions);
                             throw new AuthenticationException(errorResponse?.Message ?? $"Token registration failed with status {response.StatusCode}");
                         }
                         catch (JsonException)

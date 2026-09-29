@@ -916,7 +916,7 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
 
                     await ReportAsync(result.ErrorCode ?? SignupViewDecisions.SignupFailedCode, message);
                     // The category only: never the visitor's input or the server's words.
-                    await TrackAsync(f => f.ErrorFromCodeAsync(result.ErrorCode));
+                    await TrackAsync(f => f.ErrorFromCodeAsync(result.ErrorCode, result.HttpStatus));
                     Apply(new SignupEvent.AccountFailed(stepToken, message));
                     return;
                 }

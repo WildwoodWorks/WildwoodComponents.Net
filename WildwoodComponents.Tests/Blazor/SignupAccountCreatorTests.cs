@@ -269,6 +269,38 @@ public class SignupAccountCreatorTests
 
         Assert.False(result.Success);
         Assert.Equal("Registration is closed.", result.ErrorMessage);
+        Assert.Equal(SignupAccountErrorCodes.RegistrationRefused, result.ErrorCode);
+        Assert.Equal(403, result.HttpStatus);
+    }
+
+    [Fact]
+    public async Task CreateAsync_KeepsTheServersOwnRefusalCode()
+    {
+        // The signup_error funnel category and a host routing on the code both need the server's
+        // code; replacing it with registration_refused reported every refusal as "unknown".
+        var harness = new Harness();
+        harness.Handler.On(OpenRegisterRoute, HttpStatusCode.Conflict,
+            """{"success":false,"errorCode":"USERNAME_EXISTS","message":"That username is taken."}""");
+        harness.Build();
+
+        var result = await harness.Creator.CreateAsync(harness.Request(), harness.Attempt);
+
+        Assert.False(result.Success);
+        Assert.Equal("USERNAME_EXISTS", result.ErrorCode);
+        Assert.Equal(409, result.HttpStatus);
+    }
+
+    [Fact]
+    public async Task CreateAsync_KeepsTheServersCode_OnASuccessStatusRefusal()
+    {
+        var harness = new Harness();
+        harness.Handler.On(OpenRegisterRoute, """{"success":false,"errorCode":"EMAIL_EXISTS","message":"That email is taken."}""");
+        harness.Build();
+
+        var result = await harness.Creator.CreateAsync(harness.Request(), harness.Attempt);
+
+        Assert.Equal("EMAIL_EXISTS", result.ErrorCode);
+        Assert.Null(result.HttpStatus);
     }
 
     /// <summary>

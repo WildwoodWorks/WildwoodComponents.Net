@@ -109,9 +109,16 @@ public class SignupRegisterResultModel
     public string? Message { get; set; }
 
     /// <summary>
-    /// <c>registration_refused</c> when the server said no. Absent on success.
+    /// When the server said no: its own error code where it sent one (e.g. <c>USERNAME_EXISTS</c>),
+    /// otherwise <c>registration_refused</c>. Absent on success.
     /// </summary>
     public string? ErrorCode { get; set; }
+
+    /// <summary>
+    /// The upstream HTTP status of a refusal that came with a non-success status, for the
+    /// signup_error funnel category's status fallback. Absent otherwise.
+    /// </summary>
+    public int? Status { get; set; }
 }
 
 /// <summary>

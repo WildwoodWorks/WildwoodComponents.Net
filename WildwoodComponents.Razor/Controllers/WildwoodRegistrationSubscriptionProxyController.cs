@@ -504,7 +504,13 @@ public class WildwoodRegistrationSubscriptionProxyController : ControllerBase
             {
                 Success = false,
                 Message = response?.Message is { Length: > 0 } m ? m : "Registration failed. Please try again.",
-                ErrorCode = "registration_refused"
+                // The server's own code when it sent one, as @wildwood/react-shared's signup does,
+                // so a host and the signup_error funnel category can tell a taken username from a
+                // closed registration.
+                ErrorCode = response?.ErrorCode is { } code && !string.IsNullOrWhiteSpace(code)
+                    ? code.Trim()
+                    : "registration_refused",
+                Status = response?.HttpStatus
             });
         }
 

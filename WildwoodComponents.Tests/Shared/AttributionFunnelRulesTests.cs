@@ -1,3 +1,4 @@
+using WildwoodComponents.Shared.Models;
 using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Tests.Shared;
@@ -51,6 +52,39 @@ public class AttributionFunnelRulesTests
         Assert.False(AttributionRules.IsAllowedFunnelEvent("purchase", new[] { "purchase" }));
         Assert.False(AttributionRules.IsAllowedFunnelEvent("signup_complete"));
         Assert.False(AttributionRules.IsAllowedFunnelEvent("Bad Name", new[] { "Bad Name" }));
+    }
+
+    [Fact]
+    public void TheConfigGateMatchesTheJsSdk()
+    {
+        // funnelTracker.ts accept(): no config, attribution off or funnel tracking off accepts nothing;
+        // a custom name must be configured; a signup step needs trackSignupSteps.
+        var on = new AttributionConfigModel
+        {
+            IsEnabled = true,
+            FunnelTrackingEnabled = true,
+            TrackSignupSteps = false,
+            CustomEventNames = new List<string> { " Demo_Booked " }
+        };
+
+        Assert.True(AttributionRules.IsFunnelEventAcceptedBy(on, "page_view"));
+        Assert.True(AttributionRules.IsFunnelEventAcceptedBy(on, "plan_selected"));
+        Assert.True(AttributionRules.IsFunnelEventAcceptedBy(on, "demo_booked"));
+        Assert.False(AttributionRules.IsFunnelEventAcceptedBy(on, "other_custom"));
+        Assert.False(AttributionRules.IsFunnelEventAcceptedBy(on, "purchase"));
+        foreach (var step in AttributionRules.FunnelSignupStepEvents)
+        {
+            Assert.False(AttributionRules.IsFunnelEventAcceptedBy(on, step));
+        }
+
+        on.TrackSignupSteps = true;
+        Assert.True(AttributionRules.IsFunnelEventAcceptedBy(on, "signup_error"));
+
+        Assert.False(AttributionRules.IsFunnelEventAcceptedBy(null, "page_view"));
+        Assert.False(AttributionRules.IsFunnelEventAcceptedBy(new AttributionConfigModel { IsEnabled = true }, "page_view"));
+        Assert.False(AttributionRules.IsFunnelEventAcceptedBy(
+            new AttributionConfigModel { IsEnabled = false, FunnelTrackingEnabled = true }, "page_view"));
+        Assert.Equal(new[] { "signup_view", "signup_start", "signup_submit", "signup_error" }, AttributionRules.FunnelSignupStepEvents);
     }
 
     [Fact]

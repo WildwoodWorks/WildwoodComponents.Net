@@ -40,6 +40,17 @@ namespace WildwoodComponents.Blazor.Services
         /// <param name="value">Optional number.</param>
         Task TrackAsync(string name, string? label = null, double? value = null) => Task.CompletedTask;
 
+        /// <summary>
+        /// <see cref="TrackAsync(string, string?, double?)"/> for a named page — @wildwood/core's
+        /// <c>track(name, { label, value, path })</c>. The path is normalised by the engine (query and
+        /// fragment dropped); null means the current page. Never throws.
+        /// </summary>
+        /// <param name="name">A standard client event or one of the app's custom names.</param>
+        /// <param name="label">Optional label.</param>
+        /// <param name="value">Optional number.</param>
+        /// <param name="path">The page path the event belongs to, e.g. <c>/pricing</c>.</param>
+        Task TrackAsync(string name, string? label, double? value, string? path) => TrackAsync(name, label, value);
+
         /// <summary>Tracks a <c>cta_click</c> with this label. Never throws.</summary>
         Task TrackCtaAsync(string label) => Task.CompletedTask;
 

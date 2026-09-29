@@ -543,7 +543,7 @@ namespace WildwoodComponents.Blazor.Components.Registration
                 {
                     _processingError = result.ErrorMessage;
                     // The category only: never the visitor's input or the server's words.
-                    await Funnel.ErrorFromCodeAsync(result.ErrorCode);
+                    await Funnel.ErrorFromCodeAsync(result.ErrorCode, result.HttpStatus);
                     StateHasChanged();
                     return;
                 }

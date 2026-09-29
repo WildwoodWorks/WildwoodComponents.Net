@@ -140,18 +140,18 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
 
             try
             {
-                return JsonSerializer.Deserialize<RegistrationSuccessResponse>(content, JsonOptions);
+                return WithStatus(JsonSerializer.Deserialize<RegistrationSuccessResponse>(content, JsonOptions), response);
             }
             catch (JsonException)
             {
                 _logger.LogWarning("Failed to parse registration response: {Content}", content);
-                return new RegistrationSuccessResponse
+                return WithStatus(new RegistrationSuccessResponse
                 {
                     Success = false,
                     Message = response.IsSuccessStatusCode
                         ? "Registration completed but response was unexpected."
                         : $"Registration failed: {response.StatusCode}"
-                };
+                }, response);
             }
         }
         catch (Exception ex)
@@ -170,18 +170,18 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
 
             try
             {
-                return JsonSerializer.Deserialize<RegistrationSuccessResponse>(content, JsonOptions);
+                return WithStatus(JsonSerializer.Deserialize<RegistrationSuccessResponse>(content, JsonOptions), response);
             }
             catch (JsonException)
             {
                 _logger.LogWarning("Failed to parse registration response: {Content}", content);
-                return new RegistrationSuccessResponse
+                return WithStatus(new RegistrationSuccessResponse
                 {
                     Success = false,
                     Message = response.IsSuccessStatusCode
                         ? "Registration completed but response was unexpected."
                         : $"Registration failed: {response.StatusCode}"
-                };
+                }, response);
             }
         }
         catch (Exception ex)
@@ -189,6 +189,16 @@ public class WildwoodRegistrationService : IWildwoodRegistrationService
             _logger.LogError(ex, "Error during open registration");
             return new RegistrationSuccessResponse { Success = false, Message = "An error occurred during registration." };
         }
+    }
+
+    /// <summary>
+    /// Records a non-success status on the answer, so a caller can categorise a refusal whose body
+    /// named no code (the signup_error funnel falls back to the status, as @wildwood/core does).
+    /// </summary>
+    private static RegistrationSuccessResponse? WithStatus(RegistrationSuccessResponse? result, HttpResponseMessage response)
+    {
+        if (result is not null && !response.IsSuccessStatusCode) result.HttpStatus = (int)response.StatusCode;
+        return result;
     }
 
     public async Task<string?> GetPasswordRequirementsAsync(string appId)

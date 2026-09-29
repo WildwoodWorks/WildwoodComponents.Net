@@ -329,6 +329,38 @@ public static class AttributionRules
         return false;
     }
 
+    /// <summary>The signup steps an app accepts only while its config's <c>TrackSignupSteps</c> is on.</summary>
+    public static readonly IReadOnlyList<string> FunnelSignupStepEvents = new[] { "signup_view", "signup_start", "signup_submit", "signup_error" };
+
+    /// <summary>
+    /// Whether the app's config accepts this event, by @wildwood/core's funnel rule: attribution and
+    /// funnel tracking both on, the name allowed (a standard client event or one of the config's custom
+    /// names), and a signup step only while <c>TrackSignupSteps</c> is on. No config accepts nothing —
+    /// the SDK sends nothing until the config says so.
+    /// </summary>
+    public static bool IsFunnelEventAcceptedBy(AttributionConfigModel? config, string? name)
+    {
+        if (config is null || !config.IsEnabled || !config.FunnelTrackingEnabled)
+        {
+            return false;
+        }
+
+        if (!IsAllowedFunnelEvent(name, NormalizeCustomEventNames(config.CustomEventNames)))
+        {
+            return false;
+        }
+
+        foreach (var step in FunnelSignupStepEvents)
+        {
+            if (string.Equals(step, name, StringComparison.Ordinal))
+            {
+                return config.TrackSignupSteps;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// A config's custom event names: trimmed, lowercased, well formed, not a standard or server-only
     /// name, deduplicated, and at most <see cref="MaxCustomEventNames"/>.

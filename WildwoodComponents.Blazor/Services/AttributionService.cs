@@ -60,10 +60,13 @@ namespace WildwoodComponents.Blazor.Services
         public Task<AttributionStateModel?> GetStateAsync() => InvokeAsync<AttributionStateModel>("getState");
 
         public Task TrackAsync(string name, string? label = null, double? value = null)
+            => TrackAsync(name, label, value, path: null);
+
+        public Task TrackAsync(string name, string? label, double? value, string? path)
         {
             if (string.IsNullOrWhiteSpace(name)) return Task.CompletedTask;
-            // The engine takes @wildwood/core's options object: { label, value }.
-            return InvokeVoidAsync("track", name, new FunnelTrackOptions { Label = label, Value = value });
+            // The engine takes @wildwood/core's options object: { label, value, path? }.
+            return InvokeVoidAsync("track", name, new FunnelTrackOptions { Label = label, Value = value, Path = path });
         }
 
         public Task TrackCtaAsync(string label)
@@ -90,6 +93,10 @@ namespace WildwoodComponents.Blazor.Services
         {
             public string? Label { get; set; }
             public double? Value { get; set; }
+
+            /// <summary>The page the event belongs to; absent means the engine's current page.</summary>
+            [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+            public string? Path { get; set; }
         }
 
         private async Task<T?> InvokeAsync<T>(string fn, params object?[] args) where T : class
