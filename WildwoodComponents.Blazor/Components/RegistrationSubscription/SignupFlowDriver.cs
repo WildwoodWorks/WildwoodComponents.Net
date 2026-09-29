@@ -183,6 +183,13 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
         public Func<SignupOutcome, Task>? SignupCompleted { get; set; }
 
         /// <summary>
+        /// The registration funnel reporter (signup_view, signup_submit, signup_error, plan_selected,
+        /// checkout_start), or null to report nothing. Mirrors the funnel events of @wildwood/react-shared
+        /// useSignupFlow; the engine sends the one-shot steps once per session.
+        /// </summary>
+        public SignupFunnel? Funnel { get; set; }
+
+        /// <summary>
         /// DETACHES the flow from the view: no more re-renders, no more host callbacks, and no new
         /// step work — but nothing already under way is abandoned.
         /// </summary>
@@ -222,6 +229,7 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
             AlreadySignedInDetected = null;
             EntitlementsChanged = null;
             SignupCompleted = null;
+            Funnel = null;
 
             // Nothing in flight: settle up now. Otherwise the pump's own finally does it when the
             // call that is running finishes.
@@ -435,19 +443,21 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
             return Task.CompletedTask;
         }
 
-        public Task SubmitFormAsync(RegistrationFormData data)
+        public async Task SubmitFormAsync(RegistrationFormData data)
         {
+            await TrackAsync(f => f.SubmitAsync());
             _formData = data;
             _tokenMessage = null;
-            return DispatchAsync(new SignupEvent.RegisterSubmitted(data.Email ?? string.Empty));
+            await DispatchAsync(new SignupEvent.RegisterSubmitted(data.Email ?? string.Empty));
         }
 
-        public Task ChoosePlanAsync(AppTierModel tier)
+        public async Task ChoosePlanAsync(AppTierModel tier)
         {
             var pricing = PricingViewDecisions.PlanPriceOption(tier, _billing);
             _chosenPlan = new SignupPlanView(tier, pricing);
+            await TrackAsync(f => f.PlanSelectedAsync(tier.Id, tier.Name));
 
-            return DispatchAsync(new SignupEvent.PlanChosen(
+            await DispatchAsync(new SignupEvent.PlanChosen(
                 tier.Id, pricing?.Id, SignupViewDecisions.RequiresPayment(tier, pricing)));
         }
 
@@ -714,6 +724,7 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
                     if (_detached) break;
 
                     Notify();
+                    await TrackStepAsync();
                     if (!await RunStepWorkAsync()) break;
                 }
             }
@@ -839,6 +850,7 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
                     : SignupViewDecisions.TokenRejectedFallback;
 
                 await ReportAsync(SignupViewDecisions.TokenRejectedCode, message);
+                await TrackAsync(f => f.ErrorAsync("invalid_token"));
                 _tokenMessage = message;
                 Apply(new SignupEvent.TokenRejected(stepToken, message));
                 return;
@@ -903,6 +915,8 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
                         : SignupViewDecisions.SignupFailedFallback;
 
                     await ReportAsync(result.ErrorCode ?? SignupViewDecisions.SignupFailedCode, message);
+                    // The category only: never the visitor's input or the server's words.
+                    await TrackAsync(f => f.ErrorFromCodeAsync(result.ErrorCode));
                     Apply(new SignupEvent.AccountFailed(stepToken, message));
                     return;
                 }
@@ -918,6 +932,7 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
                 _logger?.LogError(ex, "Error during signup processing");
 
                 await ReportAsync(SignupViewDecisions.SignupFailedCode, message);
+                await TrackAsync(f => f.ErrorAsync(ex is System.Net.Http.HttpRequestException ? "network" : "unknown"));
                 Apply(new SignupEvent.AccountFailed(stepToken, message));
             }
         }
@@ -958,6 +973,34 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
             _runs[key] = token;
             return true;
         }
+
+        private Task TrackAsync(Func<SignupFunnel, Task> report)
+        {
+            return Funnel is { } funnel ? report(funnel) : Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// The step-driven funnel events: signup_view on entering the form (not for a visitor who was
+        /// already signed in), and checkout_start on entering the payment step for a paid plan. Reported
+        /// once per step change; the engine dedups the one-shots across the session.
+        /// </summary>
+        private async Task TrackStepAsync()
+        {
+            if (Funnel is null || _funnelStep == _state.Step) return;
+            _funnelStep = _state.Step;
+
+            if (_state.Step == SignupStep.Register && !AlreadySignedIn)
+            {
+                await TrackAsync(f => f.ViewAsync());
+            }
+            else if (_state.Step == SignupStep.Payment && Plan is { } plan
+                && SignupViewDecisions.RequiresPayment(plan.Tier, plan.Pricing))
+            {
+                await TrackAsync(f => f.CheckoutStartAsync(plan.Pricing?.Id, plan.Tier.Id, plan.Tier.Name));
+            }
+        }
+
+        private SignupStep? _funnelStep;
 
         private void Notify()
         {

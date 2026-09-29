@@ -72,6 +72,45 @@
         return grant.appTierName || grant.appTierId || 'plan';
     }
 
+    // ── Campaign Attribution funnel events ──────────────────────────
+    // signup_view / signup_start / signup_submit / signup_error / checkout_start go through
+    // window.wildwoodAttribution.track (attribution.js), which gates them on the app config and sends the
+    // one-shot steps once per session. A label is never what the visitor typed or a server message:
+    // signup_error carries a fixed category. Nothing here throws, and a page without attribution.js
+    // simply reports nothing.
+    function funnel(name, label, retried) {
+        try {
+            var attribution = window.wildwoodAttribution;
+            if (attribution && typeof attribution.track === 'function') {
+                attribution.track(name, label ? { label: label } : undefined);
+            } else if (!retried && document.readyState !== 'complete') {
+                // attribution.js may be included after this script: try once more when the page has loaded.
+                window.addEventListener('load', function () { funnel(name, label, true); });
+            }
+        } catch (e) { /* funnel tracking must never break registration */ }
+    }
+
+    /** The signup_error category for an error code and/or HTTP status (attribution.js holds the map). */
+    function funnelErrorCategory(code, status) {
+        try {
+            var attribution = window.wildwoodAttribution;
+            if (attribution && typeof attribution.signupErrorCategory === 'function') {
+                return attribution.signupErrorCategory(code, status);
+            }
+        } catch (e) { /* fall through */ }
+        return 'unknown';
+    }
+
+    /** A refused validation: the field flags first, then the server's errorCode. */
+    function validationErrorCategory(validation) {
+        if (!validation) return 'unknown';
+        if (validation.usernameAvailable === false) return 'username_taken';
+        if (validation.emailAvailable === false) return 'email_taken';
+        if (validation.passwordValid === false) return 'password_policy';
+        var category = funnelErrorCategory(validation.errorCode);
+        return category === 'unknown' ? 'validation' : category;
+    }
+
     function RegistrationInstance(root) {
         this.root = root;
         this.cid = root.dataset.componentId;
@@ -192,7 +231,15 @@
 
         this._bindEvents();
         this._initializeStep();
+        funnel('signup_view');
     }
+
+    /** signup_start once per form: the first focus on a field, or the submit of an autofilled form. */
+    RegistrationInstance.prototype._funnelStart = function () {
+        if (this.funnelStarted) return;
+        this.funnelStarted = true;
+        funnel('signup_start');
+    };
 
     RegistrationInstance.prototype._bindEvents = function () {
         var self = this;
@@ -227,6 +274,7 @@
 
         // Registration form
         if (this.els.regForm) {
+            this.els.regForm.addEventListener('focusin', function () { self._funnelStart(); });
             if (window.WildwoodForms) {
                 // Classic WebForms cannot nest a <form>, so the container renders as a
                 // <div data-ww-form> there; the shim supplies the submit semantics.
@@ -439,9 +487,11 @@
                     self._loadPasswordRequirements();
                 } else {
                     self._showTokenError(data ? data.errorMessage || 'Invalid registration token.' : 'Invalid registration token.');
+                    funnel('signup_error', 'invalid_token');
                 }
             })
-            .catch(function () {
+            .catch(function (err) {
+                funnel('signup_error', err instanceof TypeError ? 'network' : 'unknown');
                 self._showTokenError('Unable to validate token. Please try again.');
                 self._dispatchError('Unable to validate token. Please try again.');
             })
@@ -730,6 +780,9 @@
     RegistrationInstance.prototype._submitRegistration = function () {
         if (this.isLoading) return;
         var self = this;
+        // Before the request goes out (an autofilled form never focused a field, so start it too).
+        this._funnelStart();
+        funnel('signup_submit');
 
         // Client-side validation
         var form = this.els.regForm;
@@ -738,6 +791,7 @@
             : form.checkValidity();
         if (!formValid) {
             form.classList.add('was-validated');
+            funnel('signup_error', 'validation');
             return;
         }
 
@@ -746,6 +800,7 @@
         var cpw = form.querySelector('[name="confirmPassword"]').value;
         if (pw !== cpw) {
             form.querySelector('[name="confirmPassword"]').classList.add('is-invalid');
+            funnel('signup_error', 'validation');
             return;
         }
 
@@ -767,6 +822,7 @@
             .then(function (validation) {
                 if (!validation || !validation.isValid) {
                     self._showRegError(validation ? validation.errorMessage || 'Validation failed.' : 'Validation failed.');
+                    funnel('signup_error', validationErrorCategory(validation));
                     return;
                 }
                 self.validationResponse = validation;
@@ -784,6 +840,7 @@
                 });
             })
             .catch(function (err) {
+                funnel('signup_error', err instanceof TypeError ? 'network' : 'unknown');
                 self._showRegError('An error occurred during registration. Please try again.');
                 self._dispatchError('An error occurred during registration. Please try again.');
             })
@@ -885,6 +942,10 @@
         this.requiresPayment = true;
         this.registrationPending = true;
         this.currentStep = 3;
+        // The pricing option id keys the checkout (else a slug of its name).
+        var planKey = validation.pricingModelId ||
+            String(validation.pricingModelName || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 100);
+        funnel('checkout_start', planKey || null);
 
         this.pricingDetails = {
             planName: validation.pricingModelName,
@@ -1102,12 +1163,14 @@
                     }
                 } else {
                     var errMsg = result ? result.message || 'Registration failed.' : 'Registration failed.';
+                    funnel('signup_error', funnelErrorCategory(result && result.errorCode));
                     self._showRegError(errMsg);
                     self._dispatchError(errMsg);
                     self.registrationSuccessful = false;
                 }
             })
-            .catch(function () {
+            .catch(function (err) {
+                funnel('signup_error', err instanceof TypeError ? 'network' : 'unknown');
                 self._showRegError('An error occurred during registration. Please try again.');
                 self._dispatchError('An error occurred during registration. Please try again.');
                 self.registrationSuccessful = false;

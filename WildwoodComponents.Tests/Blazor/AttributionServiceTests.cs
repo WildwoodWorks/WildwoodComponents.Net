@@ -86,6 +86,88 @@ public class AttributionServiceTests
         Assert.Equal("dotnet", payload?.Sdk);
     }
 
+    [Fact]
+    public async Task TrackAsync_PassesTheNameAndTheCoreOptionsObject()
+    {
+        var js = new FakeJsRuntime();
+
+        await Create(js).TrackAsync("demo_booked", "pricing", 2);
+
+        var call = Assert.Single(js.Module.Calls);
+        Assert.Equal("track", call.Identifier);
+        Assert.Equal("demo_booked", call.Args?[0]);
+        // Serialized the way JS interop sends it: @wildwood/core's { label, value }.
+        var options = System.Text.Json.JsonSerializer.Serialize(
+            call.Args?[1], new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        Assert.Equal("{\"label\":\"pricing\",\"value\":2}", options);
+    }
+
+    [Fact]
+    public async Task TrackCtaAsync_AndFlushAsync_CallTheEngine()
+    {
+        var js = new FakeJsRuntime();
+        var service = Create(js);
+
+        await service.TrackCtaAsync("hero_start_trial");
+        await service.FlushAsync();
+
+        Assert.Equal(new[] { "trackCta", "flush" }, js.Module.Calls.Select(c => c.Identifier));
+        Assert.Equal("hero_start_trial", js.Module.Calls[0].Args?[0]);
+    }
+
+    [Fact]
+    public async Task TrackAsync_WithoutANameOrLabel_DoesNotLoadTheEngine()
+    {
+        var js = new FakeJsRuntime();
+        var service = Create(js);
+
+        await service.TrackAsync("  ");
+        await service.TrackCtaAsync("");
+
+        Assert.Empty(js.Imports);
+    }
+
+    [Fact]
+    public async Task TheFunnelCalls_NeverThrow()
+    {
+        var js = new FakeJsRuntime();
+        js.Module.Throw = new JSException("engine failure");
+        var service = Create(js);
+
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            await service.TrackAsync("signup_view");
+            await service.TrackCtaAsync("hero");
+            await service.FlushAsync();
+        });
+
+        Assert.Null(exception);
+
+        var prerendering = new FakeJsRuntime { ImportThrow = new InvalidOperationException("prerendering") };
+        Assert.Null(await Record.ExceptionAsync(() => Create(prerendering).TrackAsync("signup_view")));
+    }
+
+    [Fact]
+    public async Task GetForRegistrationAsync_ReadsTheFunnelSession()
+    {
+        var js = new FakeJsRuntime();
+        js.Module.Result = id => id == "getForRegistration"
+            ? new AttributionPayloadModel
+            {
+                VisitorKey = "visitor-key-0001",
+                SessionKey = "session-key-0001",
+                DeviceClass = "mobile",
+                SessionCount = 2
+            }
+            : null;
+
+        var payload = await Create(js).GetForRegistrationAsync();
+
+        Assert.Equal("session-key-0001", payload?.SessionKey);
+        Assert.Equal("mobile", payload?.DeviceClass);
+        Assert.Equal(2, payload?.SessionCount);
+    }
+
     private sealed class FakeModule : IJSObjectReference
     {
         public List<(string Identifier, object?[]? Args)> Calls { get; } = new();

@@ -226,6 +226,8 @@
                data-ww-action names the submit. The ids stay for hosts that already use them, but an
                id cannot be the contract: the Razor stack suffixes its ids with a per-instance
                component id, so no constant id selector exists there at all. *@
+            @* The first focus on any field reports signup_start (once per session, gated by the app config). *@
+            <div class="ww-registration-form" @onfocusin="HandleFormFocusAsync">
             <EditForm Model="_registrationModel" OnValidSubmit="RegisterUserAsync" OnInvalidSubmit="HandleInvalidSubmit">
                 <DataAnnotationsValidator />
                 <ValidationSummary class="text-danger mb-2" />
@@ -353,6 +355,7 @@
                     }
                 </div>
             </EditForm>
+            </div>
         </div>
     }
     else if (_showRegistrationDisclaimers && _registrationDisclaimers?.Any() == true)
@@ -869,6 +872,15 @@
         StateHasChanged();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        // signup_view once the form is on the page (interactive, so the engine is reachable).
+        if (firstRender) await Funnel.ViewAsync();
+    }
+
+    private Task HandleFormFocusAsync(FocusEventArgs _) => Funnel.StartAsync();
+
     private async Task ValidateTokenAsync()
     {
         // Prevent double-clicks
@@ -922,17 +934,20 @@
                 else
                 {
                     _tokenError = validationResult?.ErrorMessage ?? "Invalid registration token.";
+                    await Funnel.ErrorAsync("invalid_token");
                 }
             }
             else
             {
                 _tokenError = "Unable to validate token. Please try again.";
+                await Funnel.ErrorFromCodeAsync(null, (int)response.StatusCode);
             }
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error validating token");
             _tokenError = "An error occurred while validating the token.";
+            await Funnel.ErrorAsync(ex is HttpRequestException ? "network" : "unknown");
             await OnError.InvokeAsync(ex.Message);
         }
         finally
@@ -964,6 +979,8 @@
         {
             _isLoading = true;
             _registrationError = string.Empty;
+            // Before the request goes out (also reports signup_start for an autofilled form).
+            await Funnel.SubmitAsync();
 
             // DeferSubmission mode: validate client-side only and return form data
             if (DeferSubmission)
@@ -999,14 +1016,16 @@
             if (!validationResponse.IsSuccessStatusCode)
             {
                 _registrationError = "Unable to validate registration. Please try again.";
+                await Funnel.ErrorFromCodeAsync(null, (int)validationResponse.StatusCode);
                 return;
             }
 
             var validation = await validationResponse.Content.ReadFromJsonAsync<ValidationResponse>();
-            
+
             if (validation == null || !validation.IsValid)
             {
                 _registrationError = validation?.ErrorMessage ?? "Validation failed. Please check your information.";
+                await Funnel.ErrorAsync(ValidationErrorCategory(validation));
                 return;
             }
 
@@ -1049,6 +1068,7 @@
                 // Store pending registration state - we'll complete registration after payment
                 _registrationPending = true;
                 _currentStep = 3;
+                await Funnel.CheckoutStartAsync(validation.PricingModelId, null, validation.PricingModelName);
 
                 // Create a temporary registration response with payment info for the PaymentComponent
                 _registrationResponse = new RegistrationSuccessResponse
@@ -1073,6 +1093,7 @@
         {
             Logger.LogError(ex, "Error during registration");
             _registrationError = "An error occurred during registration. Please try again.";
+            await Funnel.ErrorAsync(ex is HttpRequestException ? "network" : "unknown");
             await OnError.InvokeAsync(ex.Message);
         }
         finally
@@ -1105,6 +1126,7 @@
 
             _registrationPending = true;
             _currentStep = 3;
+            await Funnel.CheckoutStartAsync(_validationResponse.PricingModelId, null, _validationResponse.PricingModelName);
 
             _registrationResponse = new RegistrationSuccessResponse
             {
@@ -1231,19 +1253,22 @@
                 else
                 {
                     _registrationError = result?.Message ?? "Registration failed. Please try again.";
+                    await Funnel.ErrorFromCodeAsync(result?.ErrorCode);
                 }
             }
             else
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                Logger.LogWarning("Registration failed with status {StatusCode}. Response: {ErrorContent}", 
+                Logger.LogWarning("Registration failed with status {StatusCode}. Response: {ErrorContent}",
                     response.StatusCode, errorContent);
-                
+
                 try
                 {
                     var errorResult = System.Text.Json.JsonSerializer.Deserialize<RegistrationSuccessResponse>(
-                        errorContent, 
+                        errorContent,
                         new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    // The server's errorCode first, then the status; never the message.
+                    await Funnel.ErrorFromCodeAsync(errorResult?.ErrorCode, (int)response.StatusCode);
                     
                     if (!string.IsNullOrEmpty(errorResult?.Message))
                     {
@@ -1256,6 +1281,7 @@
                 }
                 catch (System.Text.Json.JsonException)
                 {
+                    await Funnel.ErrorFromCodeAsync(null, (int)response.StatusCode);
                     if (!string.IsNullOrWhiteSpace(errorContent) && errorContent.Length < 500)
                     {
                         _registrationError = $"Registration failed: {errorContent}";
@@ -1271,6 +1297,7 @@
         {
             Logger.LogError(ex, "Error completing registration");
             _registrationError = "An error occurred during registration. Please try again.";
+            await Funnel.ErrorAsync(ex is HttpRequestException ? "network" : "unknown");
             await OnError.InvokeAsync(ex.Message);
         }
         finally
@@ -1514,10 +1541,12 @@
         _showPassword = !_showPassword;
     }
 
-    private void HandleInvalidSubmit()
+    private async Task HandleInvalidSubmit()
     {
         Logger.LogWarning("Form validation failed - invalid submit detected");
         _registrationError = "Please correct the validation errors above.";
+        await Funnel.SubmitAsync();
+        await Funnel.ErrorAsync("validation");
         StateHasChanged();
     }
 
@@ -1660,6 +1689,21 @@
         if (AttributionEngine is { } attribution) await attribution.ClearAsync();
     }
 
+    // The registration funnel events (signup_view / start / submit / error, checkout_start). Never throws.
+    private SignupFunnel? _funnel;
+    private SignupFunnel Funnel => _funnel ??= new SignupFunnel(AttributionEngine);
+
+    /// <summary>The signup_error category for a refused validation: the field flags first, then the code.</summary>
+    private static string ValidationErrorCategory(ValidationResponse? validation)
+    {
+        if (validation is null) return "unknown";
+        if (!validation.UsernameAvailable) return "username_taken";
+        if (!validation.EmailAvailable) return "email_taken";
+        if (!validation.PasswordValid) return "password_policy";
+        var category = WildwoodComponents.Shared.Utilities.AttributionRules.SignupErrorCategoryFromCode(validation.ErrorCode);
+        return category == "unknown" ? "validation" : category;
+    }
+
     public class TokenRegistrationRequest
     {
         public string Token { get; set; } = string.Empty;
@@ -1695,6 +1739,8 @@
         public bool Success { get; set; }
         public string? UserId { get; set; }
         public string? Message { get; set; }
+        /// <summary>WildwoodAPI's machine-readable error code on a refusal (e.g. <c>USERNAME_EXISTS</c>).</summary>
+        public string? ErrorCode { get; set; }
         public bool RequiresStripeSetup { get; set; }
         public bool RequiresPaymentSetup { get; set; }
         public bool IsSubscription { get; set; }

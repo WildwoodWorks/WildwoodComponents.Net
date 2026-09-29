@@ -498,6 +498,11 @@
             if (name !== lastStepName) {
                 lastStepName = name;
                 raise(EVT_STEP, { step: name });
+                // The step-driven funnel events; attribution.js sends the one-shots once per session.
+                if (name === 'register' && !state.alreadySignedInLatched) trackFunnel('signup_view');
+                if (name === 'payment' && state.selection) {
+                    trackFunnel('checkout_start', state.selection.pricingId || state.selection.tierId || null);
+                }
             }
         }
 
@@ -604,6 +609,7 @@
                     if (details && details.isValid === false) {
                         var message = details.errorMessage || labels.tokenRejected;
                         report(CODE_TOKEN_REJECTED, message);
+                        trackFunnel('signup_error', 'invalid_token');
                         dispatch({ type: 'TOKEN_REJECTED', token: stepToken, message: message });
                         return;
                     }
@@ -671,6 +677,8 @@
                     if (detached) return;
                     var message = (error && error.message) || labels.signupFailed;
                     report((error && error.code) || CODE_SIGNUP_FAILED, message);
+                    // The category only: never the visitor's input or the server's words.
+                    trackFunnel('signup_error', error instanceof TypeError ? 'network' : funnelErrorCategory(error && error.code));
                     dispatch({ type: 'ACCOUNT_FAILED', token: stepToken, message: message });
                 });
         }
@@ -773,6 +781,24 @@
                 try { return window.wildwoodAttribution.getForRegistration(); } catch (e) { return null; }
             }
             return null;
+        }
+
+        /**
+         * A Campaign Attribution funnel event through the same global. attribution.js gates it on the
+         * app config and sends the one-shot steps once per session; absent engine, nothing is sent.
+         */
+        function trackFunnel(name, label) {
+            if (window.wildwoodAttribution && typeof window.wildwoodAttribution.track === 'function') {
+                try { window.wildwoodAttribution.track(name, label ? { label: label } : undefined); } catch (e) { /* best-effort */ }
+            }
+        }
+
+        /** The signup_error category for an error code (attribution.js holds the map). */
+        function funnelErrorCategory(code) {
+            if (window.wildwoodAttribution && typeof window.wildwoodAttribution.signupErrorCategory === 'function') {
+                try { return window.wildwoodAttribution.signupErrorCategory(code); } catch (e) { /* fall through */ }
+            }
+            return 'unknown';
         }
 
         /** Recorded with the account: a later signup from this browser must not reuse the touches. */
@@ -940,16 +966,21 @@
             var values = readForm();
             var error = q('[data-ww-form-error]');
             show(error, false);
+            // Before the request goes out; an autofilled form that was never focused started too.
+            startFunnel();
+            trackFunnel('signup_submit');
 
             var required = qa('[data-ww-field][required]');
             for (var i = 0; i < required.length; i++) {
                 if (!required[i].value) {
                     required[i].focus();
+                    trackFunnel('signup_error', 'validation');
                     return;
                 }
             }
 
             if (values.password !== values.confirmPassword) {
+                trackFunnel('signup_error', 'validation');
                 // The browser's own validity message, so the wording is the visitor's locale and
                 // nothing English lives here.
                 var confirm = q('[data-ww-field="confirmPassword"]');
@@ -991,6 +1022,7 @@
          * take it over.
          */
         function chooseTier(card) {
+            trackFunnel('plan_selected', card.getAttribute('data-ww-tier') || null);
             var billing = currentBilling();
             var pricingId = card.getAttribute(
                 billing === 'annual' ? 'data-ww-pricing-annual' : 'data-ww-pricing-monthly') || '';
@@ -1198,6 +1230,16 @@
         }
 
         // ----- Start ---------------------------------------------------------------------------------
+
+        // signup_start once: the first focus on a register field.
+        var funnelStarted = false;
+        function startFunnel() {
+            if (funnelStarted) return;
+            funnelStarted = true;
+            trackFunnel('signup_start');
+        }
+        var registerPanel = stepEl('register');
+        if (registerPanel) registerPanel.addEventListener('focusin', startFunnel);
 
         dispatch({ type: 'INIT', signedIn: data.wwSignedIn === 'true' });
 

@@ -219,6 +219,287 @@ public static class AttributionRules
         return occurredAt < nowUtc - TimeSpan.FromDays(ClampWindowDays(windowDays));
     }
 
+    // ---- Funnel events (mirrors @wildwood/core types.ts, attributionRules.ts and signupFunnel.ts) ----
+
+    /// <summary>Minutes of inactivity after which a funnel session ends and the next event starts a new one.</summary>
+    public const int FunnelSessionTimeoutMinutes = 30;
+
+    /// <summary>Most events one POST /api/attribution/events request may carry.</summary>
+    public const int MaxFunnelEventsPerRequest = 25;
+
+    /// <summary>Maximum length of a funnel event label.</summary>
+    public const int FunnelLabelMaxLength = 100;
+
+    /// <summary>Most custom event names an app config may carry.</summary>
+    public const int MaxCustomEventNames = 50;
+
+    /// <summary>Funnel events a client may send. Configured custom names are allowed on top of these.</summary>
+    public static readonly IReadOnlyList<string> FunnelClientEvents = new[]
+    {
+        "page_view", "engaged", "scroll_depth", "time_on_page", "cta_click",
+        "signup_view", "signup_start", "signup_submit", "signup_error", "plan_selected", "checkout_start"
+    };
+
+    /// <summary>Funnel events only the server records. A client request carrying one is refused, so they are dropped.</summary>
+    public static readonly IReadOnlyList<string> FunnelServerOnlyEvents = new[] { "signup_complete", "trial_started", "purchase" };
+
+    /// <summary>The device classes a funnel event or registration may report.</summary>
+    public static readonly IReadOnlyList<string> DeviceClasses = new[] { "mobile", "tablet", "desktop" };
+
+    /// <summary>The categories a <c>signup_error</c> label is drawn from.</summary>
+    public static readonly IReadOnlyList<string> SignupErrorCategories = new[]
+    {
+        "validation", "email_taken", "username_taken", "password_policy", "captcha", "invalid_token",
+        "registration_closed", "rate_limited", "network", "server", "unknown"
+    };
+
+    private static readonly Regex FunnelEventNamePattern = new Regex("^[a-z0-9_]{1,40}$", RegexOptions.Compiled);
+    private static readonly HashSet<string> ClientEventSet = new HashSet<string>(FunnelClientEvents, StringComparer.Ordinal);
+    private static readonly HashSet<string> ServerOnlyEventSet = new HashSet<string>(FunnelServerOnlyEvents, StringComparer.Ordinal);
+
+    /// <summary>Codes compared with case and separators removed ("USERNAME_EXISTS" and "UsernameExists" match).</summary>
+    private static readonly Dictionary<string, string> SignupErrorCodeCategories = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["USERNAMEEXISTS"] = "username_taken",
+        ["USERNAMETAKEN"] = "username_taken",
+        ["USEREXISTS"] = "email_taken",
+        ["EMAILEXISTS"] = "email_taken",
+        ["EMAILTAKEN"] = "email_taken",
+        ["DUPLICATEEMAIL"] = "email_taken",
+        ["PASSWORDINVALID"] = "password_policy",
+        ["PASSWORDPOLICY"] = "password_policy",
+        ["INVALIDTOKEN"] = "invalid_token",
+        ["REGISTRATIONTOKENREJECTED"] = "invalid_token",
+        ["VALIDATIONERROR"] = "validation",
+        ["VALIDATION"] = "validation",
+        ["EMAILREQUIRED"] = "validation",
+        ["USERNAMEREQUIRED"] = "validation",
+        ["REGISTRATIONNOTALLOWED"] = "registration_closed",
+        ["FORBIDDEN"] = "registration_closed",
+        ["RATELIMITED"] = "rate_limited",
+        ["RATELIMITEXCEEDED"] = "rate_limited",
+        ["NETWORKERROR"] = "network",
+        ["TIMEOUT"] = "network",
+        ["SERVERERROR"] = "server",
+        ["INTERNALERROR"] = "server",
+        ["DATABASEERROR"] = "server",
+        ["EXECUTIONSTRATEGYERROR"] = "server",
+        ["USERCREATIONFAILED"] = "server",
+    };
+
+    /// <summary>Whether the value has the shape of a funnel event name (<c>^[a-z0-9_]{1,40}$</c>).</summary>
+    public static bool IsValidFunnelEventName(string? name)
+        => name is { Length: > 0 } && FunnelEventNamePattern.IsMatch(name);
+
+    /// <summary>Whether the name is one of the standard client events.</summary>
+    public static bool IsClientFunnelEvent(string? name) => name is not null && ClientEventSet.Contains(name);
+
+    /// <summary>Whether the name is recorded only by the server (a client sending it is refused).</summary>
+    public static bool IsServerOnlyFunnelEvent(string? name) => name is not null && ServerOnlyEventSet.Contains(name);
+
+    /// <summary>
+    /// Whether a client may send this event: well formed, not server-only, and a standard client event
+    /// or one of the app's custom names.
+    /// </summary>
+    public static bool IsAllowedFunnelEvent(string? name, IEnumerable<string>? customEventNames = null)
+    {
+        if (!IsValidFunnelEventName(name) || IsServerOnlyFunnelEvent(name))
+        {
+            return false;
+        }
+
+        if (IsClientFunnelEvent(name))
+        {
+            return true;
+        }
+
+        if (customEventNames is null)
+        {
+            return false;
+        }
+
+        foreach (var custom in customEventNames)
+        {
+            if (string.Equals(custom, name, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// A config's custom event names: trimmed, lowercased, well formed, not a standard or server-only
+    /// name, deduplicated, and at most <see cref="MaxCustomEventNames"/>.
+    /// </summary>
+    public static List<string> NormalizeCustomEventNames(IEnumerable<string?>? names)
+    {
+        var kept = new List<string>();
+        if (names is null)
+        {
+            return kept;
+        }
+
+        foreach (var raw in names)
+        {
+            if (raw is null)
+            {
+                continue;
+            }
+
+            var name = raw.Trim().ToLowerInvariant();
+            if (IsValidFunnelEventName(name) && !IsClientFunnelEvent(name) && !IsServerOnlyFunnelEvent(name) && !kept.Contains(name))
+            {
+                kept.Add(name);
+            }
+
+            if (kept.Count >= MaxCustomEventNames)
+            {
+                break;
+            }
+        }
+
+        return kept;
+    }
+
+    /// <summary>A device class as the server accepts it (<c>mobile</c>, <c>tablet</c>, <c>desktop</c>), or null.</summary>
+    public static string? NormalizeDeviceClass(string? value)
+    {
+        var normalized = value?.Trim().ToLowerInvariant();
+        if (normalized is null)
+        {
+            return null;
+        }
+
+        foreach (var known in DeviceClasses)
+        {
+            if (string.Equals(known, normalized, StringComparison.Ordinal))
+            {
+                return known;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The browser engines' viewport bucket: under 768 CSS pixels is mobile, under 1024 a tablet (a
+    /// coarse pointer stretches the tablet range to 1280), and anything wider a desktop. Null for a
+    /// non-positive width.
+    /// </summary>
+    public static string? DeviceClassFromViewport(int width, bool coarsePointer = false)
+    {
+        if (width <= 0) return null;
+        if (width < 768) return "mobile";
+        if (width < 1024 || (coarsePointer && width < 1280)) return "tablet";
+        return "desktop";
+    }
+
+    /// <summary>
+    /// A funnel event label: trimmed, capped at <see cref="FunnelLabelMaxLength"/>, and null when empty
+    /// or carrying control characters.
+    /// </summary>
+    public static string? NormalizeFunnelLabel(string? label) => NormalizeToken(label, FunnelLabelMaxLength, lowercase: false);
+
+    /// <summary>
+    /// A page or screen path for a funnel event: no query or fragment, a leading "/", capped at
+    /// <see cref="PathMaxLength"/>. Null when empty.
+    /// </summary>
+    public static string? NormalizeFunnelPath(string? raw)
+    {
+        if (raw is null)
+        {
+            return null;
+        }
+
+        var cut = raw;
+        var stop = cut.IndexOfAny(new[] { '?', '#' });
+        if (stop >= 0)
+        {
+            cut = cut.Substring(0, stop);
+        }
+
+        cut = cut.Trim();
+        if (cut.Length == 0)
+        {
+            return null;
+        }
+
+        return Truncate(cut[0] == '/' ? cut : "/" + cut, PathMaxLength);
+    }
+
+    /// <summary>
+    /// A <c>signup_error</c> label reduced to the server's category shape (<c>^[a-z0-9_]{1,40}$</c>),
+    /// <c>unknown</c> when nothing is left. The engines apply the same reduction to every signup_error.
+    /// </summary>
+    public static string SignupErrorLabel(string? label)
+    {
+        var lowered = (label ?? string.Empty).ToLowerInvariant();
+        var category = Regex.Replace(lowered, "[^a-z0-9_]+", "_").Trim('_');
+        if (category.Length > 40)
+        {
+            category = category.Substring(0, 40);
+        }
+
+        category = category.TrimEnd('_');
+        return category.Length > 0 ? category : "unknown";
+    }
+
+    /// <summary>
+    /// The <c>signup_error</c> category for a server or client error code (WildwoodAPI's
+    /// <c>errorCode</c>, or a flow code such as <c>registration_token_rejected</c>), falling back on the
+    /// HTTP status (0 for a request that never reached the server). Never reads a message.
+    /// </summary>
+    public static string SignupErrorCategoryFromCode(string? code, int? status = null)
+    {
+        var key = Regex.Replace((code ?? string.Empty).ToUpperInvariant(), "[^A-Z0-9]", string.Empty);
+        if (key.Length > 0)
+        {
+            if (SignupErrorCodeCategories.TryGetValue(key, out var known)) return known;
+            if (key.IndexOf("CAPTCHA", StringComparison.Ordinal) >= 0) return "captcha";
+            if (key.StartsWith("TOKEN", StringComparison.Ordinal)) return "invalid_token";
+            if (key.StartsWith("PASSWORD", StringComparison.Ordinal)) return "password_policy";
+            if (key.IndexOf("REGISTRATIONDISABLED", StringComparison.Ordinal) >= 0
+                || key.IndexOf("NOTALLOWED", StringComparison.Ordinal) >= 0)
+            {
+                return "registration_closed";
+            }
+        }
+
+        if (status.HasValue)
+        {
+            var s = status.Value;
+            if (s == 0) return "network";
+            if (s == 429) return "rate_limited";
+            if (s >= 500) return "server";
+            if (s == 400 || s == 422) return "validation";
+        }
+
+        return "unknown";
+    }
+
+    /// <summary>
+    /// A stable plan key for <c>plan_selected</c> / <c>checkout_start</c>: the tier's (or pricing
+    /// option's) id, else a slug of its name, capped at 100 characters. Null when there is neither.
+    /// </summary>
+    public static string? SignupPlanKey(string? id, string? name = null)
+    {
+        var trimmed = id?.Trim() ?? string.Empty;
+        if (trimmed.Length > 0)
+        {
+            return trimmed.Length <= 100 ? trimmed : trimmed.Substring(0, 100);
+        }
+
+        var slug = Regex.Replace((name ?? string.Empty).ToLowerInvariant(), "[^a-z0-9]+", "_").Trim('_');
+        if (slug.Length > 100)
+        {
+            slug = slug.Substring(0, 100);
+        }
+
+        return slug.Length > 0 ? slug : null;
+    }
+
     // ---- Helpers ----------------------------------------------------------------------------
 
     private static Dictionary<string, string>? ReadExtraParams(

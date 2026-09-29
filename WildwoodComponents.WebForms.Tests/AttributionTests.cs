@@ -295,5 +295,134 @@ namespace WildwoodComponents.WebForms.Tests
         {
             Assert.Null(WildwoodAttribution.Capture(null));
         }
+
+        // ── funnel events (server-side Track) ───────────────────────────────────
+
+        private static readonly DateTimeOffset Now = new DateTimeOffset(2026, 9, 28, 12, 0, 0, TimeSpan.Zero);
+
+        [Fact]
+        public void A_funnel_event_carries_the_visitor_the_session_and_the_current_touch()
+        {
+            var store = new WildwoodAttributionStore(new InMemoryTokenStore());
+            store.Capture(Landing, null);
+
+            var body = store.CreateEventsRequest("app-1", "cta_click", " hero ", null, "/pricing?x=1", "Mobile", Now);
+
+            Assert.NotNull(body);
+            Assert.Equal("app-1", body!.AppId);
+            Assert.Equal(store.GetForRegistration()!.VisitorKey, body.VisitorKey);
+            Assert.True(AttributionRules.IsValidVisitorKey(body.SessionKey));
+            Assert.False(body.IsReturning);
+            Assert.Equal("mobile", body.DeviceClass);
+            Assert.Equal("web", body.Platform);
+            Assert.Equal("reddit", body.Touch!.Source);
+            var only = Assert.Single(body.Events);
+            Assert.Equal("cta_click", only.Name);
+            Assert.Equal("hero", only.Label);
+            Assert.Equal("/pricing", only.Path);
+            Assert.Equal("2026-09-28T12:00:00.000Z", only.ClientTimestamp);
+        }
+
+        [Fact]
+        public void The_session_continues_under_thirty_minutes_and_rolls_over_after()
+        {
+            var session = new InMemoryTokenStore();
+            var first = new WildwoodAttributionStore(session).CreateEventsRequest("app-1", "page_view", nowUtc: Now);
+            var soon = new WildwoodAttributionStore(session).CreateEventsRequest("app-1", "page_view", nowUtc: Now.AddMinutes(29));
+            var later = new WildwoodAttributionStore(session).CreateEventsRequest("app-1", "page_view", nowUtc: Now.AddMinutes(60));
+
+            Assert.Equal(first!.SessionKey, soon!.SessionKey);
+            Assert.NotEqual(first.SessionKey, later!.SessionKey);
+            Assert.Equal(first.VisitorKey, later.VisitorKey);
+            Assert.False(first.IsReturning);
+            Assert.True(later.IsReturning);
+            Assert.Null(first.Touch);
+            Assert.Null(first.DeviceClass);
+        }
+
+        [Fact]
+        public void Server_only_and_malformed_names_and_refused_values_send_nothing()
+        {
+            var store = new WildwoodAttributionStore(new InMemoryTokenStore());
+
+            Assert.Null(store.CreateEventsRequest("app-1", "purchase"));
+            Assert.Null(store.CreateEventsRequest("app-1", "signup_complete"));
+            Assert.Null(store.CreateEventsRequest("app-1", "Bad Name"));
+            Assert.Null(store.CreateEventsRequest("app-1", "cta_click"));
+            Assert.Null(store.CreateEventsRequest("app-1", "scroll_depth", value: 33));
+            Assert.Null(store.CreateEventsRequest("", "page_view"));
+            Assert.NotNull(store.CreateEventsRequest("app-1", "demo_booked", value: 1));
+        }
+
+        [Fact]
+        public void A_signup_error_label_is_reduced_to_a_category()
+        {
+            var store = new WildwoodAttributionStore(new InMemoryTokenStore());
+
+            var body = store.CreateEventsRequest("app-1", "signup_error", "USERNAME EXISTS!");
+
+            Assert.Equal("username_exists", body!.Events[0].Label);
+        }
+
+        [Fact]
+        public void A_declined_visitor_sends_nothing_and_drops_what_was_held()
+        {
+            var session = new InMemoryTokenStore();
+            new WildwoodAttributionStore(session).Capture(Landing, null);
+            var store = new WildwoodAttributionStore(session, () => WildwoodAttributionConsent.Denied);
+
+            Assert.Null(store.CreateEventsRequest("app-1", "page_view"));
+            Assert.Null(session.Get(WildwoodStorageKeys.Attribution));
+        }
+
+        [Fact]
+        public void Registration_carries_the_funnel_session()
+        {
+            var session = new InMemoryTokenStore();
+            var store = new WildwoodAttributionStore(session);
+            store.Capture(Landing, null);
+            var tracked = store.CreateEventsRequest("app-1", "signup_view");
+
+            var payload = store.GetForRegistration();
+
+            Assert.Equal(tracked!.SessionKey, payload!.SessionKey);
+            Assert.Equal(1, payload.SessionCount);
+            Assert.Null(payload.DeviceClass);
+        }
+
+        [Fact]
+        public async Task SendEvents_posts_the_body_to_the_events_endpoint()
+        {
+            var handler = new FakeHttpMessageHandler();
+            var store = new WildwoodAttributionStore(new InMemoryTokenStore());
+            var body = store.CreateEventsRequest("app 1", "cta_click", "hero");
+
+            var sent = await WildwoodAttribution.SendEventsAsync(handler.CreateClient(), body!);
+
+            Assert.True(sent);
+            var request = handler.Single("attribution/events");
+            Assert.Equal("https://api.example.test/api/attribution/events?appId=app%201", request.Instance.RequestUri!.AbsoluteUri);
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Contains("\"events\":[{\"name\":\"cta_click\",\"label\":\"hero\"", request.Body);
+            Assert.DoesNotContain("\"deviceClass\"", request.Body);
+        }
+
+        [Fact]
+        public async Task SendEvents_answers_false_on_an_error_status_and_never_throws()
+        {
+            var handler = new FakeHttpMessageHandler { DefaultStatus = (System.Net.HttpStatusCode)429 };
+            var store = new WildwoodAttributionStore(new InMemoryTokenStore());
+            var body = store.CreateEventsRequest("app-1", "page_view");
+
+            Assert.False(await WildwoodAttribution.SendEventsAsync(handler.CreateClient(), body!));
+            Assert.False(await WildwoodAttribution.SendEventsAsync(null!, body!));
+        }
+
+        [Fact]
+        public async Task Track_without_a_request_sends_nothing_rather_than_throwing()
+        {
+            Assert.False(WildwoodAttribution.Track(null, "page_view"));
+            Assert.False(await WildwoodAttribution.TrackAsync(null, "page_view"));
+        }
     }
 }

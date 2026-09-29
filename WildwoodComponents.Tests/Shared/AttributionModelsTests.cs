@@ -67,5 +67,78 @@ public class AttributionModelsTests
         Assert.False(config.CaptureReferrer);
         Assert.Equal(new[] { "sub_id" }, config.ExtraAllowedParamNames);
         Assert.True(config.BeaconEnabled);
+        Assert.False(config.FunnelTrackingEnabled);
+        Assert.Empty(config.CustomEventNames);
+    }
+
+    [Fact]
+    public void Config_ReadsTheFunnelFields()
+    {
+        const string json = """
+            {"appId":"app-1","isEnabled":true,"funnelTrackingEnabled":true,"trackScrollDepth":true,
+             "trackEngagement":true,"autoTrackCtaClicks":true,"trackSignupSteps":true,
+             "customEventNames":["demo_booked"],"sessionStoragePersistenceBeforeConsent":true}
+            """;
+
+        var config = JsonSerializer.Deserialize<AttributionConfigModel>(json, Web)!;
+
+        Assert.True(config.FunnelTrackingEnabled);
+        Assert.True(config.TrackScrollDepth);
+        Assert.True(config.TrackEngagement);
+        Assert.True(config.AutoTrackCtaClicks);
+        Assert.True(config.TrackSignupSteps);
+        Assert.Equal(new[] { "demo_booked" }, config.CustomEventNames);
+        Assert.True(config.SessionStoragePersistenceBeforeConsent);
+    }
+
+    [Fact]
+    public void Payload_ReadsAndWritesTheFunnelSession()
+    {
+        const string json = """
+            {"version":1,"visitorKey":"visitor-key-0001","firstTouch":null,"lastTouch":null,"platform":"web",
+             "sdk":"dotnet","sessionKey":"session-key-0001","deviceClass":"tablet","sessionCount":3}
+            """;
+
+        var payload = JsonSerializer.Deserialize<AttributionPayloadModel>(json, Web)!;
+
+        Assert.Equal("session-key-0001", payload.SessionKey);
+        Assert.Equal("tablet", payload.DeviceClass);
+        Assert.Equal(3, payload.SessionCount);
+
+        // A claim carries them through, so a provider signup joins its funnel too.
+        var claim = AttributionClaimRequestModel.From("app-1", payload);
+        Assert.Equal("session-key-0001", claim.SessionKey);
+        Assert.Equal("tablet", claim.DeviceClass);
+        Assert.Equal(3, claim.SessionCount);
+
+        var written = JsonSerializer.Serialize(claim, Web);
+        Assert.Contains("\"sessionKey\":\"session-key-0001\"", written);
+        Assert.Contains("\"deviceClass\":\"tablet\"", written);
+        Assert.Contains("\"sessionCount\":3", written);
+    }
+
+    [Fact]
+    public void EventsRequest_WritesTheEndpointShape()
+    {
+        var body = new AttributionEventsRequestModel
+        {
+            AppId = "app-1",
+            VisitorKey = "visitor-key-0001",
+            SessionKey = "session-key-0001",
+            IsReturning = true,
+            DeviceClass = "mobile",
+            Touch = null,
+            Events = { new AttributionFunnelEventModel { Name = "cta_click", Label = "hero", Path = "/" } }
+        };
+
+        var written = JsonSerializer.Serialize(body, Web);
+
+        Assert.Contains("\"appId\":\"app-1\"", written);
+        Assert.Contains("\"sessionKey\":\"session-key-0001\"", written);
+        Assert.Contains("\"isReturning\":true", written);
+        Assert.Contains("\"deviceClass\":\"mobile\"", written);
+        Assert.Contains("\"platform\":\"web\"", written);
+        Assert.Contains("\"touch\":null", written);
+        Assert.Contains("\"events\":[{\"name\":\"cta_click\",\"label\":\"hero\"", written);
     }
 }
