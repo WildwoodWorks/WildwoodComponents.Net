@@ -14,6 +14,18 @@ public partial class AIChatComponent
 {
     #region Message Methods
 
+    /// <summary>
+    /// The session id to send with a chat request: the loaded session's id, or the tracked
+    /// <c>CurrentSessionId</c> when the session object failed to load (GetSessionAsync returns null
+    /// on any error). Sending null makes the API start a new, empty session, and the model loses
+    /// the whole conversation.
+    /// </summary>
+    internal static string? ResolveRequestSessionId(string? loadedSessionId, string? trackedSessionId)
+    {
+        if (!string.IsNullOrEmpty(loadedSessionId)) return loadedSessionId;
+        return string.IsNullOrEmpty(trackedSessionId) ? null : trackedSessionId;
+    }
+
     private async Task SendMessage()
     {
         // A recording in progress (or still transcribing) is part of this message: finish it first
@@ -78,17 +90,19 @@ public partial class AIChatComponent
             StateHasChanged();
             Logger?.LogInformation("? AIChatComponent: Typing indicator shown");
 
+            var requestSessionId = ResolveRequestSessionId(CurrentSession?.Id, CurrentSessionId);
+
             var request = new AIChatRequest
             {
                 ConfigurationId = CurrentConfigurationId,
-                SessionId = CurrentSession?.Id,
+                SessionId = requestSessionId,
                 Message = messageText,
                 SaveToSession = Settings.EnableSessions,
                 MacroValues = new Dictionary<string, string>()
             };
 
             Logger?.LogInformation("?? AIChatComponent: Sending request - ConfigId: {ConfigId}, SessionId: {SessionId}, SaveToSession: {SaveToSession}",
-                CurrentConfigurationId, CurrentSession?.Id ?? "null", Settings.EnableSessions);
+                CurrentConfigurationId, requestSessionId ?? "null", Settings.EnableSessions);
 
             AIChatResponse response;
             if (_selectedFile != null)
