@@ -549,6 +549,11 @@
 
 .ai-chat-input::placeholder {
     color: var(--chat-text-muted);
+    /* The textarea is one row tall: a long placeholder that wraps on a narrow screen shows only
+       its first line. Keep it on one line and end it with an ellipsis instead. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .ai-chat-input:disabled {
@@ -1428,6 +1433,23 @@
     }
 }
 
+/* Small screens: the floating sidebar toggle sits over the scrolling messages, and the
+   messages' top padding only clears it at scroll-top, so text scrolls underneath it. Give it
+   its own row above the messages instead. */
+@media (max-width: 768px) {
+    .ai-chat-sidebar-toggle-floating {
+        position: static;
+        align-self: flex-start;
+        flex-shrink: 0;
+        margin: 8px 0 4px 8px;
+    }
+
+    .ai-chat-messages,
+    .ai-chat-container.sidebar-open .ai-chat-messages {
+        padding-top: 12px;
+    }
+}
+
 /* ==================== NARROW PHONE SCREENS ==================== */
 
 @media (max-width: 480px) {
@@ -1501,10 +1523,9 @@
         gap: 2px;
     }
     
-    /* Messages take full width */
+    /* Messages take full width (the sidebar toggle has its own row on small screens, above) */
     .ai-chat-messages {
         padding: 12px 8px;
-        padding-top: 56px;
     }
     
     /* Empty state smaller font */
