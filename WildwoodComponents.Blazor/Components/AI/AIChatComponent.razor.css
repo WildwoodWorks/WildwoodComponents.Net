@@ -556,6 +556,20 @@
     text-overflow: ellipsis;
 }
 
+/* Where the browser can size a textarea to its placeholder, show the whole placeholder instead:
+   it wraps and the empty input grows to fit it (max-height still caps it). Browsers without
+   field-sizing keep the one-line ellipsis above. */
+@supports (field-sizing: content) {
+    .ai-chat-input {
+        field-sizing: content;
+        min-width: 0;
+    }
+
+    .ai-chat-input::placeholder {
+        white-space: normal;
+    }
+}
+
 .ai-chat-input:disabled {
     color: var(--chat-text-muted);
     cursor: not-allowed;
