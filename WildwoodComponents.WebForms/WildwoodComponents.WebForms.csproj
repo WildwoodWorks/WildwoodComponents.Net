@@ -36,7 +36,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\WildwoodComponents.Shared\WildwoodComponents.Shared.csproj" />
-    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <PackageReference Include="System.Text.Json" Version="8.0.6" />
     <!-- Lets the net48 leg compile on a Linux CI runner too; tests still need Windows. -->
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
