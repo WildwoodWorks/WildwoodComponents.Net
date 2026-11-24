@@ -27,12 +27,21 @@ namespace WildwoodComponents.Blazor.Services
             _logger = logger;
         }
 
+        /// <summary>
+        /// Points the service at the API. Every request path here is rooted ("api/twofactor/..."), so the
+        /// API ROOT is wanted; a base that already ends in /api — what hosts commonly hold as their
+        /// "ApiSettings:BaseUrl" — is accepted and trimmed, because otherwise every call went to
+        /// /api/api/... and 404'd, and the panel only ever said "Failed to get 2FA status".
+        /// </summary>
         public void SetApiBaseUrl(string baseUrl)
         {
-            if (!string.IsNullOrEmpty(baseUrl))
-            {
-                _httpClient.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
-            }
+            if (string.IsNullOrEmpty(baseUrl))
+                return;
+
+            var root = baseUrl.TrimEnd('/');
+            if (root.EndsWith("/api", StringComparison.OrdinalIgnoreCase))
+                root = root[..^4];
+            _httpClient.BaseAddress = new Uri(root + "/");
         }
 
         public void SetAuthToken(string token)
