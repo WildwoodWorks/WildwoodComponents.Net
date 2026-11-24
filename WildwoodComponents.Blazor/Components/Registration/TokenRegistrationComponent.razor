@@ -437,6 +437,7 @@
                                  CustomerEmail="@_registrationModel.Email"
                                  PricingModelId="@_registrationResponse?.PricingModelId"
                                  IsSubscription="@(_registrationResponse?.IsSubscription ?? false)"
+                                 TrialDays="@_pricingDetails?.TrialDays"
                                  ShowAmount="false"
                                  OnPaymentSuccess="HandlePaymentSuccess"
                                  OnPaymentFailure="HandlePaymentFailure"
@@ -804,7 +805,8 @@
                         PriceAmount = pricingModel.Price,
                         Currency = pricingModel.Currency ?? "USD",
                         IsSubscription = !string.Equals(pricingModel.BillingFrequency, "OneTime", StringComparison.OrdinalIgnoreCase),
-                        BillingFrequency = pricingModel.BillingFrequency
+                        BillingFrequency = pricingModel.BillingFrequency,
+                        TrialDays = pricingModel.TrialDays
                     };
                 }
             }
@@ -1072,7 +1074,8 @@
                     PlanName = validation.PricingModelName,
                     PriceAmount = validation.PriceAmount ?? 0,
                     Currency = validation.Currency ?? "USD",
-                    IsSubscription = validation.IsSubscription
+                    IsSubscription = validation.IsSubscription,
+                    TrialDays = validation.TrialDays
                 };
 
                 // Store pending registration state - we'll complete registration after payment
@@ -1131,7 +1134,8 @@
                 PlanName = _validationResponse.PricingModelName,
                 PriceAmount = _validationResponse.PriceAmount ?? 0,
                 Currency = _validationResponse.Currency ?? "USD",
-                IsSubscription = _validationResponse.IsSubscription
+                IsSubscription = _validationResponse.IsSubscription,
+                TrialDays = _validationResponse.TrialDays
             };
 
             _registrationPending = true;
@@ -1454,6 +1458,13 @@
 
     private async Task PerformAutoLoginAsync()
     {
+        // Once per registration. The deferred (pay-first) path reaches here twice — from
+        // CompleteRegistrationAsync and again from HandlePaymentSuccess/SkipPaymentAsync — and a second
+        // OnAutoLoginSuccess makes the host submit its sign-in form again mid-navigation: the first
+        // post signs in (302), the second is refused (400) and the user is left on a blank page.
+        if (_isAutoLoggingIn || _autoLoginComplete)
+            return;
+
         try
         {
             _isAutoLoggingIn = true;
@@ -1744,6 +1755,7 @@
         public string Currency { get; set; } = "USD";
         public string? BillingFrequency { get; set; }
         public bool IsSubscription { get; set; }
+        public int? TrialDays { get; set; }
     }
 
     public class PricingModelResponse
@@ -1755,6 +1767,7 @@
         public string BillingFrequency { get; set; } = "Monthly";
         public string? Currency { get; set; } = "USD";
         public bool IsActive { get; set; }
+        public int? TrialDays { get; set; }
     }
 
     public class SkipPaymentRequest
@@ -1809,6 +1822,9 @@
         public string? Currency { get; set; }
         public string[]? GrantedApps { get; set; }
         public string? PaymentAppId { get; set; }
+
+        /// <summary>Free-trial length of the pricing model (null/0 = no trial).</summary>
+        public int? TrialDays { get; set; }
     }
 
     /// <summary>
