@@ -59,4 +59,44 @@ public class TwoFactorSettingsServiceTests
 
         Assert.Null(config);
     }
+
+    [Fact]
+    public async Task BeginAuthenticatorEnrollment_MapsTheApisFieldNames()
+    {
+        // The API's AuthenticatorEnrollmentResponse: secretKey / qrCodeBase64 (already a data URL).
+        var (service, handler) = CreateService();
+        handler.WhenOk("twofactor/enroll/authenticator", """
+        {
+            "credentialId": "cred-1",
+            "secretKey": "JBSWY3DPEHPK3PXP",
+            "otpAuthUri": "otpauth://totp/Wildwood:e2e?secret=JBSWY3DPEHPK3PXP",
+            "qrCodeBase64": "data:image/png;base64,iVBORw0KGgo=",
+            "issuer": "Wildwood",
+            "accountName": "e2e"
+        }
+        """);
+
+        var result = await service.BeginAuthenticatorEnrollmentAsync("Authenticator App");
+
+        Assert.True(result.Success);
+        Assert.Equal("cred-1", result.CredentialId);
+        Assert.Equal("JBSWY3DPEHPK3PXP", result.Secret);
+        Assert.Equal("JBSW Y3DP EHPK 3PXP", result.ManualEntryKey);
+        Assert.Equal("data:image/png;base64,iVBORw0KGgo=", result.QrCodeDataUrl);
+    }
+
+    [Fact]
+    public async Task SetApiBaseUrl_AcceptsABaseEndingInApi()
+    {
+        // Hosts commonly hold ".../api" as their API base; the paths here already start with api/.
+        var (service, handler) = CreateService();
+        handler.WhenOk("twofactor/configuration", """{ "isEnabled": true }""");
+        service.SetApiBaseUrl("https://api.test/api");
+
+        await service.GetConfigurationAsync("app-1");
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Contains("https://api.test/api/twofactor/configuration/app-1", request.Url);
+        Assert.DoesNotContain("/api/api/", request.Url);
+    }
 }

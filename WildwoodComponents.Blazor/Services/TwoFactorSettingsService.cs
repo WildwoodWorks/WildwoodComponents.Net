@@ -196,7 +196,7 @@ namespace WildwoodComponents.Blazor.Services
 
                 if (response.IsSuccessStatusCode)
                 {
-                    return await response.Content.ReadFromJsonAsync<AuthenticatorEnrollmentResult>()
+                    return (await response.Content.ReadFromJsonAsync<AuthenticatorEnrollmentResult>())?.Normalize()
                         ?? new AuthenticatorEnrollmentResult { Success = false, Message = "Invalid response" };
                 }
 
