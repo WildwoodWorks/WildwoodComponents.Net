@@ -95,7 +95,10 @@
             </button>
         </div>
     }
-    else if (_tokenValidated && _currentStep == 2 && !_registrationSuccessful)
+    @* The account form must yield while registration-time terms are pending: this branch precedes the
+       Terms & Agreements branch below, so without the disclaimer check it kept matching and the terms
+       step never rendered — submit validated, found pending terms, and the user saw nothing happen. *@
+    else if (_tokenValidated && _currentStep == 2 && !_registrationSuccessful && !_showRegistrationDisclaimers)
     {
         <!-- Registration Form Step -->
         <div class="registration-form-section">
@@ -437,7 +440,7 @@
                                  ShowAmount="false"
                                  OnPaymentSuccess="HandlePaymentSuccess"
                                  OnPaymentFailure="HandlePaymentFailure"
-                                 OnCancel="SkipPaymentAsync" />
+                                 OnCancel="CancelPaymentAsync" />
             }
             else
             {
@@ -447,11 +450,11 @@
                     Payment configuration is not available. Please contact support.
                 </div>
                 <div class="d-grid gap-2">
-                    <button type="button" 
+                    <button type="button"
                             class="btn btn-outline-secondary"
-                            @onclick="SkipPaymentAsync">
+                            @onclick="CancelPaymentAsync">
                         <i class="fas fa-clock me-2"></i>
-                        Set Up Payment Later
+                        @(AllowSkipPayment ? "Set Up Payment Later" : "Back")
                     </button>
                 </div>
             }
@@ -648,6 +651,13 @@
     /// Called when user wants to cancel/close the registration.
     /// </summary>
     [Parameter] public EventCallback OnCancel { get; set; }
+
+    /// <summary>
+    /// Whether the payment step offers "pay later": cancelling it registers the user without paying.
+    /// Default true (historical behaviour). Set false where the plan must be paid before an account
+    /// exists — cancelling then returns to the account step instead.
+    /// </summary>
+    [Parameter] public bool AllowSkipPayment { get; set; } = true;
 
     /// <summary>
     /// Determines if token is strictly required (no open registration allowed).
@@ -1197,7 +1207,9 @@
                     DeviceInfo = "Browser",
                     Username = _registrationModel.Username,
                     DisclaimerAcceptances = _disclaimerAcceptances,
-                    Attribution = await GetAttributionPayloadAsync()
+                    Attribution = await GetAttributionPayloadAsync(),
+                    PaymentTransactionId = _pendingPaymentTransactionId,
+                    PaymentIntentId = _pendingPaymentIntentId
                 };
 
                 response = await GetHttpClient().PostAsJsonAsync("api/userregistration/register-with-token", registrationRequest);
@@ -1217,7 +1229,9 @@
                     Username = _registrationModel.Username,
                     PricingModelId = DefaultPricingModelId,
                     DisclaimerAcceptances = _disclaimerAcceptances,
-                    Attribution = await GetAttributionPayloadAsync()
+                    Attribution = await GetAttributionPayloadAsync(),
+                    PaymentTransactionId = _pendingPaymentTransactionId,
+                    PaymentIntentId = _pendingPaymentIntentId
                 };
 
                 response = await GetHttpClient().PostAsJsonAsync("api/userregistration/register", registrationRequest);
@@ -1346,8 +1360,9 @@
                 return;
             }
             
-            // Link the payment transaction to the newly created user
-            await LinkPaymentTransactionToUserAsync();
+            // The registration request carried the payment reference and the server linked it to the
+            // new user inside the registration transaction. (The old follow-up link call needed a
+            // session the new user did not have yet, so it always failed with 401.)
         }
         
         _paymentComplete = true;
@@ -1360,69 +1375,32 @@
         }
     }
 
-    /// <summary>
-    /// Links a pending payment transaction to the newly registered user.
-    /// Called after CompleteRegistrationAsync succeeds when payment was made before registration.
-    /// </summary>
-    private async Task LinkPaymentTransactionToUserAsync()
-    {
-        // Determine which transaction ID to use for linking
-        var externalTransactionId = _pendingPaymentIntentId ?? _pendingPaymentTransactionId;
-        var userId = _registrationResponse?.UserId;
-        
-        if (string.IsNullOrEmpty(externalTransactionId))
-        {
-            Logger.LogWarning("No payment transaction ID available to link to user");
-            return;
-        }
-        
-        if (string.IsNullOrEmpty(userId))
-        {
-            Logger.LogWarning("No user ID available to link payment transaction to");
-            return;
-        }
-        
-        try
-        {
-            Logger.LogInformation("Linking payment transaction {ExternalTransactionId} to user {UserId}",
-                externalTransactionId, userId);
-            
-            var linked = await PaymentProviderService.LinkTransactionToUserAsync(
-                externalTransactionId, 
-                userId,
-                _tokenInfo?.CompanyClientId);
-            
-            if (linked)
-            {
-                Logger.LogInformation("Successfully linked payment transaction {ExternalTransactionId} to user {UserId}",
-                    externalTransactionId, userId);
-            }
-            else
-            {
-                Logger.LogWarning("Failed to link payment transaction {ExternalTransactionId} to user {UserId}. " +
-                    "The transaction was created but may not be associated with the user in the database.",
-                    externalTransactionId, userId);
-            }
-        }
-        catch (Exception ex)
-        {
-            // Log but don't fail registration - the payment was still successful
-            Logger.LogError(ex, "Error linking payment transaction {ExternalTransactionId} to user {UserId}. " +
-                "Registration completed successfully but transaction link failed.",
-                externalTransactionId, userId);
-        }
-        finally
-        {
-            // Clear the pending transaction IDs
-            _pendingPaymentTransactionId = null;
-            _pendingPaymentIntentId = null;
-        }
-    }
-
     private async Task HandlePaymentFailure(PaymentFailureEventArgs args)
     {
         Logger.LogWarning("Payment failed: {Error}", args.ErrorMessage);
         await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// The payment form's Cancel (and the no-payment-config fallback button). With AllowSkipPayment the
+    /// registrant may register now and pay later; without it — a signup whose plan must be paid for —
+    /// Cancel returns to the account step and nobody is registered, since an unpaid account on a paid
+    /// plan is exactly what the plan gate exists to prevent.
+    /// </summary>
+    private async Task CancelPaymentAsync()
+    {
+        if (AllowSkipPayment)
+        {
+            await SkipPaymentAsync();
+            return;
+        }
+
+        Logger.LogInformation("Payment cancelled; returning to the account step without registering.");
+        _registrationPending = false;
+        _pendingPaymentTransactionId = null;
+        _pendingPaymentIntentId = null;
+        _currentStep = 2;
+        StateHasChanged();
     }
 
     private async Task SkipPaymentAsync()
@@ -1717,6 +1695,8 @@
         public string? DeviceInfo { get; set; }
         public List<DisclaimerAcceptanceResult>? DisclaimerAcceptances { get; set; }
         public WildwoodComponents.Shared.Models.AttributionPayloadModel? Attribution { get; set; }
+        public string? PaymentTransactionId { get; set; }
+        public string? PaymentIntentId { get; set; }
     }
 
     public class OpenRegistrationRequest
@@ -1732,6 +1712,8 @@
         public string? PricingModelId { get; set; }
         public List<DisclaimerAcceptanceResult>? DisclaimerAcceptances { get; set; }
         public WildwoodComponents.Shared.Models.AttributionPayloadModel? Attribution { get; set; }
+        public string? PaymentTransactionId { get; set; }
+        public string? PaymentIntentId { get; set; }
     }
 
     public class RegistrationSuccessResponse
