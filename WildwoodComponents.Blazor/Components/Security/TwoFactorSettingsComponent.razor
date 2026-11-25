@@ -77,6 +77,23 @@
             </div>
 
             <!-- Accordion for sections -->
+            @if (_appDoesNotEnforce)
+            {
+                @* The app's sign-in only asks for a second factor when a 2FA provider is enabled for it
+                   (TwoFactorService.IsTwoFactorEnabledAsync). Offering enrollment anyway showed "2FA
+                   Enabled" for protection that did not exist. *@
+                <div class="alert alert-warning" data-ww-2fa-notice="app-not-enforcing">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Two-factor authentication is not enabled for this application, so signing in will not ask for a code.
+                    @if (_status?.IsEnabled == true)
+                    {
+                        <span>Your existing methods are listed below and can be removed.</span>
+                    }
+                </div>
+            }
+
+            @if (!_appDoesNotEnforce || _status?.IsEnabled == true)
+            {
             <div class="accordion" id="twoFactorAccordion">
                 <!-- Authenticator App Section -->
                 <div class="accordion-item">
@@ -440,6 +457,7 @@
                     </div>
                 </div>
             </div>
+            }
         }
     </div>
 </div>
@@ -562,6 +580,10 @@
     [Parameter] public EventCallback OnStatusChanged { get; set; }
 
     private TwoFactorUserStatus? _status;
+    private TwoFactorConfiguration? _appConfiguration;
+
+    /// <summary>True when the host named its app and that app has no 2FA provider enabled.</summary>
+    private bool _appDoesNotEnforce => _appConfiguration is { IsEnabled: false };
     private List<TwoFactorCredential>? _credentials;
     private List<TrustedDevice>? _trustedDevices;
     private RecoveryCodeInfo? _recoveryCodeInfo;
@@ -599,6 +621,8 @@
         await ExecuteAsync(async () =>
         {
             _status = await TwoFactorService.GetStatusAsync();
+            if (!string.IsNullOrEmpty(AppId))
+                _appConfiguration = await TwoFactorService.GetConfigurationAsync(AppId);
             _credentials = await TwoFactorService.GetCredentialsAsync();
             _trustedDevices = await TwoFactorService.GetTrustedDevicesAsync();
 
