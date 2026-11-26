@@ -701,6 +701,13 @@
         {
             _webAuthnSupported = false;
         }
+
+        // The support check only resolves after the first render, and the base class does not re-render
+        // after this hook: without this the passkey button never appears until something else redraws.
+        if (_webAuthnSupported && _passkeyEnabled)
+        {
+            StateHasChanged();
+        }
     }
 
     private async Task HandleSubmit()
