@@ -33,4 +33,24 @@ public class AuthenticationComponentContractTests
         Assert.NotNull(property!.GetCustomAttribute<ParameterAttribute>());
         Assert.Equal(typeof(EventCallback), property.PropertyType);
     }
+
+    [Fact]
+    public void OnTwoFactorEnrollmentRequired_is_an_EventCallback_of_the_response()
+    {
+        var property = typeof(AuthenticationComponent).GetProperty("OnTwoFactorEnrollmentRequired");
+
+        Assert.NotNull(property);
+        Assert.NotNull(property!.GetCustomAttribute<ParameterAttribute>());
+        Assert.Equal(typeof(EventCallback<WildwoodComponents.Blazor.Models.AuthenticationResponse>), property.PropertyType);
+    }
+
+    [Fact]
+    public void AuthenticationResponse_reads_requiresTwoFactorEnrollment()
+    {
+        var response = System.Text.Json.JsonSerializer.Deserialize<WildwoodComponents.Blazor.Models.AuthenticationResponse>(
+            """{"jwtToken":"t","requiresTwoFactorEnrollment":true}""",
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+
+        Assert.True(response!.RequiresTwoFactorEnrollment);
+    }
 }

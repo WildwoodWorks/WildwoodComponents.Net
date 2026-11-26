@@ -99,6 +99,13 @@ namespace WildwoodComponents.Blazor.Models
         public string RefreshToken { get; set; } = string.Empty;
         public bool RequiresTwoFactor { get; set; }
         public bool RequiresPasswordReset { get; set; }
+
+        /// <summary>
+        /// The app requires two-factor authentication and this user has none: the session is real but
+        /// restricted, and the API refuses everything except enrolling a second factor (403
+        /// TWO_FACTOR_ENROLLMENT_REQUIRED) until they do. The first token refresh after enrolling lifts it.
+        /// </summary>
+        public bool RequiresTwoFactorEnrollment { get; set; }
         public List<string> Roles { get; set; } = new();
         public string? CompanyId { get; set; }
         public List<string> Permissions { get; set; } = new();
