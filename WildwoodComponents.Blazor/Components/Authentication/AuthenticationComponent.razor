@@ -8,6 +8,7 @@
 @inject IAuthenticationService AuthService
 @inject ICaptchaService CaptchaService
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 @inject WildwoodComponents.Blazor.Extensions.WildwoodComponentsOptions WildwoodOptions
 
 <div class="@GetRootCssClasses()">
@@ -666,7 +667,9 @@
         // Check WebAuthn browser support
         try
         {
-            _webAuthnSupported = await JS.InvokeAsync<bool>("webauthnIsSupported");
+            // The host need not add a script tag for webauthn.js; load it here.
+            _webAuthnSupported = await WebAuthnScript.EnsureLoadedAsync(JS, Navigation)
+                && await JS.InvokeAsync<bool>("webauthnIsSupported");
         }
         catch
         {

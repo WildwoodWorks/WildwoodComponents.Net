@@ -510,6 +510,22 @@ namespace WildwoodComponents.Blazor.Extensions
                 // Service may not exist, ignore
             }
 
+            // Passkey self-service (My Account passkey management)
+            services.AddScoped<WildwoodComponents.Blazor.Services.IPasskeyManagementService>(serviceProvider =>
+            {
+                var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
+                if (!string.IsNullOrEmpty(options.ApiKey) && !httpClient.DefaultRequestHeaders.Contains("X-API-Key"))
+                {
+                    httpClient.DefaultRequestHeaders.Add("X-API-Key", options.ApiKey);
+                }
+
+                var logger = serviceProvider.GetService<ILoggerFactory>()?.CreateLogger<WildwoodComponents.Blazor.Services.PasskeyManagementService>()
+                             ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.PasskeyManagementService>.Instance;
+                var passkeyService = new WildwoodComponents.Blazor.Services.PasskeyManagementService(httpClient, logger);
+                passkeyService.SetApiBaseUrl(options.BaseUrl ?? "");
+                return passkeyService;
+            });
+
             // Register Disclaimer service if available
             try
             {
