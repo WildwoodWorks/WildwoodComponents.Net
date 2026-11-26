@@ -153,7 +153,9 @@ namespace WildwoodComponents.Blazor.Services
         private static readonly TimeSpan AttributionClaimWindow = TimeSpan.FromMinutes(15);
 
         private readonly HttpClient _httpClient;
-        private string? _pendingPasskeySessionId;
+        // Passkey challenge sessions, keyed by challenge. The signed clientDataJSON carries the challenge back,
+        // so each assertion finds its own session even when one service handles concurrent sign-ins.
+        private readonly PasskeyChallengeSessions _passkeySessions = new();
         private readonly ILocalStorageService _localStorage;
         private readonly ILogger<AuthenticationService> _logger;
 
@@ -1302,7 +1304,7 @@ namespace WildwoodComponents.Blazor.Services
                     if (options.ValueKind != JsonValueKind.Object)
                         throw new InvalidOperationException("Failed to get authentication options.");
                     // The API only accepts an assertion against the challenge it issued, identified by this id.
-                    _pendingPasskeySessionId = options.TryGetProperty("sessionId", out var sid) ? sid.GetString() : null;
+                    _passkeySessions.Remember(options);
                     return options;
                 }
 
@@ -1334,8 +1336,8 @@ namespace WildwoodComponents.Blazor.Services
                 _logger.LogInformation("Verifying passkey authentication for app: {AppId}", appId);
 
                 // Build the request with the credential data
-                var sessionId = _pendingPasskeySessionId;
-                _pendingPasskeySessionId = null;
+                var sessionId = _passkeySessions.Take(
+                    credential.GetProperty("response").GetProperty("clientDataJSON").GetString());
                 var request = new
                 {
                     AppId = appId,

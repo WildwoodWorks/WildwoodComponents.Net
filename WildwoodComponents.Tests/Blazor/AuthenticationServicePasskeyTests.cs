@@ -32,4 +32,31 @@ public class AuthenticationServicePasskeyTests
         using var body = JsonDocument.Parse(verify.Body!);
         Assert.Equal("session-42", (body.RootElement.TryGetProperty("sessionId", out var s) ? s : body.RootElement.GetProperty("SessionId")).GetString());
     }
+
+    private static string ClientData(string challenge) =>
+        Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(
+                $$"""{"type":"webauthn.get","challenge":"{{challenge}}","origin":"https://example.com"}"""))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    [Fact]
+    public void ConcurrentSignIns_EachFindTheirOwnSession()
+    {
+        // Two sign-ins in flight on one service: the second options call must not hijack the first assertion.
+        var sessions = new PasskeyChallengeSessions();
+        sessions.Remember(JsonDocument.Parse("""{"challenge":"Y2hhbGxlbmdlLWE","sessionId":"session-a"}""").RootElement);
+        sessions.Remember(JsonDocument.Parse("""{"challenge":"Y2hhbGxlbmdlLWI","sessionId":"session-b"}""").RootElement);
+
+        Assert.Equal("session-a", sessions.Take(ClientData("Y2hhbGxlbmdlLWE")));
+        Assert.Equal("session-b", sessions.Take(ClientData("Y2hhbGxlbmdlLWI")));
+    }
+
+    [Fact]
+    public void UnreadableClientData_FallsBackToTheLatestSession()
+    {
+        var sessions = new PasskeyChallengeSessions();
+        sessions.Remember(JsonDocument.Parse("""{"challenge":"Y2hhbGxlbmdlLWE","sessionId":"session-a"}""").RootElement);
+
+        Assert.Equal("session-a", sessions.Take("not-base64!"));
+        Assert.Null(sessions.Take("not-base64!"));
+    }
 }
