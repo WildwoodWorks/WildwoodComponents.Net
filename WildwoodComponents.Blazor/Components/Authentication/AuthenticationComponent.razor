@@ -8,6 +8,7 @@
 @inject IAuthenticationService AuthService
 @inject ICaptchaService CaptchaService
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 @inject WildwoodComponents.Blazor.Extensions.WildwoodComponentsOptions WildwoodOptions
 
 <div class="@GetRootCssClasses()">
@@ -74,6 +75,21 @@
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle"></i>
                     No authentication methods are currently available for this application.
+                </div>
+            }
+            else if (_showTwoFactorEnrollment && _enrollmentResponse != null)
+            {
+                <!-- Two-factor enrollment required by the app (restricted session until enrolled) -->
+                <div class="two-factor-enrollment-section" data-ww-2fa-notice="enrollment-required">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-user-shield"></i>
+                        This app requires two-factor authentication. Set up a second factor to continue.
+                    </div>
+                    <WildwoodComponents.Blazor.Components.Security.TwoFactorSettingsComponent
+                        AppId="@AppId"
+                        AuthToken="@_enrollmentResponse.JwtToken"
+                        ApiBaseUrl="@WildwoodOptions.BaseUrl"
+                        OnStatusChanged="@HandleEnrollmentStatusChanged" />
                 </div>
             }
             else if (_showPasswordReset)
@@ -494,6 +510,15 @@
     [Parameter] public bool ShowDetailedErrors { get; set; } = true;
     [Parameter] public EventCallback<AuthenticationResponse> OnAuthenticationSuccess { get; set; }
     [Parameter] public EventCallback<string> OnAuthenticationError { get; set; }
+
+    /// <summary>
+    /// Raised instead of <see cref="OnAuthenticationSuccess"/> when the sign-in succeeded but the app
+    /// requires two-factor authentication the user has not set up (the response's
+    /// RequiresTwoFactorEnrollment; its token is restricted to enrollment). Without a handler the
+    /// component shows the two-factor setup itself and raises OnAuthenticationSuccess once the user has
+    /// enrolled and the session has been refreshed.
+    /// </summary>
+    [Parameter] public EventCallback<AuthenticationResponse> OnTwoFactorEnrollmentRequired { get; set; }
     [Parameter] public List<AuthProvider>? AvailableProviders { get; set; }
     [Parameter] public CaptchaConfiguration? CaptchaConfig { get; set; }
     [Parameter] public AuthenticationConfiguration? AuthConfig { get; set; }
@@ -530,6 +555,8 @@
 
     // Disclaimer acceptance support
     private bool _showDisclaimers = false;
+    private bool _showTwoFactorEnrollment = false;
+    private AuthenticationResponse? _enrollmentResponse;
     private List<PendingDisclaimerModel>? _pendingDisclaimers;
 
     // Two-Factor Authentication support
@@ -666,11 +693,20 @@
         // Check WebAuthn browser support
         try
         {
-            _webAuthnSupported = await JS.InvokeAsync<bool>("webauthnIsSupported");
+            // The host need not add a script tag for webauthn.js; load it here.
+            _webAuthnSupported = await WebAuthnScript.EnsureLoadedAsync(JS, Navigation)
+                && await JS.InvokeAsync<bool>("webauthnIsSupported");
         }
         catch
         {
             _webAuthnSupported = false;
+        }
+
+        // The support check only resolves after the first render, and the base class does not re-render
+        // after this hook: without this the passkey button never appears until something else redraws.
+        if (_webAuthnSupported && _passkeyEnabled)
+        {
+            StateHasChanged();
         }
     }
 
@@ -790,7 +826,7 @@
                 return;
             }
 
-            await OnAuthenticationSuccess.InvokeAsync(response);
+            await CompleteSignInAsync(response);
             _successMessage = "Login successful!";
         }, "Processing authentication");
     }
@@ -823,7 +859,7 @@
             if (_pendingAuthResponse != null)
             {
                 _pendingAuthResponse.RequiresDisclaimerAcceptance = false;
-                await OnAuthenticationSuccess.InvokeAsync(_pendingAuthResponse);
+                await CompleteSignInAsync(_pendingAuthResponse);
                 _successMessage = "Login successful!";
             }
 
@@ -879,7 +915,7 @@
             {
                 // Update the response to indicate password reset is no longer required
                 _pendingAuthResponse.RequiresPasswordReset = false;
-                await OnAuthenticationSuccess.InvokeAsync(_pendingAuthResponse);
+                await CompleteSignInAsync(_pendingAuthResponse);
             }
 
             _pendingAuthResponse = null;
@@ -975,7 +1011,7 @@
                 return;
             }
 
-            await OnAuthenticationSuccess.InvokeAsync(response);
+            await CompleteSignInAsync(response);
         }, $"Social authentication with {provider.Name}");
     }
 
@@ -1027,7 +1063,7 @@
             return;
         }
 
-        await OnAuthenticationSuccess.InvokeAsync(authResponse);
+        await CompleteSignInAsync(authResponse);
     }
 
     /// <summary>
@@ -1305,7 +1341,7 @@
                 }
 
                 _showTwoFactor = false;
-                await OnAuthenticationSuccess.InvokeAsync(result.AuthResponse);
+                await CompleteSignInAsync(result.AuthResponse);
                 _successMessage = "Login successful!";
             }
             else
@@ -1366,7 +1402,7 @@
 
                 _showTwoFactor = false;
                 _showRecoveryCodeInput = false;
-                await OnAuthenticationSuccess.InvokeAsync(result.AuthResponse);
+                await CompleteSignInAsync(result.AuthResponse);
                 _successMessage = "Login successful! Note: One of your recovery codes has been used.";
             }
             else
@@ -1481,9 +1517,61 @@
             // Send assertion to server for verification
             var response = await AuthService.VerifyPasskeyAuthenticationAsync(AppId, credential);
 
-            await OnAuthenticationSuccess.InvokeAsync(response);
+            await CompleteSignInAsync(response);
             _successMessage = "Passkey authentication successful!";
         }, "Authenticating with passkey");
+    }
+
+    /// <summary>
+    /// Every successful sign-in path ends here. A response restricted by "2FA required" goes to
+    /// OnTwoFactorEnrollmentRequired, or to the built-in enrollment step when the host did not handle it.
+    /// </summary>
+    private async Task CompleteSignInAsync(AuthenticationResponse response)
+    {
+        if (response.RequiresTwoFactorEnrollment)
+        {
+            if (OnTwoFactorEnrollmentRequired.HasDelegate)
+            {
+                await OnTwoFactorEnrollmentRequired.InvokeAsync(response);
+                return;
+            }
+
+            _enrollmentResponse = response;
+            _showTwoFactorEnrollment = true;
+            StateHasChanged();
+            return;
+        }
+
+        _showTwoFactorEnrollment = false;
+        _enrollmentResponse = null;
+        await OnAuthenticationSuccess.InvokeAsync(response);
+    }
+
+    /// <summary>
+    /// The user changed their 2FA in the built-in enrollment step: refresh the session, and once the
+    /// refreshed token is no longer restricted, finish signing in with it.
+    /// </summary>
+    private async Task HandleEnrollmentStatusChanged()
+    {
+        AuthenticationResponse? refreshed = null;
+        void Capture(AuthenticationResponse r) => refreshed = r;
+        AuthService.OnAuthenticationChanged += Capture;
+        try
+        {
+            if (!await AuthService.RefreshTokenAsync())
+                return;
+        }
+        finally
+        {
+            AuthService.OnAuthenticationChanged -= Capture;
+        }
+
+        if (refreshed != null && !refreshed.RequiresTwoFactorEnrollment && !string.IsNullOrEmpty(refreshed.JwtToken))
+        {
+            await CompleteSignInAsync(refreshed);
+            _successMessage = "Login successful!";
+            StateHasChanged();
+        }
     }
 
     /// <summary>

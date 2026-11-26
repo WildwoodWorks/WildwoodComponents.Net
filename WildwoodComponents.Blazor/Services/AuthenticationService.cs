@@ -153,6 +153,9 @@ namespace WildwoodComponents.Blazor.Services
         private static readonly TimeSpan AttributionClaimWindow = TimeSpan.FromMinutes(15);
 
         private readonly HttpClient _httpClient;
+        // Passkey challenge sessions, keyed by challenge. The signed clientDataJSON carries the challenge back,
+        // so each assertion finds its own session even when one service handles concurrent sign-ins.
+        private readonly PasskeyChallengeSessions _passkeySessions = new();
         private readonly ILocalStorageService _localStorage;
         private readonly ILogger<AuthenticationService> _logger;
 
@@ -1297,8 +1300,12 @@ namespace WildwoodComponents.Blazor.Services
 
                 if (response.IsSuccessStatusCode)
                 {
-                    var options = await response.Content.ReadFromJsonAsync<object>();
-                    return options ?? throw new InvalidOperationException("Failed to get authentication options.");
+                    var options = await response.Content.ReadFromJsonAsync<JsonElement>();
+                    if (options.ValueKind != JsonValueKind.Object)
+                        throw new InvalidOperationException("Failed to get authentication options.");
+                    // The API only accepts an assertion against the challenge it issued, identified by this id.
+                    _passkeySessions.Remember(options);
+                    return options;
                 }
 
                 var errorContent = await response.Content.ReadAsStringAsync();
@@ -1329,9 +1336,12 @@ namespace WildwoodComponents.Blazor.Services
                 _logger.LogInformation("Verifying passkey authentication for app: {AppId}", appId);
 
                 // Build the request with the credential data
+                var sessionId = _passkeySessions.Take(
+                    credential.GetProperty("response").GetProperty("clientDataJSON").GetString());
                 var request = new
                 {
                     AppId = appId,
+                    SessionId = sessionId,
                     Id = credential.GetProperty("id").GetString(),
                     RawId = credential.GetProperty("rawId").GetString(),
                     Type = credential.GetProperty("type").GetString(),

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -154,6 +155,10 @@ namespace WildwoodComponents.Blazor.Extensions
             // attempts and backoff share one budget, where the JS client gives each attempt a
             // fresh one. Bounded total latency is the safer default for a UI.
             var wildwoodHttpClient = services.AddHttpClient(WildwoodHttpClientName);
+            // "2FA enrollment required" refusals (403 TWO_FACTOR_ENROLLMENT_REQUIRED) become an event.
+            services.TryAddSingleton<WildwoodComponents.Shared.Http.IWildwoodApiEvents, WildwoodComponents.Shared.Http.WildwoodApiEvents>();
+            wildwoodHttpClient.AddHttpMessageHandler(serviceProvider => new WildwoodComponents.Shared.Http.TwoFactorEnrollmentHandler(
+                serviceProvider.GetRequiredService<WildwoodComponents.Shared.Http.IWildwoodApiEvents>()));
             if (options.EnableRetry)
             {
                 wildwoodHttpClient.AddHttpMessageHandler(serviceProvider => new WildwoodRetryHandler(
@@ -509,6 +514,22 @@ namespace WildwoodComponents.Blazor.Extensions
             {
                 // Service may not exist, ignore
             }
+
+            // Passkey self-service (My Account passkey management)
+            services.AddScoped<WildwoodComponents.Blazor.Services.IPasskeyManagementService>(serviceProvider =>
+            {
+                var httpClient = serviceProvider.GetService<IHttpClientFactory>()?.CreateClient(WildwoodHttpClientName) ?? new HttpClient();
+                if (!string.IsNullOrEmpty(options.ApiKey) && !httpClient.DefaultRequestHeaders.Contains("X-API-Key"))
+                {
+                    httpClient.DefaultRequestHeaders.Add("X-API-Key", options.ApiKey);
+                }
+
+                var logger = serviceProvider.GetService<ILoggerFactory>()?.CreateLogger<WildwoodComponents.Blazor.Services.PasskeyManagementService>()
+                             ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.PasskeyManagementService>.Instance;
+                var passkeyService = new WildwoodComponents.Blazor.Services.PasskeyManagementService(httpClient, logger);
+                passkeyService.SetApiBaseUrl(options.BaseUrl ?? "");
+                return passkeyService;
+            });
 
             // Register Disclaimer service if available
             try

@@ -161,6 +161,39 @@ public class AuthenticatorEnrollmentResult
     [JsonPropertyName("manualEntryKey")]
     public string ManualEntryKey { get; set; } = string.Empty;
 
+    /// <summary>The API's name for the TOTP secret (AuthenticatorEnrollmentResponse.SecretKey).</summary>
+    [JsonPropertyName("secretKey")]
+    public string? SecretKey { get; set; }
+
+    /// <summary>The API's QR code: already a complete <c>data:image/png;base64,...</c> URL.</summary>
+    [JsonPropertyName("qrCodeBase64")]
+    public string? QrCodeBase64 { get; set; }
+
+    [JsonPropertyName("otpAuthUri")]
+    public string? OtpAuthUri { get; set; }
+
+    /// <summary>
+    /// Fills the fields the UI binds (Secret, ManualEntryKey, QrCodeDataUrl) from the API's own names.
+    /// The API answers secretKey/qrCodeBase64 while this model only read secret/manualEntryKey/
+    /// qrCodeDataUrl, so enrollment rendered a broken QR image and an EMPTY manual key: no one could set
+    /// up an authenticator app from the settings panel.
+    /// </summary>
+    public AuthenticatorEnrollmentResult Normalize()
+    {
+        if (string.IsNullOrEmpty(Secret) && !string.IsNullOrEmpty(SecretKey))
+            Secret = SecretKey;
+        if (string.IsNullOrEmpty(ManualEntryKey) && !string.IsNullOrEmpty(Secret))
+            ManualEntryKey = string.Join(" ", Enumerable.Range(0, (Secret.Length + 3) / 4)
+                .Select(i => Secret.Substring(i * 4, Math.Min(4, Secret.Length - i * 4))));
+        if (string.IsNullOrEmpty(QrCodeDataUrl) && !string.IsNullOrEmpty(QrCodeBase64))
+            QrCodeDataUrl = QrCodeBase64.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+                ? QrCodeBase64
+                : $"data:image/png;base64,{QrCodeBase64}";
+        if (!Success && !string.IsNullOrEmpty(CredentialId))
+            Success = true;
+        return this;
+    }
+
     [JsonPropertyName("issuer")]
     public string? Issuer { get; set; }
 

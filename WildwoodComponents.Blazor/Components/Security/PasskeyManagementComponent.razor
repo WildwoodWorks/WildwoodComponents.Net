@@ -1,0 +1,249 @@
+@using WildwoodComponents.Blazor.Services
+@using WildwoodComponents.Blazor.Components.Base
+@using WildwoodComponents.Shared.Models
+@inherits BaseWildwoodComponent
+@inject IPasskeyManagementService PasskeyService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+@* The signed-in user's passkeys: register one on this device or a security key, rename, remove. *@
+<div class="@GetRootCssClasses()" data-ww-passkeys>
+    <div class="passkey-management-card p-3">
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="alert alert-danger" role="alert" data-ww-passkey-error>
+                <i class="fas fa-exclamation-triangle"></i> @ErrorMessage
+            </div>
+        }
+        @if (!string.IsNullOrEmpty(_successMessage))
+        {
+            <div class="alert alert-success" role="status" data-ww-passkey-success>
+                <i class="fas fa-check-circle"></i> @_successMessage
+            </div>
+        }
+
+        @if (!_loaded)
+        {
+            <div class="text-center py-3">
+                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                    <span class="visually-hidden">Loading passkeys...</span>
+                </div>
+            </div>
+        }
+        else if (!_appEnabled)
+        {
+            <p class="mb-0" data-ww-passkey-notice="app-disabled">
+                Passkeys are not enabled for this app.
+            </p>
+        }
+        else
+        {
+            <p class="small mb-3">
+                A passkey signs you in with your device's fingerprint, face or PIN instead of a password.
+                A passkey that verifies you counts as two-factor authentication on its own.
+            </p>
+
+            @if (_passkeys.Count == 0)
+            {
+                <p class="mb-3" data-ww-passkey-empty>You have no passkeys yet.</p>
+            }
+            else
+            {
+                <ul class="list-group mb-3" data-ww-passkey-list>
+                    @foreach (var passkey in _passkeys)
+                    {
+                        <li class="list-group-item" data-ww-passkey-id="@passkey.Id">
+                            @if (_renamingId == passkey.Id)
+                            {
+                                <div class="d-flex gap-2">
+                                    <input class="form-control form-control-sm" maxlength="100" aria-label="Passkey name"
+                                           @bind="_renameValue" @bind:event="oninput" data-ww-passkey-rename-input />
+                                    <button type="button" class="btn btn-sm btn-primary" disabled="@(IsLoading || string.IsNullOrWhiteSpace(_renameValue))"
+                                            @onclick="() => SaveRename(passkey)">Save</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CancelRename">Cancel</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <div>
+                                        <i class="fas @(passkey.IsPlatformAuthenticator ? "fa-fingerprint" : "fa-key") me-2"></i>
+                                        <strong data-ww-passkey-name>@passkey.DisplayName</strong>
+                                        <div class="small">
+                                            Added @passkey.CreatedAt.ToLocalTime().ToString("d")
+                                            @(passkey.LastUsedAt.HasValue ? $" · last used {passkey.LastUsedAt.Value.ToLocalTime():d}" : " · never used")
+                                        </div>
+                                    </div>
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-secondary" disabled="@IsLoading"
+                                                @onclick="() => StartRename(passkey)" aria-label="Rename @passkey.DisplayName">Rename</button>
+                                        @if (_confirmDeleteId == passkey.Id)
+                                        {
+                                            <button type="button" class="btn btn-danger" disabled="@IsLoading"
+                                                    @onclick="() => Delete(passkey)" data-ww-passkey-confirm-delete>Remove</button>
+                                            <button type="button" class="btn btn-outline-secondary" @onclick="() => _confirmDeleteId = null">Keep</button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn btn-outline-danger" disabled="@IsLoading"
+                                                    @onclick="() => _confirmDeleteId = passkey.Id" aria-label="Remove @passkey.DisplayName">Remove</button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+
+            @if (_browserSupported)
+            {
+                <div class="d-flex gap-2 align-items-end">
+                    <div class="flex-grow-1">
+                        <label class="form-label small" for="passkey-name-@ComponentId">Name (optional)</label>
+                        <input id="passkey-name-@ComponentId" class="form-control form-control-sm" maxlength="100"
+                               placeholder="e.g. Work laptop" @bind="_newName" data-ww-passkey-new-name />
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" disabled="@IsLoading" @onclick="Register" data-ww-passkey-add>
+                        <i class="fas fa-plus me-1"></i>Add a passkey
+                    </button>
+                </div>
+            }
+            else
+            {
+                <p class="mb-0" data-ww-passkey-notice="browser-unsupported">This browser cannot create passkeys.</p>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? AppId { get; set; }
+    [Parameter] public string? AuthToken { get; set; }
+    [Parameter] public string? ApiBaseUrl { get; set; }
+
+    /// <summary>Raised after a passkey is added, renamed or removed.</summary>
+    [Parameter] public EventCallback OnPasskeysChanged { get; set; }
+
+    private List<UserPasskey> _passkeys = new();
+    private bool _loaded;
+    private bool _appEnabled;
+    private bool _browserSupported;
+    private string? _successMessage;
+    private string? _newName;
+    private string? _renamingId;
+    private string? _renameValue;
+    private string? _confirmDeleteId;
+
+    protected override async Task OnComponentInitializedAsync()
+    {
+        if (!string.IsNullOrEmpty(ApiBaseUrl))
+            PasskeyService.SetApiBaseUrl(ApiBaseUrl);
+        if (!string.IsNullOrEmpty(AuthToken))
+            PasskeyService.SetAuthToken(AuthToken);
+
+        if (string.IsNullOrEmpty(AppId))
+        {
+            _loaded = true;
+            return;
+        }
+
+        _appEnabled = await PasskeyService.IsEnabledAsync(AppId);
+        if (_appEnabled)
+        {
+            await ExecuteAsync(async () => _passkeys = await PasskeyService.GetPasskeysAsync(AppId), "Loading passkeys");
+        }
+        _loaded = true;
+    }
+
+    protected override async Task OnComponentFirstRenderAsync()
+    {
+        if (!_appEnabled)
+            return;
+        try
+        {
+            _browserSupported = await WebAuthnScript.EnsureLoadedAsync(JS, Navigation)
+                && await JS.InvokeAsync<bool>("webauthnIsSupported");
+        }
+        catch
+        {
+            _browserSupported = false;
+        }
+        StateHasChanged();
+    }
+
+    private async Task Register()
+    {
+        _successMessage = null;
+        await ExecuteAsync(async () =>
+        {
+            var options = await PasskeyService.GetRegistrationOptionsAsync(AppId!, _newName);
+            System.Text.Json.JsonElement credential;
+            try
+            {
+                credential = await JS.InvokeAsync<System.Text.Json.JsonElement>("webauthnRegister", options);
+            }
+            catch (JSException ex)
+            {
+                // The browser's own message (cancelled, timed out, already registered) is what the user needs.
+                throw new PasskeyManagementException(StripJsPrefix(ex.Message), ex);
+            }
+
+            var added = await PasskeyService.CompleteRegistrationAsync(AppId!, credential);
+            _passkeys = await PasskeyService.GetPasskeysAsync(AppId!);
+            _newName = null;
+            _successMessage = $"Passkey \"{added?.DisplayName ?? "new passkey"}\" added.";
+            await OnPasskeysChanged.InvokeAsync();
+        }, "Adding a passkey");
+    }
+
+    private void StartRename(UserPasskey passkey)
+    {
+        _confirmDeleteId = null;
+        _renamingId = passkey.Id;
+        _renameValue = passkey.FriendlyName ?? passkey.DisplayName;
+    }
+
+    private void CancelRename()
+    {
+        _renamingId = null;
+        _renameValue = null;
+    }
+
+    private async Task SaveRename(UserPasskey passkey)
+    {
+        _successMessage = null;
+        var name = _renameValue?.Trim();
+        if (string.IsNullOrEmpty(name))
+            return;
+
+        await ExecuteAsync(async () =>
+        {
+            await PasskeyService.RenameAsync(passkey.Id, name);
+            _passkeys = await PasskeyService.GetPasskeysAsync(AppId!);
+            CancelRename();
+            _successMessage = "Passkey renamed.";
+            await OnPasskeysChanged.InvokeAsync();
+        }, "Renaming a passkey");
+    }
+
+    private async Task Delete(UserPasskey passkey)
+    {
+        _successMessage = null;
+        await ExecuteAsync(async () =>
+        {
+            await PasskeyService.DeleteAsync(passkey.Id);
+            _passkeys = await PasskeyService.GetPasskeysAsync(AppId!);
+            _confirmDeleteId = null;
+            _successMessage = $"Passkey \"{passkey.DisplayName}\" removed.";
+            await OnPasskeysChanged.InvokeAsync();
+        }, "Removing a passkey");
+    }
+
+    /// <summary>JSException messages carry a stack after the first line; keep the sentence.</summary>
+    private static string StripJsPrefix(string message)
+    {
+        var firstLine = message.Split('\n')[0].Trim();
+        return firstLine.StartsWith("Error: ") ? firstLine[7..] : firstLine;
+    }
+}
