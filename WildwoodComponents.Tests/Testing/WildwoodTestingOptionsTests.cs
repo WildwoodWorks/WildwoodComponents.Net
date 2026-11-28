@@ -25,9 +25,12 @@ public class WildwoodTestingOptionsTests
         Assert.Equal(5_000, options.DisclaimerGateTimeoutMs);
         Assert.Equal(10, options.AcceptAttempts);
         Assert.Equal(400, options.AcceptPauseMs);
-        Assert.Equal(1_000, options.RetryPauseMs);
-        Assert.Equal(3, options.RateLimitWaits);
-        Assert.Equal(20_000, options.RateLimitPauseMs);
+        Assert.Equal(5_000, options.AcceptClickTimeoutMs);
+        Assert.Equal(12, options.RetryLimit);
+        Assert.Equal(10_000, options.RetryClickTimeoutMs);
+        Assert.Equal(6_000, options.RetryPauseMs);
+        Assert.Equal(4, options.RateLimitWaits);
+        Assert.Equal(30_000, options.RateLimitPauseMs);
         Assert.Equal(120_000, options.ProcessingTimeoutMs);
         Assert.Equal(2, options.SignupRetries);
         Assert.Equal(30_000, options.LeaveFailedTimeoutMs);

@@ -15,8 +15,8 @@ namespace WildwoodComponents.Testing;
 // as the React helpers do. Every property below names the number it came from.
 //
 // They are also what lets a deliberate failure be proved quickly. The accept loop's shipped budget
-// is ten clicks and three rate-limit waits, and the processing window is two minutes; a test that
-// proved either bound at those numbers would spend minutes failing on purpose.
+// is ten clicks, twelve paced retries and four rate-limit waits, and the processing window is two
+// minutes; a test that proved either bound at those numbers would spend minutes failing on purpose.
 
 /// <summary>
 /// The timeouts, budgets and acceptance-response pattern the signup drivers use.
@@ -66,7 +66,7 @@ public sealed class WildwoodTestingOptions
     public int DisclaimerGateTimeoutMs { get; set; } = 5_000;
 
     /// <summary>
-    /// How many Accept clicks (or load retries) the loop spends before failing loudly. flows.ts: 10.
+    /// How many Accept clicks the loop spends before failing loudly. flows.ts: 10.
     /// </summary>
     /// <remarks>
     /// Bounded on purpose: an Accept that never goes away is a real defect and has to be reported as
@@ -78,16 +78,49 @@ public sealed class WildwoodTestingOptions
     /// <summary>How long to leave after an Accept click before reading the page. flows.ts: 400ms.</summary>
     public int AcceptPauseMs { get; set; } = 400;
 
-    /// <summary>How long to leave after clicking the component's own retry. flows.ts: 1s.</summary>
-    public int RetryPauseMs { get; set; } = 1_000;
-
-    /// <summary>How many HTTP 429s to wait out before giving up. flows.ts: 3.</summary>
-    public int RateLimitWaits { get; set; } = 3;
+    /// <summary>
+    /// How long one Accept click may wait to land before the loop re-reads the panel. flows.ts: 5s.
+    /// </summary>
+    /// <remarks>
+    /// Bounded because an in-flight accept leaves the button disabled and then REMOVES it when the
+    /// flow moves on; an unbounded click re-resolves that vanished element until the spec's own
+    /// timeout. A click that could not land is not an error - the loop re-reads the panel, and a
+    /// button that really is stuck still fails through <see cref="AcceptAttempts"/>.
+    /// </remarks>
+    public int AcceptClickTimeoutMs { get; set; } = 5_000;
 
     /// <summary>
-    /// How long to wait for the rate-limit window to replenish after a 429. flows.ts: 20s.
+    /// How many times to click the component's own "load failed, try again" button before giving
+    /// up. flows.ts: <c>RETRY_LIMIT</c> = 12.
     /// </summary>
-    public int RateLimitPauseMs { get; set; } = 20_000;
+    /// <remarks>
+    /// Its own budget, separate from <see cref="AcceptAttempts"/>: a list that will not load is
+    /// almost always the API's per-IP auth limiter, and the retries are paced to outlast its window.
+    /// </remarks>
+    public int RetryLimit { get; set; } = 12;
+
+    /// <summary>How long one retry click may wait to land. flows.ts: <c>CLICK_TIMEOUT_MS</c> = 10s.</summary>
+    public int RetryClickTimeoutMs { get; set; } = 10_000;
+
+    /// <summary>
+    /// How long to leave after clicking the component's own retry. flows.ts: <c>RETRY_PAUSE_MS</c> = 6s.
+    /// </summary>
+    /// <remarks>
+    /// So the dozen retries span a deployed server's one-minute auth rate-limit window rather than
+    /// burning out inside it. Lower it where nothing is rate-limited and a stuck panel should fail fast.
+    /// </remarks>
+    public int RetryPauseMs { get; set; } = 6_000;
+
+    /// <summary>
+    /// How many rate-limit refusals to wait out - HTTP 429s on accept, and "too many requests"
+    /// failures of the signup's processing step. flows.ts: <c>RATE_LIMIT_WAITS</c> = 4.
+    /// </summary>
+    public int RateLimitWaits { get; set; } = 4;
+
+    /// <summary>
+    /// How long to wait for the rate-limit window to replenish. flows.ts: <c>RATE_LIMIT_PAUSE_MS</c> = 30s.
+    /// </summary>
+    public int RateLimitPauseMs { get; set; } = 30_000;
 
     /// <summary>
     /// How long the flow is given to reach success, disclaimers or a failure. flows.ts: 120s.
@@ -109,7 +142,14 @@ public sealed class WildwoodTestingOptions
     /// </remarks>
     public int LeaveFailedTimeoutMs { get; set; } = 30_000;
 
-    /// <summary>How long to wait for the success step once disclaimers are done. flows.ts: 60s.</summary>
+    /// <summary>
+    /// How long to wait for the success step once disclaimers are done, ON TOP OF one
+    /// <see cref="RateLimitPauseMs"/>. flows.ts: <c>RATE_LIMIT_PAUSE_MS + 60_000</c>.
+    /// </summary>
+    /// <remarks>
+    /// The accept loop can return while a refused accept is still waiting out the server's auth
+    /// limiter, and the step only moves on once that retry lands.
+    /// </remarks>
     public int SuccessTimeoutMs { get; set; } = 60_000;
 
     /// <summary>How long to wait for the text the success panel must show. flows.ts: 30s.</summary>

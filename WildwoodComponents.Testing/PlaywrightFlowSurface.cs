@@ -62,6 +62,21 @@ internal sealed class PlaywrightFlowSurface : IFlowSurface
         return Locate(selector).First.ClickAsync();
     }
 
+    public async Task<bool> TryClickAsync(string selector, int timeoutMs)
+    {
+        try
+        {
+            await Locate(selector).First
+                .ClickAsync(new LocatorClickOptions { Timeout = timeoutMs })
+                .ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception error) when (IsDriverAnswer(error))
+        {
+            return false;
+        }
+    }
+
     public async Task<int> CountAsync(string selector)
     {
         try
