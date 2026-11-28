@@ -21,7 +21,8 @@
      data-redirect-url="@(Model.RedirectUrl ?? "")"
      data-proxy-base="@Model.ProxyBaseUrl"
      data-payment-proxy-base="@(Model.PaymentProxyBaseUrl ?? "")"
-     data-default-pricing='@(defaultPricing != null ? System.Text.Json.JsonSerializer.Serialize(defaultPricing) : "")'>
+     data-allow-skip-payment="@Model.AllowSkipPayment.ToString().ToLower()"
+     data-default-pricing='@(defaultPricing != null ? System.Text.Json.JsonSerializer.Serialize(defaultPricing, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)) : "")'>
 
     <!-- Step Indicator -->
     <div class="ww-reg-steps mb-3" style="display: none;">
@@ -259,7 +260,7 @@
             </div>
             <div class="d-grid gap-2">
                 <button type="button" class="btn btn-outline-secondary ww-skip-payment-btn">
-                    <i class="bi bi-clock me-2"></i>Set Up Payment Later
+                    <i class="bi bi-clock me-2"></i>@(Model.AllowSkipPayment ? "Set Up Payment Later" : "Back")
                 </button>
             </div>
         </div>
