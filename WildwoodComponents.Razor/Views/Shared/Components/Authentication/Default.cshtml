@@ -5,7 +5,8 @@
      data-return-url="@Model.ReturnUrl"
      data-allow-registration="@Model.AllowRegistration.ToString().ToLower()"
      data-enable-2fa="@Model.EnableTwoFactor.ToString().ToLower()"
-     data-register-url="@Model.RegisterUrl">
+     data-register-url="@Model.RegisterUrl"
+     data-two-factor-setup-url="@Model.TwoFactorSetupUrl">
 
     @* Error/Success message area *@
     <div id="ww-auth-message" class="ww-alert" style="display:none;"></div>
@@ -363,6 +364,38 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    @* ===== TWO-FACTOR ENROLLMENT REQUIRED =====
+       Shown when the sign-in response carries requiresTwoFactorEnrollment: the app requires
+       two-factor and this user has none, so the session the proxy holds is restricted to
+       enrollment and the app sign-in is withheld (the same rule as the forced reset). The user
+       sets up a method (on the host's page with <vc:two-factor-settings>, when one is named),
+       then Continue asks the proxy to lift the restriction. *@
+    <div id="ww-enroll-view" class="ww-auth-view" style="display:none;" data-ww-2fa-notice="enrollment-required">
+        <div class="ww-card">
+            <div class="ww-card-header">
+                <h2>Two-Factor Authentication Required</h2>
+                <p>This app requires two-factor authentication. Set up a second factor to continue.</p>
+            </div>
+            <div class="ww-card-body">
+                @if (!string.IsNullOrEmpty(Model.TwoFactorSetupUrl))
+                {
+                    <div class="mb-3 d-grid">
+                        <a class="btn btn-outline-primary" id="ww-enroll-setup" href="@Model.TwoFactorSetupUrl"
+                           target="_blank" rel="noopener">Set up two-factor authentication</a>
+                    </div>
+                }
+                <div class="mb-3 d-grid">
+                    <button type="button" class="btn btn-primary" id="ww-enroll-continue">
+                        <span class="ww-btn-text">Continue</span>
+                        <span class="ww-btn-spinner" style="display:none;">
+                            <span class="ww-spinner"></span> Checking...
+                        </span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>

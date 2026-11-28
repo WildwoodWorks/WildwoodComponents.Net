@@ -23,6 +23,12 @@ public class WildwoodSessionManager : IWildwoodSessionManager
     /// </summary>
     public const string RequiresPasswordResetKey = "WildwoodAPI_RequiresPasswordReset";
 
+    /// <summary>
+    /// Session key for the two-factor-enrollment restriction. Present with "true" only while the
+    /// held token is restricted to enrollment; removed otherwise.
+    /// </summary>
+    public const string TwoFactorEnrollmentPendingKey = "WildwoodAPI_TwoFactorEnrollmentPending";
+
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<WildwoodSessionManager> _logger;
 
@@ -79,7 +85,31 @@ public class WildwoodSessionManager : IWildwoodSessionManager
         session.Remove(RefreshTokenKey);
         session.Remove(TokenExpiryKey);
         session.Remove(RequiresPasswordResetKey);
+        session.Remove(TwoFactorEnrollmentPendingKey);
         _logger.LogDebug("WildwoodAPI tokens cleared from session");
+    }
+
+    /// <inheritdoc />
+    public bool IsTwoFactorEnrollmentPending =>
+        string.Equals(
+            _httpContextAccessor.HttpContext?.Session.GetString(TwoFactorEnrollmentPendingKey),
+            "true",
+            StringComparison.Ordinal);
+
+    /// <inheritdoc />
+    public void SetTwoFactorEnrollmentPending(bool value)
+    {
+        var session = _httpContextAccessor.HttpContext?.Session;
+        if (session == null) return;
+
+        if (value)
+        {
+            session.SetString(TwoFactorEnrollmentPendingKey, "true");
+        }
+        else
+        {
+            session.Remove(TwoFactorEnrollmentPendingKey);
+        }
     }
 
     /// <inheritdoc />

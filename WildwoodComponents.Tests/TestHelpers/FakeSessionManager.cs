@@ -41,11 +41,18 @@ public class FakeSessionManager : IWildwoodSessionManager
         _refreshToken = null;
         _expiryUtc = null;
         _requiresPasswordReset = false;
+        _enrollmentPending = false;
     }
 
     public bool RequiresPasswordReset => _requiresPasswordReset;
 
     public void SetRequiresPasswordReset(bool value) => _requiresPasswordReset = value;
+
+    private bool _enrollmentPending;
+
+    public bool IsTwoFactorEnrollmentPending => _enrollmentPending;
+
+    public void SetTwoFactorEnrollmentPending(bool value) => _enrollmentPending = value;
 
     public bool IsAuthenticated => !string.IsNullOrEmpty(_accessToken);
 

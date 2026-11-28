@@ -1,6 +1,8 @@
 using System.Net.Security;
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using WildwoodComponents.Razor.Authentication;
 using WildwoodComponents.Razor.Services;
@@ -104,6 +106,14 @@ public static class ServiceCollectionExtensions
                 options.MaxRetryAttempts,
                 serviceProvider.GetService<ILogger<WildwoodRetryHandler>>()));
         }
+
+        // A 403 TWO_FACTOR_ENROLLMENT_REQUIRED marks the calling user's session restricted (and
+        // raises the app-wide IWildwoodApiEvents event Blazor raises too).
+        services.AddHttpContextAccessor();
+        services.TryAddSingleton<WildwoodComponents.Shared.Http.IWildwoodApiEvents, WildwoodComponents.Shared.Http.WildwoodApiEvents>();
+        httpClientBuilder.AddHttpMessageHandler(serviceProvider => new WildwoodTwoFactorEnrollmentHandler(
+            serviceProvider.GetRequiredService<IHttpContextAccessor>(),
+            serviceProvider.GetRequiredService<WildwoodComponents.Shared.Http.IWildwoodApiEvents>()));
 
         // In dev mode, accept self-signed certificates for localhost WildwoodAPI
         if (options.EnableDetailedErrors)
