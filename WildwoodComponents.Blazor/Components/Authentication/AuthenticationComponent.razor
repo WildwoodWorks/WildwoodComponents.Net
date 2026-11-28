@@ -85,6 +85,12 @@
                         <i class="fas fa-user-shield"></i>
                         This app requires two-factor authentication. Set up a second factor to continue.
                     </div>
+                    @if (!string.IsNullOrEmpty(_enrollmentNotice))
+                    {
+                        <div class="alert alert-danger" role="alert" data-ww-2fa-notice="enrollment-still-pending">
+                            @_enrollmentNotice
+                        </div>
+                    }
                     <WildwoodComponents.Blazor.Components.Security.TwoFactorSettingsComponent
                         AppId="@AppId"
                         AuthToken="@_enrollmentResponse.JwtToken"
@@ -1545,7 +1551,8 @@
     /// </summary>
     private async Task CompleteSignInAsync(AuthenticationResponse response)
     {
-        if (response.RequiresTwoFactorEnrollment)
+        // The flag or the token's tfa_enroll_pending claim: a refreshed response carries only the claim.
+        if (TwoFactorEnrollmentState.IsPending(response.RequiresTwoFactorEnrollment, response.JwtToken))
         {
             if (OnTwoFactorEnrollmentRequired.HasDelegate)
             {
@@ -1561,8 +1568,15 @@
 
         _showTwoFactorEnrollment = false;
         _enrollmentResponse = null;
+        _enrollmentNotice = null;
         await OnAuthenticationSuccess.InvokeAsync(response);
     }
+
+    /// <summary>Why the enrollment step is still showing after the user acted on it (JS copy).</summary>
+    private string? _enrollmentNotice;
+
+    private const string EnrollmentStillPendingMessage =
+        "Two-factor authentication is not set up yet. Add a method to continue.";
 
     /// <summary>
     /// The user changed their 2FA in the built-in enrollment step: refresh the session, and once the
@@ -1570,25 +1584,38 @@
     /// </summary>
     private async Task HandleEnrollmentStatusChanged()
     {
+        _enrollmentNotice = null;
         AuthenticationResponse? refreshed = null;
         void Capture(AuthenticationResponse r) => refreshed = r;
         AuthService.OnAuthenticationChanged += Capture;
         try
         {
             if (!await AuthService.RefreshTokenAsync())
+            {
+                // Silent before: the user enrolled, nothing happened, and nothing said why.
+                _enrollmentNotice = EnrollmentStillPendingMessage;
+                StateHasChanged();
                 return;
+            }
         }
         finally
         {
             AuthService.OnAuthenticationChanged -= Capture;
         }
 
-        if (refreshed != null && !refreshed.RequiresTwoFactorEnrollment && !string.IsNullOrEmpty(refreshed.JwtToken))
+        if (refreshed != null && !string.IsNullOrEmpty(refreshed.JwtToken)
+            && !TwoFactorEnrollmentState.IsPending(refreshed.RequiresTwoFactorEnrollment, refreshed.JwtToken))
         {
             await CompleteSignInAsync(refreshed);
             _successMessage = "Login successful!";
             StateHasChanged();
+            return;
         }
+
+        // Still restricted (e.g. a method was removed rather than added, or enrollment is not
+        // verified yet): say so instead of returning silently.
+        _enrollmentNotice = EnrollmentStillPendingMessage;
+        StateHasChanged();
     }
 
     /// <summary>
