@@ -121,6 +121,9 @@ namespace WildwoodComponents.Blazor.Services
         /// <c>sessionId</c>), for a host that ran the options call itself. Null falls back to the
         /// challenge found in the credential's client data, as the two-argument form does.
         /// JS <c>verifyPasskeyAuthentication(appId, credential, sessionId?)</c>.
+        /// The default body (for a host's own implementation of this interface) ignores
+        /// <paramref name="sessionId"/> and uses the remembered challenge; the shipped
+        /// <c>AuthenticationService</c> honours it.
         /// </summary>
         Task<AuthenticationResponse> VerifyPasskeyAuthenticationAsync(
             string appId, System.Text.Json.JsonElement credential, string? sessionId)
