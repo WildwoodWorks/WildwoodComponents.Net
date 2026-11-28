@@ -56,15 +56,12 @@ public partial class AIChatComponent
         _ => role
     };
 
-    private string FormatMessageContent(string content)
-    {
-        content = System.Web.HttpUtility.HtmlEncode(content);
-        content = content.Replace("\n", "<br>");
-        content = System.Text.RegularExpressions.Regex.Replace(content, @"\*\*(.*?)\*\*", "<strong>$1</strong>");
-        content = System.Text.RegularExpressions.Regex.Replace(content, @"\*(.*?)\*", "<em>$1</em>");
-        content = System.Text.RegularExpressions.Regex.Replace(content, @"`(.*?)`", "<code>$1</code>");
-        return content;
-    }
+    /// <summary>
+    /// HTML for a message bubble: encoded text with the chat's inline markdown rules, plus
+    /// markdown pipe tables rendered as real tables (styled under <c>.ai-chat-table</c>).
+    /// </summary>
+    private static string FormatMessageContent(string content)
+        => WildwoodComponents.Shared.Utilities.ChatMarkdownFormatter.ToHtml(content);
 
     /// <summary>
     /// Formats the tooltip text for a session item showing name and date/time.
