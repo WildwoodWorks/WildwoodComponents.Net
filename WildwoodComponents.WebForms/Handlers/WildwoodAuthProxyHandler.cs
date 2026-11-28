@@ -16,7 +16,7 @@ namespace WildwoodComponents.WebForms.Handlers
     /// </summary>
     /// <remarks>
     /// Routes, all POST: <c>/login</c>, <c>/register</c>, <c>/forgot-password</c>,
-    /// <c>/two-factor-verify</c>, <c>/reset-password</c>.
+    /// <c>/two-factor-verify</c>, <c>/reset-password</c>, <c>/two-factor-enrollment-complete</c>.
     /// <para>
     /// A rejected sign-in is answered with HTTP 200 and <c>success: false</c>, not a 4xx:
     /// the script treats any non-OK status as a transport failure and replaces the API's
@@ -68,6 +68,12 @@ namespace WildwoodComponents.WebForms.Handlers
             if (RouteEquals(route, "/reset-password"))
             {
                 await ResetPasswordAsync(context).ConfigureAwait(false);
+                return true;
+            }
+
+            if (RouteEquals(route, "/two-factor-enrollment-complete"))
+            {
+                await CompleteTwoFactorEnrollmentAsync(context).ConfigureAwait(false);
                 return true;
             }
 
@@ -274,6 +280,99 @@ namespace WildwoodComponents.WebForms.Handlers
         }
 
         /// <summary>
+        /// Completes a sign-in that stalled on "two-factor enrollment required": refreshes the held
+        /// session and, once the restriction is gone, issues the auth cookie the login withheld.
+        /// </summary>
+        /// <remarks>
+        /// Like /reset-password it acts only on a session a restricted sign-in already established
+        /// (no token, nobody to complete), and the cookie is issued from the SESSION rather than by
+        /// signing in again. A still-restricted session answers requiresTwoFactorEnrollment with
+        /// the reason, so the script stays on the enrollment view; a pending forced reset follows.
+        /// </remarks>
+        private static async Task CompleteTwoFactorEnrollmentAsync(HttpContextBase context)
+        {
+            var body = await ReadJsonAsync<EnrollmentCompleteProxyRequest>(context).ConfigureAwait(false);
+            var session = WildwoodWebForms.Session;
+
+            if (session.GetAccessToken() is not { Length: > 0 })
+            {
+                await WriteJsonAsync(context, AuthProxyResponse.Fail(
+                    "Your session has expired. Please sign in again.")).ConfigureAwait(false);
+                return;
+            }
+
+            // Only a session a restricted sign-in left behind has anything to complete; anything
+            // else posting here is not finishing an enrollment and must not be handed a cookie.
+            if (!session.IsTwoFactorEnrollmentPending)
+            {
+                await WriteJsonAsync(context, AuthProxyResponse.Fail(
+                    "There is no two-factor setup to finish. Please sign in again.")).ConfigureAwait(false);
+                return;
+            }
+
+            var result = await WildwoodWebForms.Auth.CompleteTwoFactorEnrollmentAsync().ConfigureAwait(false);
+            if (!result.Succeeded || result.Response == null)
+            {
+                // Expired outright (the refresh cleared the session): no enrollment view to stay
+                // on, since it could no longer do anything for this user.
+                var expired = session.GetAccessToken() is not { Length: > 0 };
+                await WriteJsonAsync(context, new AuthProxyResponse
+                {
+                    Success = false,
+                    RequiresTwoFactorEnrollment = !expired,
+                    Message = result.ErrorMessage ?? "Two-factor setup could not be confirmed."
+                }).ConfigureAwait(false);
+                return;
+            }
+
+            if (result.Response.RequiresPasswordReset)
+            {
+                await WriteJsonAsync(context, new AuthProxyResponse
+                {
+                    Success = false,
+                    RequiresPasswordReset = true,
+                    Message = "Please choose a new password to finish signing in."
+                }).ConfigureAwait(false);
+                return;
+            }
+
+            // The identity the server returned, not one the browser posted; the posted name is a
+            // fallback only for a refresh response that carried none.
+            var userName = result.Response.Email ?? result.Response.UserId;
+            if (userName is not { Length: > 0 })
+            {
+                userName = body?.Username;
+            }
+
+            if (userName is not { Length: > 0 } || result.Response.Token is not { Length: > 0 })
+            {
+                Logger.Warn("Two-factor enrollment completed but no user identity was available; no auth cookie was issued.");
+                await WriteJsonAsync(context, new AuthProxyResponse
+                {
+                    Success = false,
+                    Message = "Two-factor authentication is set up. Please sign in again."
+                }).ConfigureAwait(false);
+                return;
+            }
+
+            WildwoodFormsAuthHelper.IssueAuthCookie(
+                context,
+                userName,
+                result.Response.Token,
+                result.Response.RefreshToken,
+                session.GetTokenExpiryUtc() ?? DateTime.UtcNow.AddMinutes(15),
+                createPersistentCookie: false,
+                Logger);
+
+            await WriteJsonAsync(context, new AuthProxyResponse
+            {
+                Success = true,
+                RedirectUrl = ResolveReturnUrl(body?.ReturnUrl),
+                Message = "Signed in."
+            }).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Turns a successful <see cref="AuthResult"/> into a signed-in browser session:
         /// the Forms Authentication cookie carrying a backup of the tokens, plus the
         /// redirect the script follows.
@@ -292,6 +391,21 @@ namespace WildwoodComponents.WebForms.Handlers
             }
 
             var response = result.Response;
+
+            // The app requires two-factor and this user has none: the tokens are held (enrollment
+            // calls need them) but the token is RESTRICTED to enrollment, so no auth cookie - the
+            // same gate as the forced reset, and checked first because a restricted token cannot
+            // call the reset endpoint. /two-factor-enrollment-complete issues the cookie once lifted.
+            if (response.RequiresTwoFactorEnrollment)
+            {
+                await WriteJsonAsync(context, new AuthProxyResponse
+                {
+                    Success = false,
+                    RequiresTwoFactorEnrollment = true,
+                    Message = "This app requires two-factor authentication. Set up a second factor to continue."
+                }).ConfigureAwait(false);
+                return;
+            }
 
             // Authenticated, but the sign-in is NOT finished: the account is on a temporary
             // password. The tokens are already in session (LoginAsync stores them for this
@@ -383,6 +497,16 @@ namespace WildwoodComponents.WebForms.Handlers
         }
 
         /// <summary>
+        /// The enrollment-complete POST. <c>Username</c> is only a fallback for the cookie name: the
+        /// refreshed auth response's own email / user id is preferred.
+        /// </summary>
+        private sealed class EnrollmentCompleteProxyRequest
+        {
+            public string? Username { get; set; }
+            public string? ReturnUrl { get; set; }
+        }
+
+        /// <summary>
         /// The forced-reset POST. <c>Username</c> comes from the login form the script still
         /// holds: the API identifies the user from the JWT, but the Forms Authentication cookie
         /// needs a name, and the session stores tokens only — no identity.
@@ -407,6 +531,7 @@ namespace WildwoodComponents.WebForms.Handlers
             public bool RequiresTwoFactor { get; set; }
             public string? TwoFactorSessionId { get; set; }
             public bool RequiresPasswordReset { get; set; }
+            public bool RequiresTwoFactorEnrollment { get; set; }
             public string? RedirectUrl { get; set; }
 
             public static AuthProxyResponse Fail(string message)

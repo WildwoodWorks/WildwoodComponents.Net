@@ -57,5 +57,13 @@ namespace WildwoodComponents.WebForms.Services
         /// is unreachable, permissive defaults are returned so the login form still renders.
         /// </summary>
         Task<AuthConfigResponse> GetAuthConfigAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Call once the user has enrolled a two-factor method after a sign-in that answered
+        /// <see cref="AuthResponse.RequiresTwoFactorEnrollment"/>. Refreshes the held session so
+        /// the restricted token is replaced; succeeds only when the new one is no longer
+        /// restricted. Port of JS <c>session.completeTwoFactorEnrollment()</c>.
+        /// </summary>
+        Task<AuthResult> CompleteTwoFactorEnrollmentAsync(CancellationToken cancellationToken = default);
     }
 }

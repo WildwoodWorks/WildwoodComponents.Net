@@ -31,7 +31,8 @@
      data-return-url="<%= Attr(ResolvedReturnUrl) %>"
      data-allow-registration="<%= Attr(EffectiveAllowRegistration) %>"
      data-enable-2fa="<%= Attr(EffectiveEnableTwoFactor) %>"
-     data-register-url="<%= Attr(ResolvedRegisterUrl) %>">
+     data-register-url="<%= Attr(ResolvedRegisterUrl) %>"
+     data-two-factor-setup-url="<%= Attr(ResolvedTwoFactorSetupUrl) %>">
 
     <%-- Error/success message area --%>
     <div id="ww-auth-message" class="ww-alert" style="display:none;"></div>
@@ -376,6 +377,35 @@
                             </span>
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <%-- ===== TWO-FACTOR ENROLLMENT REQUIRED =====
+         Shown when the sign-in answers requiresTwoFactorEnrollment: the app requires two-factor
+         and this user has none, so the proxy holds a token restricted to enrollment and issues no
+         auth cookie (the forced reset's rule). Continue posts /two-factor-enrollment-complete. --%>
+    <div id="ww-enroll-view" class="ww-auth-view" style="display:none;" data-ww-2fa-notice="enrollment-required">
+        <div class="ww-card">
+            <div class="ww-card-header">
+                <h2>Two-Factor Authentication Required</h2>
+                <p>This app requires two-factor authentication. Set up a second factor to continue.</p>
+            </div>
+            <div class="ww-card-body">
+                <% if (ResolvedTwoFactorSetupUrl.Length > 0) { %>
+                <div class="mb-3 d-grid">
+                    <a class="btn btn-outline-primary" id="ww-enroll-setup" href="<%= Attr(ResolvedTwoFactorSetupUrl) %>"
+                       target="_blank" rel="noopener">Set up two-factor authentication</a>
+                </div>
+                <% } %>
+                <div class="mb-3 d-grid">
+                    <button type="button" class="btn btn-primary" id="ww-enroll-continue">
+                        <span class="ww-btn-text">Continue</span>
+                        <span class="ww-btn-spinner" style="display:none;">
+                            <span class="ww-spinner"></span> Checking...
+                        </span>
+                    </button>
                 </div>
             </div>
         </div>

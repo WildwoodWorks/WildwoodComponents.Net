@@ -1160,6 +1160,10 @@ if (result.Response.RequiresTwoFactorEnrollment)
 [HttpPost("two-factor-enrollment-complete")]
 public async Task<IActionResult> CompleteTwoFactorEnrollment([FromBody] EnrollmentCompleteRequest request)
 {
+    // Only a session a restricted sign-in left behind has anything to complete.
+    if (!_session.IsTwoFactorEnrollmentPending)
+        return Ok(new { success = false, message = "There is no two-factor setup to finish. Please sign in again." });
+
     var result = await _auth.CompleteTwoFactorEnrollmentAsync();   // refreshes; fails while still restricted
     if (!result.Succeeded)
         return Ok(new { success = false, requiresTwoFactorEnrollment = true, message = result.ErrorMessage });
@@ -1167,7 +1171,8 @@ public async Task<IActionResult> CompleteTwoFactorEnrollment([FromBody] Enrollme
     if (result.Response!.RequiresPasswordReset)
         return Ok(new { success = false, requiresPasswordReset = true });
 
-    await SignInFromCurrentSessionAsync(request.Username);
+    // Name the cookie from the server's answer, not from what the browser posted.
+    await SignInFromCurrentSessionAsync(result.Response.Email ?? request.Username);
     return Ok(new { success = true, redirectUrl = LocalReturnUrl(request.ReturnUrl) });
 }
 ```
