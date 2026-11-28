@@ -115,6 +115,19 @@ namespace WildwoodComponents.Blazor.Services
         // Passkey/WebAuthn methods
         Task<object> GetPasskeyAuthenticationOptionsAsync(string appId);
         Task<AuthenticationResponse> VerifyPasskeyAuthenticationAsync(string appId, System.Text.Json.JsonElement credential);
+
+        /// <summary>
+        /// Verifies a passkey assertion against an explicitly named challenge session (the options'
+        /// <c>sessionId</c>), for a host that ran the options call itself. Null falls back to the
+        /// challenge found in the credential's client data, as the two-argument form does.
+        /// JS <c>verifyPasskeyAuthentication(appId, credential, sessionId?)</c>.
+        /// The default body (for a host's own implementation of this interface) ignores
+        /// <paramref name="sessionId"/> and uses the remembered challenge; the shipped
+        /// <c>AuthenticationService</c> honours it.
+        /// </summary>
+        Task<AuthenticationResponse> VerifyPasskeyAuthenticationAsync(
+            string appId, System.Text.Json.JsonElement credential, string? sessionId)
+            => VerifyPasskeyAuthenticationAsync(appId, credential);
         Task<object> GetPasskeyRegistrationOptionsAsync(string appId);
         Task CompletePasskeyRegistrationAsync(string appId, System.Text.Json.JsonElement credential);
 
@@ -1329,15 +1342,21 @@ namespace WildwoodComponents.Blazor.Services
             }
         }
 
-        public async Task<AuthenticationResponse> VerifyPasskeyAuthenticationAsync(string appId, JsonElement credential)
+        public Task<AuthenticationResponse> VerifyPasskeyAuthenticationAsync(string appId, JsonElement credential)
+            => VerifyPasskeyAuthenticationAsync(appId, credential, null);
+
+        public async Task<AuthenticationResponse> VerifyPasskeyAuthenticationAsync(
+            string appId, JsonElement credential, string? sessionId)
         {
             try
             {
                 _logger.LogInformation("Verifying passkey authentication for app: {AppId}", appId);
 
-                // Build the request with the credential data
-                var sessionId = _passkeySessions.Take(
+                // Build the request with the credential data. The remembered session is always
+                // TAKEN (so the cache does not keep it), and an explicit one wins over it.
+                var remembered = _passkeySessions.Take(
                     credential.GetProperty("response").GetProperty("clientDataJSON").GetString());
+                sessionId ??= remembered;
                 var request = new
                 {
                     AppId = appId,

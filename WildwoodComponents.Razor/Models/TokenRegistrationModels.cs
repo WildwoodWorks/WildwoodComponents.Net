@@ -24,6 +24,13 @@ public class TokenRegistrationViewModel
     public bool AllowTokenRegistration { get; set; } = true;
 
     /// <summary>
+    /// Whether the payment step offers "pay later": cancelling it registers the user without paying.
+    /// Default true (historical behaviour). False where the plan must be paid before an account
+    /// exists - cancelling then returns to the account step and nobody is registered.
+    /// </summary>
+    public bool AllowSkipPayment { get; set; } = true;
+
+    /// <summary>
     /// If true, open registration (without token) is allowed (default false)
     /// </summary>
     public bool AllowOpenRegistration { get; set; }
@@ -115,6 +122,14 @@ public class TokenRegistrationRequest
 
     /// <summary>Campaign Attribution payload captured by the browser attribution engine, when any.</summary>
     public WildwoodComponents.Shared.Models.AttributionPayloadModel? Attribution { get; set; }
+
+    /// <summary>
+    /// The pay-first plan payment this account is for. The server links it to the new user inside
+    /// the registration transaction (the old follow-up link call needed a session the new user did
+    /// not have yet, and always failed). Blazor's request models carry the same pair.
+    /// </summary>
+    public string? PaymentTransactionId { get; set; }
+    public string? PaymentIntentId { get; set; }
 }
 
 public class OpenRegistrationRequest
@@ -132,6 +147,14 @@ public class OpenRegistrationRequest
 
     /// <summary>Campaign Attribution payload captured by the browser attribution engine, when any.</summary>
     public WildwoodComponents.Shared.Models.AttributionPayloadModel? Attribution { get; set; }
+
+    /// <summary>
+    /// The pay-first plan payment this account is for. The server links it to the new user inside
+    /// the registration transaction (the old follow-up link call needed a session the new user did
+    /// not have yet, and always failed). Blazor's request models carry the same pair.
+    /// </summary>
+    public string? PaymentTransactionId { get; set; }
+    public string? PaymentIntentId { get; set; }
 }
 
 public class ValidateRegistrationRequest
@@ -206,6 +229,9 @@ public class PricingDetails
     public string Currency { get; set; } = "USD";
     public string? BillingFrequency { get; set; }
     public bool IsSubscription { get; set; }
+
+    /// <summary>The plan's free-trial length, forwarded to the payment step (Blazor parity).</summary>
+    public int? TrialDays { get; set; }
 }
 
 public class PricingModelResponse
@@ -217,6 +243,7 @@ public class PricingModelResponse
     public string BillingFrequency { get; set; } = "Monthly";
     public string? Currency { get; set; } = "USD";
     public bool IsActive { get; set; }
+    public int? TrialDays { get; set; }
 }
 
 public class SkipPaymentRequest

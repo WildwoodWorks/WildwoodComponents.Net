@@ -735,6 +735,17 @@
     padding-top: 1rem;
 }
 
+/* A switch the current plan does not allow: shaped like the button it replaces, read as inert. */
+.ww-tier-unavailable,
+.ww-tier-unavailable:hover {
+    cursor: default;
+    color: var(--ww-text-muted, #6c757d);
+    border-color: var(--ww-border-color, #dee2e6);
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+}
+
 /* Text utilities */
 .ww-text-muted {
     color: var(--ww-text-muted, #6c757d);

@@ -65,6 +65,7 @@ public class WildwoodAuthService : IWildwoodAuthService
                     {
                         _sessionManager.SetTokens(wwResponse.JwtToken, wwResponse.RefreshToken);
                         _sessionManager.SetRequiresPasswordReset(wwResponse.RequiresPasswordReset);
+                        _sessionManager.SetTwoFactorEnrollmentPending(authResponse.RequiresTwoFactorEnrollment);
                     }
 
                     return AuthResult.Success(authResponse);
@@ -113,6 +114,7 @@ public class WildwoodAuthService : IWildwoodAuthService
                     var authResponse = AuthResponse.FromWildwoodResponse(wwResponse);
                     _sessionManager.SetTokens(wwResponse.JwtToken, wwResponse.RefreshToken);
                     _sessionManager.SetRequiresPasswordReset(wwResponse.RequiresPasswordReset);
+                    _sessionManager.SetTwoFactorEnrollmentPending(authResponse.RequiresTwoFactorEnrollment);
                     return AuthResult.Success(authResponse);
                 }
             }
@@ -177,6 +179,9 @@ public class WildwoodAuthService : IWildwoodAuthService
 
                     var authResponse = AuthResponse.FromWildwoodResponse(wwResponse);
                     _sessionManager.SetTokens(wwResponse.JwtToken, wwResponse.RefreshToken);
+                    // Re-derived, not carried forward: the refreshed token's claim says whether it
+                    // is still restricted, and that is how enrollment gets lifted.
+                    _sessionManager.SetTwoFactorEnrollmentPending(authResponse.RequiresTwoFactorEnrollment);
                     return AuthResult.Success(authResponse);
                 }
             }
@@ -190,6 +195,25 @@ public class WildwoodAuthService : IWildwoodAuthService
             _sessionManager.ClearTokens();
             return AuthResult.Failure("An error occurred refreshing the session.");
         }
+    }
+
+    /// <summary>The copy JS's useAuthenticationLogic shows when the restriction is still in place.</summary>
+    public const string EnrollmentStillPendingMessage =
+        "Two-factor authentication is not set up yet. Add a method to continue.";
+
+    public async Task<AuthResult> CompleteTwoFactorEnrollmentAsync()
+    {
+        if (string.IsNullOrEmpty(_sessionManager.GetRefreshToken()))
+            return AuthResult.Failure("Your sign-in has expired. Please sign in again.");
+
+        var refreshed = await RefreshTokenAsync();
+        if (!refreshed.Succeeded || refreshed.Response == null)
+            return AuthResult.Failure("Your sign-in has expired. Please sign in again.");
+
+        if (refreshed.Response.RequiresTwoFactorEnrollment)
+            return AuthResult.Failure(EnrollmentStillPendingMessage);
+
+        return refreshed;
     }
 
     public async Task<ApiResult> ForgotPasswordAsync(string email)
@@ -278,6 +302,7 @@ public class WildwoodAuthService : IWildwoodAuthService
                         wwResponse.AuthResponse.JwtToken,
                         wwResponse.AuthResponse.RefreshToken);
                     _sessionManager.SetRequiresPasswordReset(wwResponse.AuthResponse.RequiresPasswordReset);
+                    _sessionManager.SetTwoFactorEnrollmentPending(authResponse.RequiresTwoFactorEnrollment);
                     return AuthResult.Success(authResponse);
                 }
 

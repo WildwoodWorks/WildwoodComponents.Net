@@ -28,7 +28,7 @@ namespace WildwoodComponents.Blazor.Services
         }
 
         /// <summary>
-        /// Points the service at the API. Every request path here is rooted ("api/twofactor/..."), so the
+        /// Points the service at the API. Every request path here is rooted at api/twofactor, so the
         /// API ROOT is wanted; a base that already ends in /api — what hosts commonly hold as their
         /// "ApiSettings:BaseUrl" — is accepted and trimmed, because otherwise every call went to
         /// /api/api/... and 404'd, and the panel only ever said "Failed to get 2FA status".

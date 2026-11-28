@@ -68,6 +68,20 @@ namespace WildwoodComponents.WebForms.Controls
             get { return ResolvePath(RegisterUrl); }
         }
 
+        /// <summary>
+        /// The page hosting the two-factor settings control, linked from the view shown when the app
+        /// requires two-factor and the user has none. Accepts an application-relative (~/) path.
+        /// Mirrors the Razor component's twoFactorSetupUrl. Unset: the view explains the
+        /// requirement and offers only Continue.
+        /// </summary>
+        public string? TwoFactorSetupUrl { get; set; }
+
+        /// <summary>The two-factor setup URL as the browser should use it, or empty when unset.</summary>
+        protected string ResolvedTwoFactorSetupUrl
+        {
+            get { return ResolvePath(TwoFactorSetupUrl); }
+        }
+
         /// <summary>Whether the in-control registration view is rendered: registration is allowed and
         /// the host has not taken sign-up over with <see cref="RegisterUrl"/>.</summary>
         protected bool RenderRegisterView

@@ -154,6 +154,27 @@
     max-height: 120px;
 }
 
+/* The textarea is one row tall: a long placeholder that wraps on a narrow screen shows only its
+   first line. Keep it on one line and end it with an ellipsis instead (Blazor AIChatComponent). */
+.ww-chat-input::placeholder {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Where the browser can size a textarea to its placeholder, show the whole placeholder instead:
+   it wraps and the empty input grows to fit it (max-height still caps it). */
+@supports (field-sizing: content) {
+    .ww-chat-input {
+        field-sizing: content;
+        min-width: 0;
+    }
+
+    .ww-chat-input::placeholder {
+        white-space: normal;
+    }
+}
+
 .ww-file-preview {
     padding: 0.5rem;
     background: var(--ww-bg-tertiary, #f8f9fa);

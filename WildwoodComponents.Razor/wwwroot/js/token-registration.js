@@ -127,6 +127,9 @@
         // (defaults to true; public signups hide it).
         this.showOptionalTokenEntry = root.dataset.showOptionalToken !== 'false';
         this.defaultPricingId = root.dataset.defaultPricingId || '';
+        // "Pay later": cancelling the payment step registers the user without paying. Off, a plan
+        // that must be paid first sends Cancel back to the account step instead (Blazor parity).
+        this.allowSkipPayment = root.dataset.allowSkipPayment !== 'false';
 
         // State
         this.currentStep = 1;
@@ -318,7 +321,7 @@
             this.els.backToAccountBtn.addEventListener('click', function () { self._backToAccount(); });
         }
         if (this.els.skipPaymentBtn) {
-            this.els.skipPaymentBtn.addEventListener('click', function () { self._skipPayment(); });
+            this.els.skipPaymentBtn.addEventListener('click', function () { self._cancelPayment(); });
         }
 
         // Continue to login
@@ -329,7 +332,7 @@
         // Listen for payment events from embedded PaymentViewComponent
         this.root.addEventListener('ww-payment-success', function (e) { self._handlePaymentSuccess(e.detail); });
         this.root.addEventListener('ww-payment-failure', function (e) { self._handlePaymentFailure(e.detail); });
-        this.root.addEventListener('ww-payment-cancel', function () { self._skipPayment(); });
+        this.root.addEventListener('ww-payment-cancel', function () { self._cancelPayment(); });
     };
 
     RegistrationInstance.prototype._initializeStep = function () {
@@ -478,7 +481,8 @@
                             priceAmount: data.priceAmount || 0,
                             currency: data.priceCurrency || 'USD',
                             isSubscription: data.isSubscription,
-                            billingFrequency: data.billingFrequency || (data.isSubscription ? 'Monthly' : 'One-time')
+                            billingFrequency: data.billingFrequency || (data.isSubscription ? 'Monthly' : 'One-time'),
+                            trialDays: data.trialDays || 0
                         };
                     }
 
@@ -534,7 +538,8 @@
                             priceAmount: data.priceAmount || 0,
                             currency: data.priceCurrency || 'USD',
                             isSubscription: data.isSubscription,
-                            billingFrequency: data.billingFrequency || (data.isSubscription ? 'Monthly' : 'One-time')
+                            billingFrequency: data.billingFrequency || (data.isSubscription ? 'Monthly' : 'One-time'),
+                            trialDays: data.trialDays || 0
                         };
                     }
 
@@ -1028,6 +1033,7 @@
                 'data-customer-email="' + this._esc(email) + '" ' +
                 'data-pricing-model-id="' + this._esc(pricingModelId || '') + '" ' +
                 'data-is-subscription="' + (isSub ? 'true' : 'false') + '" ' +
+                'data-trial-days="' + (this.pricingDetails && this.pricingDetails.trialDays ? parseInt(this.pricingDetails.trialDays, 10) || 0 : 0) + '" ' +
                 'data-proxy-base="' + this._esc(proxyBase) + '" ' +
                 'data-show-amount="false">' +
                 '</div>';
@@ -1044,10 +1050,10 @@
         this.pendingPaymentIntentId = detail ? detail.paymentIntentId : null;
 
         if (this.registrationPending) {
+            // The registration request carries the payment reference, and the server links it to the
+            // new user inside the registration transaction. (The old follow-up api/payment/link-transaction
+            // call needed a session the new user did not have yet, so it always failed with 401.)
             this._completeRegistration().then(function () {
-                if (self.registrationSuccessful) {
-                    self._linkPaymentTransaction();
-                }
                 self.paymentComplete = true;
                 self.registrationSuccessful = true;
                 self._showSuccessStep();
@@ -1090,20 +1096,21 @@
         }
     };
 
-    RegistrationInstance.prototype._linkPaymentTransaction = function () {
-        var txnId = this.pendingPaymentIntentId || this.pendingPaymentTransactionId;
-        var userId = this.registrationResponse ? this.registrationResponse.userId : null;
-        if (!txnId || !userId) return;
-
-        var clientId = this.tokenInfo ? this.tokenInfo.companyClientId : null;
-        this._apiPost('api/payment/link-transaction', {
-            externalTransactionId: txnId,
-            userId: userId,
-            companyClientId: clientId
-        }).catch(function () { /* log but don't fail */ });
-
+    /**
+     * The payment form's Cancel and the no-payment-config fallback button. With allowSkipPayment the
+     * registrant may register now and pay later; without it - a signup whose plan must be paid for -
+     * Cancel returns to the account step and nobody is registered, since an unpaid account on a paid
+     * plan is exactly what the plan gate exists to prevent. Port of Blazor CancelPaymentAsync.
+     */
+    RegistrationInstance.prototype._cancelPayment = function () {
+        if (this.allowSkipPayment) {
+            this._skipPayment();
+            return;
+        }
+        this.registrationPending = false;
         this.pendingPaymentTransactionId = null;
         this.pendingPaymentIntentId = null;
+        this._backToAccount();
     };
 
     RegistrationInstance.prototype._backToAccount = function () {
@@ -1127,6 +1134,9 @@
             deviceInfo: 'Browser',
             username: form.querySelector('[name="username"]').value.trim(),
             disclaimerAcceptances: this.disclaimerAcceptances,
+            // The pay-first plan payment this account is for, so the server links it at creation.
+            paymentTransactionId: this.pendingPaymentTransactionId || null,
+            paymentIntentId: this.pendingPaymentIntentId || null,
             // Campaign Attribution payload, when the page loads attribution.js.
             attribution: window.wildwoodAttribution ? window.wildwoodAttribution.getForRegistration() : null
         };
@@ -1144,6 +1154,9 @@
             .then(function (result) {
                 if (result && result.success) {
                     if (window.wildwoodAttribution) window.wildwoodAttribution.clear();
+                    // Sent with this request and linked by the server; never reuse it for another.
+                    self.pendingPaymentTransactionId = null;
+                    self.pendingPaymentIntentId = null;
                     self.registrationResponse = result;
                     self.registrationPending = false;
                     self.registrationSuccessful = true;

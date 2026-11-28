@@ -16,11 +16,34 @@ public class WildwoodTwoFactorSettingsService : IWildwoodTwoFactorSettingsServic
         PropertyNameCaseInsensitive = true
     };
 
-    public WildwoodTwoFactorSettingsService(HttpClient httpClient, IWildwoodSessionManager sessionManager, ILogger<WildwoodTwoFactorSettingsService> logger)
+    private readonly string? _appId;
+
+    public WildwoodTwoFactorSettingsService(
+        HttpClient httpClient,
+        IWildwoodSessionManager sessionManager,
+        ILogger<WildwoodTwoFactorSettingsService> logger,
+        string? appId = null)
     {
         _httpClient = httpClient;
         _sessionManager = sessionManager;
         _logger = logger;
+        _appId = appId;
+    }
+
+    public async Task<TwoFactorConfiguration?> GetConfigurationAsync()
+    {
+        if (string.IsNullOrEmpty(_appId)) return null;
+        try
+        {
+            using var response = await _httpClient.GetAsync($"twofactor/configuration/{Uri.EscapeDataString(_appId)}");
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<TwoFactorConfiguration>(content, JsonOptions);
+            }
+        }
+        catch (Exception ex) { _logger.LogError(ex, "Failed to get the app's 2FA configuration"); }
+        return null;
     }
 
     public async Task<TwoFactorUserStatus?> GetStatusAsync()

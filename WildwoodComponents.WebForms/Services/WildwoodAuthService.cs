@@ -79,6 +79,7 @@ namespace WildwoodComponents.WebForms.Services
                             {
                                 SessionManager.SetTokens(wwResponse.JwtToken, wwResponse.RefreshToken);
                                 SessionManager.SetRequiresPasswordReset(wwResponse.RequiresPasswordReset);
+                                SessionManager.SetTwoFactorEnrollmentPending(authResponse.RequiresTwoFactorEnrollment);
                             }
 
                             return AuthResult.Success(authResponse);
@@ -137,6 +138,7 @@ namespace WildwoodComponents.WebForms.Services
                             var authResponse = AuthResponse.FromWildwoodResponse(wwResponse);
                             SessionManager.SetTokens(wwResponse.JwtToken, wwResponse.RefreshToken);
                             SessionManager.SetRequiresPasswordReset(wwResponse.RequiresPasswordReset);
+                            SessionManager.SetTwoFactorEnrollmentPending(authResponse.RequiresTwoFactorEnrollment);
                             // Recorded with the account: a later signup in this session must not reuse
                             // the same touches. A failed registration keeps them.
                             ClearCapturedAttribution();
@@ -224,6 +226,9 @@ namespace WildwoodComponents.WebForms.Services
 
                             var authResponse = AuthResponse.FromWildwoodResponse(wwResponse);
                             SessionManager.SetTokens(wwResponse.JwtToken, wwResponse.RefreshToken);
+                            // Re-derived, not carried forward: the refreshed token's claim says
+                            // whether it is still restricted, and that is how enrollment is lifted.
+                            SessionManager.SetTwoFactorEnrollmentPending(authResponse.RequiresTwoFactorEnrollment);
                             return AuthResult.Success(authResponse);
                         }
                     }
@@ -243,6 +248,32 @@ namespace WildwoodComponents.WebForms.Services
                 SessionManager.ClearTokens();
                 return AuthResult.Failure("An error occurred refreshing the session.");
             }
+        }
+
+        /// <summary>The copy JS's useAuthenticationLogic shows when the restriction is still in place.</summary>
+        public const string EnrollmentStillPendingMessage =
+            "Two-factor authentication is not set up yet. Add a method to continue.";
+
+        /// <inheritdoc />
+        public async Task<AuthResult> CompleteTwoFactorEnrollmentAsync(CancellationToken cancellationToken = default)
+        {
+            if (SessionManager.GetRefreshToken() is not { Length: > 0 })
+            {
+                return AuthResult.Failure("Your sign-in has expired. Please sign in again.");
+            }
+
+            var refreshed = await RefreshTokenAsync(cancellationToken).ConfigureAwait(false);
+            if (!refreshed.Succeeded || refreshed.Response == null)
+            {
+                return AuthResult.Failure("Your sign-in has expired. Please sign in again.");
+            }
+
+            if (refreshed.Response.RequiresTwoFactorEnrollment)
+            {
+                return AuthResult.Failure(EnrollmentStillPendingMessage);
+            }
+
+            return refreshed;
         }
 
         /// <inheritdoc />
@@ -349,6 +380,7 @@ namespace WildwoodComponents.WebForms.Services
                                 wwResponse.AuthResponse.JwtToken,
                                 wwResponse.AuthResponse.RefreshToken);
                             SessionManager.SetRequiresPasswordReset(wwResponse.AuthResponse.RequiresPasswordReset);
+                            SessionManager.SetTwoFactorEnrollmentPending(authResponse.RequiresTwoFactorEnrollment);
                             return AuthResult.Success(authResponse);
                         }
 

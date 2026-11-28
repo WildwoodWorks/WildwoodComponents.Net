@@ -86,6 +86,13 @@ public class SignupFlowDriverTests
 
     #endregion
 
+    /// <summary>Waits (bounded) for something an event handler sets off asynchronously.</summary>
+    private static async Task Eventually(Func<bool> condition)
+    {
+        for (var i = 0; i < 200 && !condition(); i++) await Task.Delay(10);
+        Assert.True(condition(), "the condition never held");
+    }
+
     #region Harness
 
     private sealed class Harness
@@ -321,6 +328,64 @@ public class SignupFlowDriverTests
 
         Assert.True(driver.AlreadySignedIn);
         Assert.Equal(1, harness.SignedInNotifications);
+    }
+
+    /// <summary>
+    /// A cold load: the session restores from storage only after the page renders, so the flow
+    /// must wait for it before deciding the visitor is new (JS #37, useSignupFlow).
+    /// </summary>
+    [Fact]
+    public async Task WaitsForTheSessionToRestore_BeforeDecidingTheVisitorIsNew()
+    {
+        var harness = Ready();
+        harness.Session = new FakeBlazorSessionManager(signedIn: false, initialized: false);
+        var driver = harness.Build();
+
+        await driver.StartAsync();
+
+        Assert.False(driver.AlreadySignedIn);
+        Assert.Equal(0, harness.SignedInNotifications);
+        Assert.Equal(1, harness.Session.SessionInitializedSubscribers);
+
+        harness.Session.Restore(signedIn: true);
+        await Eventually(() => harness.SignedInNotifications == 1);
+
+        Assert.True(driver.AlreadySignedIn);
+        Assert.Equal(1, harness.SignedInNotifications);
+        Assert.Equal(0, harness.Session.SessionInitializedSubscribers);
+    }
+
+    /// <summary>A cold load of a visitor who really is new is latched as new, once.</summary>
+    [Fact]
+    public async Task LatchesANewVisitor_WhenTheRestoredSessionIsEmpty()
+    {
+        var harness = Ready();
+        harness.Session = new FakeBlazorSessionManager(signedIn: false, initialized: false);
+        var driver = harness.Build(settings => settings.PlanSelection = SignupPlanSelection.Skip);
+
+        await driver.StartAsync();
+        harness.Session.Restore(signedIn: false);
+        await Eventually(() => harness.Session.SessionInitializedSubscribers == 0);
+        await driver.SubmitFormAsync(Form());
+
+        Assert.False(driver.AlreadySignedIn);
+        Assert.Equal(0, harness.SignedInNotifications);
+    }
+
+    /// <summary>A view that left before the session restored hears nothing and holds no handler.</summary>
+    [Fact]
+    public async Task StopBeforeTheSessionRestores_Unsubscribes()
+    {
+        var harness = Ready();
+        harness.Session = new FakeBlazorSessionManager(signedIn: false, initialized: false);
+        var driver = harness.Build();
+
+        await driver.StartAsync();
+        driver.Stop();
+
+        Assert.Equal(0, harness.Session.SessionInitializedSubscribers);
+        harness.Session.Restore(signedIn: true);
+        Assert.Equal(0, harness.SignedInNotifications);
     }
 
     /// <summary>

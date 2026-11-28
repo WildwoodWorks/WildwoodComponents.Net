@@ -243,19 +243,29 @@ public static class WildwoodSignupFlows
                     .ConfigureAwait(false);
             }
 
+            var retries = 0;
             for (; ; )
             {
+                // Before anything else: the flow may have finished on its own (the last acceptance
+                // landed, or the step found nothing pending and moved on). Clicking into a step that
+                // has just unmounted is the hang this guards against - see the bounded clicks below.
+                if (isDone is not null && await isDone().ConfigureAwait(false)) return;
+
                 if (await scope.IsVisibleAsync(WildwoodTestSelectors.RetrySelector).ConfigureAwait(false))
                 {
-                    if (rateLimitWaits + clicks >= options.AcceptAttempts)
+                    // The list failed to load - on a deployed API almost always the per-IP auth
+                    // limiter, whose window is a minute. Paced so a dozen retries span that window
+                    // instead of burning out in seconds against the same refusal.
+                    if (retries >= options.RetryLimit)
                     {
                         throw new WildwoodContractException(
                             "The disclaimers never loaded - the component's own retry stayed on screen.");
                     }
 
-                    await scope.ClickAsync(WildwoodTestSelectors.RetrySelector).ConfigureAwait(false);
+                    await scope.TryClickAsync(WildwoodTestSelectors.RetrySelector, options.RetryClickTimeoutMs)
+                        .ConfigureAwait(false);
                     await scope.DelayAsync(options.RetryPauseMs).ConfigureAwait(false);
-                    clicks++;
+                    retries++;
                     continue;
                 }
 
@@ -279,7 +289,13 @@ public static class WildwoodSignupFlows
                 // unticked gate leaves it disabled and a click waits for actionability until the
                 // spec's own timeout.
                 await TickDisclaimerGateAsync(scope, options).ConfigureAwait(false);
-                await scope.ClickAsync(WildwoodTestSelectors.AcceptSelector).ConfigureAwait(false);
+
+                // Bounded: an in-flight accept leaves the button disabled and then REMOVES it when
+                // the flow moves on. A click that could not land is not an error here - the loop
+                // re-reads the panel, and a button that really is stuck disabled still fails
+                // through the click budget above.
+                await scope.TryClickAsync(WildwoodTestSelectors.AcceptSelector, options.AcceptClickTimeoutMs)
+                    .ConfigureAwait(false);
                 await scope.DelayAsync(options.AcceptPauseMs).ConfigureAwait(false);
 
                 if (isDone is not null && await isDone().ConfigureAwait(false)) return;
@@ -429,6 +445,7 @@ public static class WildwoodSignupFlows
         WildwoodTestingOptions options)
     {
         string? settled;
+        var rateLimitWaits = 0;
 
         for (var attempt = 0; ; attempt++)
         {
@@ -451,7 +468,19 @@ public static class WildwoodSignupFlows
             var message = await FirstPresentTextAsync(
                 surface, WildwoodTestSelectors.SignupFailureMessageSelectors).ConfigureAwait(false);
 
-            if (attempt >= options.SignupRetries)
+            // A deployed server's per-IP auth limiter refuses the register/login burst of a busy
+            // suite. That says nothing about the flow, so wait the window out without spending one
+            // of the real retries.
+            var rateLimited = message is not null
+                && message.IndexOf("too many requests", StringComparison.OrdinalIgnoreCase) >= 0
+                && rateLimitWaits < options.RateLimitWaits;
+            if (rateLimited)
+            {
+                rateLimitWaits++;
+                attempt--;
+                await surface.DelayAsync(options.RateLimitPauseMs).ConfigureAwait(false);
+            }
+            else if (attempt >= options.SignupRetries)
             {
                 throw new WildwoodContractException("Signup processing failed: " + message);
             }
@@ -483,7 +512,11 @@ public static class WildwoodSignupFlows
             await AcceptDisclaimersAsync(disclaimers, SuccessShownAsync, options).ConfigureAwait(false);
         }
 
-        await WildwoodSignupSteps.WaitForSignupStepAsync(readStep, SignupStep.Done, options.SuccessTimeoutMs)
+        // Longer than one rate-limit pause: the accept loop can return while a refused accept is
+        // still waiting out the server's auth limiter, and the step only moves on once that retry
+        // lands.
+        await WildwoodSignupSteps.WaitForSignupStepAsync(
+                readStep, SignupStep.Done, options.RateLimitPauseMs + options.SuccessTimeoutMs)
             .ConfigureAwait(false);
 
         if (expectText is not null || expectPattern is not null)
@@ -622,6 +655,16 @@ internal interface IFlowSurface
 
     /// <summary>Clicks the first match.</summary>
     Task ClickAsync(string selector);
+
+    /// <summary>
+    /// Clicks the first match, giving it at most <paramref name="timeoutMs"/> to become clickable.
+    /// False if the click could not land in that time - JS's <c>click({ timeout }).catch(() =&gt; undefined)</c>.
+    /// </summary>
+    /// <remarks>
+    /// For the accept loop's clicks only, where a control that vanished mid-click is an expected
+    /// race the loop recovers from by re-reading the panel, not a failure to surface.
+    /// </remarks>
+    Task<bool> TryClickAsync(string selector, int timeoutMs);
 
     /// <summary>How many elements match, over the whole scope rather than the first one.</summary>
     Task<int> CountAsync(string selector);

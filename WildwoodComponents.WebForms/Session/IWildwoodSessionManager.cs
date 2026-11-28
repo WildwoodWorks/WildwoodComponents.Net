@@ -62,5 +62,16 @@ namespace WildwoodComponents.WebForms.Session
 
         /// <summary>Records (true) or clears (false) the pending forced-reset flag.</summary>
         void SetRequiresPasswordReset(bool value);
+
+        /// <summary>
+        /// The held token is restricted to two-factor enrollment (the app requires 2FA and the
+        /// user has none). Recorded from every response that stores tokens, refresh included —
+        /// unlike the forced-reset flag it is re-derived on refresh, because the refreshed token's
+        /// claim is how the restriction is lifted.
+        /// </summary>
+        bool IsTwoFactorEnrollmentPending { get; }
+
+        /// <summary>Records (true) or clears (false) the enrollment-pending flag.</summary>
+        void SetTwoFactorEnrollmentPending(bool value);
     }
 }

@@ -35,6 +35,7 @@ public class TokenRegistrationViewComponent : ViewComponent
     /// <param name="redirectUrl">URL to redirect to after successful auto-login</param>
     /// <param name="proxyBaseUrl">Base URL for registration proxy endpoints</param>
     /// <param name="paymentProxyBaseUrl">Base URL for payment proxy endpoints</param>
+    /// <param name="allowSkipPayment">Whether cancelling the payment step registers the user to pay later (default true); false returns to the account step instead</param>
     public async Task<IViewComponentResult> InvokeAsync(
         string? appId = null,
         string? token = null,
@@ -45,7 +46,8 @@ public class TokenRegistrationViewComponent : ViewComponent
         bool autoLogin = true,
         string? redirectUrl = null,
         string proxyBaseUrl = "/api/wildwood-registration",
-        string? paymentProxyBaseUrl = null)
+        string? paymentProxyBaseUrl = null,
+        bool allowSkipPayment = true)
     {
         var model = new TokenRegistrationViewModel
         {
@@ -58,7 +60,8 @@ public class TokenRegistrationViewComponent : ViewComponent
             AutoLogin = autoLogin,
             RedirectUrl = redirectUrl,
             ProxyBaseUrl = proxyBaseUrl.TrimEnd('/'),
-            PaymentProxyBaseUrl = paymentProxyBaseUrl
+            PaymentProxyBaseUrl = paymentProxyBaseUrl,
+            AllowSkipPayment = allowSkipPayment
         };
 
         // If a default pricing model is set for open registration, pre-load pricing info
@@ -76,7 +79,8 @@ public class TokenRegistrationViewComponent : ViewComponent
                         PriceAmount = pricing.Price,
                         Currency = pricing.Currency ?? "USD",
                         IsSubscription = !string.Equals(pricing.BillingFrequency, "OneTime", StringComparison.OrdinalIgnoreCase),
-                        BillingFrequency = pricing.BillingFrequency
+                        BillingFrequency = pricing.BillingFrequency,
+                        TrialDays = pricing.TrialDays
                     };
                 }
             }

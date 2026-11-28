@@ -132,6 +132,13 @@ namespace WildwoodComponents.WebForms.Models
         /// <summary>True when the user must change their password before continuing.</summary>
         public bool RequiresPasswordReset { get; set; }
 
+        /// <summary>
+        /// True when the app requires two-factor and this user has none: the token is restricted
+        /// to enrollment. The response flag OR the token's <c>tfa_enroll_pending</c> claim. Like
+        /// <see cref="RequiresPasswordReset"/>, the tokens are held but no auth cookie is issued.
+        /// </summary>
+        public bool RequiresTwoFactorEnrollment { get; set; }
+
         /// <summary>True when the user must accept a new disclaimer version.</summary>
         public bool RequiresDisclaimerAcceptance { get; set; }
 
@@ -160,6 +167,8 @@ namespace WildwoodComponents.WebForms.Models
                 DisplayName = string.IsNullOrWhiteSpace(displayName) ? ww.Email : displayName,
                 RequiresTwoFactor = ww.RequiresTwoFactor,
                 RequiresPasswordReset = ww.RequiresPasswordReset,
+                RequiresTwoFactorEnrollment = WildwoodComponents.Shared.Utilities.TwoFactorEnrollmentState.IsPending(
+                    ww.RequiresTwoFactorEnrollment, ww.JwtToken),
                 RequiresDisclaimerAcceptance = ww.RequiresDisclaimerAcceptance,
                 TwoFactorSessionId = ww.TwoFactorSessionId,
                 AvailableTwoFactorMethods = ww.AvailableTwoFactorMethods,

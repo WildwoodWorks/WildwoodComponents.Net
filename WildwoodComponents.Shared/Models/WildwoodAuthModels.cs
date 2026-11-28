@@ -105,6 +105,14 @@ public class WildwoodAuthenticateResponse
     public string RefreshToken { get; set; } = string.Empty;
     public bool RequiresTwoFactor { get; set; }
     public bool RequiresPasswordReset { get; set; }
+
+    /// <summary>
+    /// The app requires two-factor and this user has not enrolled: the token is restricted to
+    /// enrollment (the API refuses everything else with 403 TWO_FACTOR_ENROLLMENT_REQUIRED). The
+    /// refresh-token response omits it; read the token's claim too, via
+    /// <see cref="Utilities.TwoFactorEnrollmentState.IsPending"/>.
+    /// </summary>
+    public bool RequiresTwoFactorEnrollment { get; set; }
     public bool RequiresDisclaimerAcceptance { get; set; }
     public string? TwoFactorSessionId { get; set; }
     public List<TwoFactorMethodInfo>? AvailableTwoFactorMethods { get; set; }
