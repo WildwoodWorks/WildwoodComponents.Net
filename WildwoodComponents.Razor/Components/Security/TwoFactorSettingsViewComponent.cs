@@ -32,6 +32,7 @@ public class TwoFactorSettingsViewComponent : ViewComponent
         var status = await _twoFactorService.GetStatusAsync();
         var credentials = await _twoFactorService.GetCredentialsAsync();
         var trustedDevices = await _twoFactorService.GetTrustedDevicesAsync();
+        var configuration = await _twoFactorService.GetConfigurationAsync();
         RecoveryCodeInfo? recoveryInfo = null;
         try
         {
@@ -48,7 +49,8 @@ public class TwoFactorSettingsViewComponent : ViewComponent
             Status = status,
             Credentials = credentials,
             TrustedDevices = trustedDevices,
-            RecoveryCodeInfo = recoveryInfo
+            RecoveryCodeInfo = recoveryInfo,
+            AppDoesNotEnforce = configuration is { IsEnabled: false }
         };
         return View(model);
     }

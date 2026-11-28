@@ -222,7 +222,7 @@ public static class ServiceCollectionExtensions
             var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("WildwoodAPI");
             var sessionManager = sp.GetRequiredService<IWildwoodSessionManager>();
             var logger = sp.GetRequiredService<ILogger<WildwoodTwoFactorSettingsService>>();
-            return new WildwoodTwoFactorSettingsService(httpClient, sessionManager, logger);
+            return new WildwoodTwoFactorSettingsService(httpClient, sessionManager, logger, options.AppId);
         });
 
         // Disclaimer service

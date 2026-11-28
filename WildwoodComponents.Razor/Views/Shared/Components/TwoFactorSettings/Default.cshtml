@@ -40,17 +40,33 @@
         </div>
     </div>
 
+    @if (Model.AppDoesNotEnforce)
+    {
+        @* The app's sign-in only asks for a second factor when a 2FA provider is enabled for it.
+           Offering enrollment anyway showed "Enabled" for protection that did not exist. *@
+        <div class="alert alert-warning" data-ww-2fa-notice="app-not-enforcing">
+            Two-factor authentication is not enabled for this application, so signing in will not ask for a code.
+            @if (isEnabled)
+            {
+                <span>Your existing methods are listed below and can be removed.</span>
+            }
+        </div>
+    }
+
     @* ===== AUTHENTICATOR APP SECTION ===== *@
     <div class="ww-2fa-section card mb-3">
         <div class="card-header d-flex align-items-center justify-content-between">
             <h5 class="mb-0">
                 <i class="bi bi-phone me-2"></i>Authenticator App
             </h5>
-            <button type="button"
-                    class="btn btn-sm btn-outline-primary ww-2fa-add-authenticator-btn"
-                    data-action="begin-authenticator">
-                <i class="bi bi-plus-lg me-1"></i>Add Authenticator
-            </button>
+            @if (!Model.AppDoesNotEnforce)
+            {
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary ww-2fa-add-authenticator-btn"
+                        data-action="begin-authenticator">
+                    <i class="bi bi-plus-lg me-1"></i>Add Authenticator
+                </button>
+            }
         </div>
         <div class="card-body">
             <p class="text-muted mb-3">Use an authenticator app like Google Authenticator or Authy to generate verification codes.</p>
@@ -122,11 +138,14 @@
             <h5 class="mb-0">
                 <i class="bi bi-envelope me-2"></i>Email Verification
             </h5>
-            <button type="button"
-                    class="btn btn-sm btn-outline-primary ww-2fa-add-email-btn"
-                    data-action="begin-email">
-                <i class="bi bi-plus-lg me-1"></i>Add Email
-            </button>
+            @if (!Model.AppDoesNotEnforce)
+            {
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary ww-2fa-add-email-btn"
+                        data-action="begin-email">
+                    <i class="bi bi-plus-lg me-1"></i>Add Email
+                </button>
+            }
         </div>
         <div class="card-body">
             <p class="text-muted mb-3">Receive a verification code via email when signing in.</p>
