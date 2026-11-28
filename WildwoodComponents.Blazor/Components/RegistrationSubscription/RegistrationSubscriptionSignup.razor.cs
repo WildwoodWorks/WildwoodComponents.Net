@@ -362,6 +362,7 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
                 Logger)
             {
                 StateChanged = StateHasChanged,
+                RunOnRenderer = work => InvokeAsync(work),
                 ErrorReported = ReportAsync,
                 AlreadySignedInDetected = RaiseAlreadySignedInAsync,
                 EntitlementsChanged = RaiseEntitlementsChangedAsync,

@@ -10,17 +10,34 @@ namespace WildwoodComponents.Tests.TestHelpers;
 /// </summary>
 public class FakeBlazorSessionManager : IWildwoodSessionManager
 {
-    public FakeBlazorSessionManager(bool signedIn = false)
+    public FakeBlazorSessionManager(bool signedIn = false, bool initialized = true)
     {
         IsAuthenticated = signedIn;
+        IsInitialized = initialized;
     }
+
+    /// <summary>
+    /// What a host's <c>InitializeAsync</c> does on a cold load: the stored session (or none)
+    /// becomes known, and <see cref="SessionInitialized"/> fires.
+    /// </summary>
+    public void Restore(bool signedIn)
+    {
+        IsAuthenticated = signedIn;
+        IsInitialized = true;
+        _sessionInitialized?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>How many handlers are attached to <see cref="SessionInitialized"/> right now.</summary>
+    public int SessionInitializedSubscribers => _sessionInitialized?.GetInvocationList().Length ?? 0;
+
+    private EventHandler? _sessionInitialized;
 
     /// <summary>How many times a signup stored a session here.</summary>
     public int LoginCalls { get; private set; }
 
     public bool IsAuthenticated { get; private set; }
 
-    public bool IsInitialized => true;
+    public bool IsInitialized { get; private set; }
 
     public string? AccessToken => CurrentUser?.JwtToken;
 
@@ -34,11 +51,16 @@ public class FakeBlazorSessionManager : IWildwoodSessionManager
 
     public event EventHandler<AuthenticationResponse>? TokenRefreshed;
 
-    public event EventHandler? SessionInitialized;
+    public event EventHandler? SessionInitialized
+    {
+        add => _sessionInitialized += value;
+        remove => _sessionInitialized -= value;
+    }
 
     public Task InitializeAsync()
     {
-        SessionInitialized?.Invoke(this, EventArgs.Empty);
+        IsInitialized = true;
+        _sessionInitialized?.Invoke(this, EventArgs.Empty);
         return Task.CompletedTask;
     }
 

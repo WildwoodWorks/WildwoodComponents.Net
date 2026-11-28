@@ -224,6 +224,8 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
             if (_detached) return;
             _detached = true;
 
+            UnsubscribeSessionReady();
+            RunOnRenderer = null;
             StateChanged = null;
             ErrorReported = null;
             AlreadySignedInDetected = null;
@@ -412,11 +414,76 @@ namespace WildwoodComponents.Blazor.Components.RegistrationSubscription
             if (_started || _detached) return;
             _started = true;
 
-            // Latched on the first pass only: a login later in this very flow must not look like
-            // "you were already signed in".
+            // The session restores itself from browser storage, which a host can only do once the
+            // page has rendered. Until it has, IsAuthenticated reads false for a visitor who IS
+            // signed in, so latching it now showed a cold-loaded signed-in visitor the form for a
+            // second account. Latch once the session is ready; the catalog loads meanwhile, exactly
+            // as @wildwood/react-shared useSignupFlow does.
+            if (_sessionManager.IsInitialized)
+            {
+                await LatchSignedInAsync();
+            }
+            else
+            {
+                _sessionReadyHandler = OnSessionInitialized;
+                _sessionManager.SessionInitialized += _sessionReadyHandler;
+
+                // It may have finished between the check and the subscription.
+                if (_sessionManager.IsInitialized) await LatchSignedInAsync();
+            }
+
+            await LoadAsync(false);
+        }
+
+        /// <summary>
+        /// Marshals work onto the renderer. The view sets this to its own <c>InvokeAsync</c>,
+        /// because <see cref="IWildwoodSessionManager.SessionInitialized"/> is raised from wherever
+        /// the host initialized the session, and a re-render must happen on the renderer.
+        /// </summary>
+        public Func<Func<Task>, Task>? RunOnRenderer { get; set; }
+
+        private EventHandler? _sessionReadyHandler;
+        private bool _signedInLatched;
+
+        /// <summary>
+        /// Latched on the first call only: a login later in this very flow must not look like "you
+        /// were already signed in".
+        /// </summary>
+        private async Task LatchSignedInAsync()
+        {
+            UnsubscribeSessionReady();
+            if (_signedInLatched || _detached) return;
+            _signedInLatched = true;
+
             await DispatchAsync(new SignupEvent.Init(_sessionManager.IsAuthenticated));
             await NotifyAlreadySignedInAsync();
-            await LoadAsync(false);
+        }
+
+        private void OnSessionInitialized(object? sender, EventArgs e)
+        {
+            var run = RunOnRenderer;
+            var latch = run is null ? LatchSignedInAsync() : run(LatchSignedInAsync);
+            _ = ObserveAsync(latch);
+        }
+
+        /// <summary>An event handler cannot await; log what the latch threw rather than lose it.</summary>
+        private async Task ObserveAsync(Task task)
+        {
+            try
+            {
+                await task.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Latching the signed-in state after the session initialized failed");
+            }
+        }
+
+        private void UnsubscribeSessionReady()
+        {
+            if (_sessionReadyHandler is null) return;
+            _sessionManager.SessionInitialized -= _sessionReadyHandler;
+            _sessionReadyHandler = null;
         }
 
         public Task SetBillingAsync(PricingBilling billing)
