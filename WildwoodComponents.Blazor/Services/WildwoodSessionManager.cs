@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using WildwoodComponents.Blazor.Extensions;
 using WildwoodComponents.Blazor.Models;
+using WildwoodComponents.Shared.Http;
 using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Blazor.Services;
@@ -99,6 +100,35 @@ public interface IWildwoodSessionManager : IDisposable
     /// Fired when initialization from storage is complete.
     /// </summary>
     event EventHandler? SessionInitialized;
+
+    // Two-factor enrollment (JS SessionManager parity). Default bodies so a host's own
+    // implementation of this interface keeps compiling; WildwoodSessionManager implements them.
+
+    /// <summary>
+    /// The app requires two-factor authentication and this user has not enrolled: the current token
+    /// is restricted to enrollment. Read from the auth response flag OR the token's
+    /// <c>tfa_enroll_pending</c> claim, so a restored or refreshed session is judged correctly too.
+    /// </summary>
+    bool IsTwoFactorEnrollmentPending => false;
+
+    /// <summary>
+    /// Call after the user finishes enrolling. Refreshes the session now, ignoring the recent-refresh
+    /// window and the auto-refresh setting, so the restricted token is replaced by an unrestricted one.
+    /// True when the session is no longer restricted (also when it never was); false when the refresh
+    /// failed or the API still reports enrollment pending. JS <c>completeTwoFactorEnrollment()</c>.
+    /// </summary>
+    Task<bool> CompleteTwoFactorEnrollmentAsync() => Task.FromResult(!IsTwoFactorEnrollmentPending);
+
+    /// <summary>
+    /// The session became restricted to enrollment — from an auth response or restored session
+    /// (source <c>authResponse</c>), or from the API refusing a call with 403
+    /// TWO_FACTOR_ENROLLMENT_REQUIRED for THIS user (source <c>apiRefusal</c>).
+    /// Route the user to enrollment, then call <see cref="CompleteTwoFactorEnrollmentAsync"/>.
+    /// </summary>
+    event EventHandler<TwoFactorEnrollmentPendingEventArgs>? TwoFactorEnrollmentRequired { add { } remove { } }
+
+    /// <summary>The restriction was lifted: a refreshed token no longer carries it.</summary>
+    event EventHandler? TwoFactorEnrollmentCompleted { add { } remove { } }
 }
 
 /// <summary>
@@ -138,19 +168,36 @@ public class WildwoodSessionManager : IWildwoodSessionManager
     public event EventHandler? SessionExpired;
     public event EventHandler<AuthenticationResponse>? TokenRefreshed;
     public event EventHandler? SessionInitialized;
+    public event EventHandler<TwoFactorEnrollmentPendingEventArgs>? TwoFactorEnrollmentRequired;
+    public event EventHandler? TwoFactorEnrollmentCompleted;
+
+    private readonly IWildwoodApiEvents? _apiEvents;
+    private bool _enrollmentPending;
+
+    public bool IsTwoFactorEnrollmentPending => _enrollmentPending;
 
     public WildwoodSessionManager(
         IAuthenticationService authService,
         IAIService? aiService,
         ILocalStorageService localStorage,
         ILogger<WildwoodSessionManager> logger,
-        WildwoodComponentsOptions options)
+        WildwoodComponentsOptions options,
+        IWildwoodApiEvents? apiEvents = null)
     {
         _authService = authService;
         _aiService = aiService;
         _localStorage = localStorage;
         _logger = logger;
         _options = options;
+
+        // A restricted token the API refused (403 TWO_FACTOR_ENROLLMENT_REQUIRED). The event source
+        // is application-wide (Blazor Server shares it between users), so only THIS user's refusal
+        // counts.
+        _apiEvents = apiEvents;
+        if (_apiEvents != null)
+        {
+            _apiEvents.TwoFactorEnrollmentRequired += OnApiEnrollmentRefusal;
+        }
 
         // Subscribe to AI service auth failures for reactive token refresh (if AI service available)
         if (_aiService != null)
@@ -195,6 +242,7 @@ public class WildwoodSessionManager : IWildwoodSessionManager
             {
                 _currentUser = storedAuth;
                 _logger.LogInformation("Restored session for user: {Email}", storedAuth.Email);
+                UpdateEnrollmentState(storedAuth);
 
                 // If no expiry was stored, set one now
                 if (_sessionExpiry == null)
@@ -259,6 +307,7 @@ public class WildwoodSessionManager : IWildwoodSessionManager
 
             _logger.LogInformation("User logged in: {Email} (session expires: {Expiry})",
                 authResponse.Email, _sessionExpiry);
+            UpdateEnrollmentState(authResponse);
 
             // Schedule proactive token refresh based on JWT expiration
             if (_options.EnableAutoTokenRefresh)
@@ -527,6 +576,7 @@ public class WildwoodSessionManager : IWildwoodSessionManager
     {
         _currentUser = null;
         _sessionExpiry = null;
+        _enrollmentPending = false;
         try
         {
             await _localStorage.RemoveItemAsync(SessionConstants.AuthData);
@@ -611,6 +661,7 @@ public class WildwoodSessionManager : IWildwoodSessionManager
 
         // Notify consumers
         TokenRefreshed?.Invoke(this, authResponse);
+        UpdateEnrollmentState(authResponse);
     }
 
     private void OnAuthLogout()
@@ -619,6 +670,67 @@ public class WildwoodSessionManager : IWildwoodSessionManager
         StopRefreshTimer();
         _currentUser = null;
         _sessionExpiry = null;
+        _enrollmentPending = false;
+    }
+
+    private void OnApiEnrollmentRefusal(object? sender, TwoFactorEnrollmentRequiredEventArgs e)
+    {
+        if (_currentUser == null) return;
+        // The handler labels the refusal with the bearer token's unvalidated "sub"; on a shared
+        // event source a refusal for someone else must not restrict this session. A refusal with
+        // no user (a request that carried no bearer) cannot be attributed to anyone, so it is
+        // ignored too - a restricted user's own calls always carry their token.
+        if (e.UserId == null || !string.Equals(e.UserId, _currentUser.UserId, StringComparison.OrdinalIgnoreCase)) return;
+        SetEnrollmentPending(true, TwoFactorEnrollmentState.SourceApiRefusal);
+    }
+
+    /// <summary>The response flag or the token claim: either one means restricted.</summary>
+    private void UpdateEnrollmentState(AuthenticationResponse authResponse)
+    {
+        SetEnrollmentPending(
+            TwoFactorEnrollmentState.IsPending(authResponse.RequiresTwoFactorEnrollment, authResponse.JwtToken),
+            TwoFactorEnrollmentState.SourceAuthResponse);
+    }
+
+    private void SetEnrollmentPending(bool pending, string source)
+    {
+        if (pending == _enrollmentPending) return;
+        _enrollmentPending = pending;
+        if (pending)
+            TwoFactorEnrollmentRequired?.Invoke(this, new TwoFactorEnrollmentPendingEventArgs(source));
+        else
+            TwoFactorEnrollmentCompleted?.Invoke(this, EventArgs.Empty);
+    }
+
+    public async Task<bool> CompleteTwoFactorEnrollmentAsync()
+    {
+        if (_currentUser == null || string.IsNullOrEmpty(_currentUser.JwtToken)) return false;
+        if (!_enrollmentPending) return true;
+        if (string.IsNullOrEmpty(_currentUser.RefreshToken)) return false;
+
+        // A refresh already in flight may have been sent before enrollment finished: waiting on the
+        // semaphore lets it land; then ask again with a refresh that certainly started afterwards.
+        // Deliberately ignores the recent-refresh window and EnableAutoTokenRefresh — the user very
+        // likely signed in seconds ago.
+        var acquired = await _refreshSemaphore.WaitAsync(TimeSpan.FromSeconds(10));
+        if (!acquired) return false;
+        try
+        {
+            if (!_enrollmentPending) return true;
+            var refreshed = await _authService.RefreshTokenAsync();
+            if (refreshed) _lastRefreshTime = DateTime.UtcNow;
+            // OnAuthChanged ran UpdateEnrollmentState with the new token.
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error refreshing the session after two-factor enrollment");
+        }
+        finally
+        {
+            _refreshSemaphore.Release();
+        }
+
+        return !_enrollmentPending;
     }
 
     #endregion
@@ -640,6 +752,10 @@ public class WildwoodSessionManager : IWildwoodSessionManager
         }
         _authService.OnAuthenticationChanged -= OnAuthChanged;
         _authService.OnLogout -= OnAuthLogout;
+        if (_apiEvents != null)
+        {
+            _apiEvents.TwoFactorEnrollmentRequired -= OnApiEnrollmentRefusal;
+        }
     }
 
     #endregion

@@ -6,6 +6,17 @@
 @{
     var cid = Model.ComponentId;
     bool IsEnterpriseTier(AppTierModel tier) => tier.PricingOptions.Count == 0 && !tier.IsFreeTier;
+
+    // The active subscription's tier, for the switch rule: the server refuses a move the current
+    // plan does not allow, admins included, so the grid offers none (TierChangeRules).
+    AppTierModel? currentTier = null;
+    if (Model.Subscription is { IsActive: true } activeSubscription)
+    {
+        foreach (var t in Model.Tiers)
+        {
+            if (string.Equals(t.Id, activeSubscription.AppTierId, StringComparison.OrdinalIgnoreCase)) { currentTier = t; break; }
+        }
+    }
 }
 
 <div class="ww-tier-plans-panel" id="ww-tier-plans-@cid" data-component-id="@cid">
@@ -135,6 +146,11 @@
                                 else if (isEnterprise && tier.ShowContactButton)
                                 {
                                     <a href="@(tier.ContactButtonUrl ?? "#")" class="btn btn-outline-primary btn-sm">Contact Sales</a>
+                                }
+                                else if (tier.ShowSubscribeButton && !TierChangeRules.IsTierChangeAllowed(currentTier, tier))
+                                {
+                                    @* A marker, not a disabled button: like "Active" it is not an action. *@
+                                    <span class="btn btn-outline-secondary btn-sm disabled ww-tier-unavailable" aria-disabled="true">@TierChangeRules.UnavailableText</span>
                                 }
                                 else if (tier.ShowSubscribeButton)
                                 {

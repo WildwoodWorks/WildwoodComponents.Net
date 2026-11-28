@@ -5,6 +5,7 @@
 @inherits BaseWildwoodComponent
 @inject ITwoFactorSettingsService TwoFactorService
 @inject IJSRuntime JS
+@inject IServiceProvider ServiceProvider
 
 <div class="@GetRootCssClasses()">
     <div class="two-factor-settings-card">
@@ -579,6 +580,30 @@
     [Parameter] public EventCallback<string> OnTwoFactorError { get; set; }
     [Parameter] public EventCallback OnStatusChanged { get; set; }
 
+    /// <summary>
+    /// If the session was restricted until the user enrolled (the app requires two-factor),
+    /// enrolling is what lifts it: refresh now, so the rest of the app works without waiting for a
+    /// timed refresh. Port of react-shared useTwoFactorLogic's liftEnrollmentRestriction. The
+    /// session manager is optional (a host may not register it), and a failure here is not fatal -
+    /// the sign-in flow's own completion step reports it.
+    /// </summary>
+    private async Task LiftEnrollmentRestrictionAsync()
+    {
+        if (ServiceProvider.GetService(typeof(IWildwoodSessionManager)) is not IWildwoodSessionManager session
+            || !session.IsTwoFactorEnrollmentPending)
+        {
+            return;
+        }
+
+        try
+        {
+            await session.CompleteTwoFactorEnrollmentAsync();
+        }
+        catch (Exception)
+        {
+            // Not fatal; see above.
+        }
+    }
     private TwoFactorUserStatus? _status;
     private TwoFactorConfiguration? _appConfiguration;
 
@@ -672,6 +697,7 @@
                 _verificationCode = "";
                 _successMessage = "Authenticator app enabled successfully!";
                 await LoadAllDataAsync();
+                await LiftEnrollmentRestrictionAsync();
                 await OnStatusChanged.InvokeAsync();
             }
             else
@@ -732,6 +758,7 @@
                 _verificationCode = "";
                 _successMessage = "Email verification enabled successfully!";
                 await LoadAllDataAsync();
+                await LiftEnrollmentRestrictionAsync();
                 await OnStatusChanged.InvokeAsync();
             }
             else

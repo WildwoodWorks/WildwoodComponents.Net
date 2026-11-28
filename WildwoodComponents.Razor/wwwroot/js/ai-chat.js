@@ -303,7 +303,9 @@
                         addMessage('assistant', 'Error: ' + (result.errorMessage || 'Unknown error'));
                     } else {
                         addMessage('assistant', result.response, result.createdAt);
-                        if (result.sessionId && !currentSessionId) {
+                        // The server decides which session the message landed in: follow it
+                        // whenever it differs, as Blazor and Swift do (and React/RN now).
+                        if (result.sessionId && result.sessionId !== currentSessionId) {
                             currentSessionId = result.sessionId;
                         }
                     }

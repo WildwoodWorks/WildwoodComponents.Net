@@ -29,6 +29,12 @@ namespace WildwoodComponents.WebForms.Session
         public const string RequiresPasswordResetKey = "WildwoodAPI_RequiresPasswordReset";
 
         /// <summary>
+        /// Session key for the two-factor-enrollment restriction; the same key the Razor package
+        /// uses. Present with "true" only while the held token is restricted; removed otherwise.
+        /// </summary>
+        public const string TwoFactorEnrollmentPendingKey = "WildwoodAPI_TwoFactorEnrollmentPending";
+
+        /// <summary>
         /// Assumed lifetime when a token carries no readable <c>exp</c> claim. Short on
         /// purpose: it only decides when the package proactively refreshes, and the API
         /// remains the authority on whether a token is actually still good.
@@ -126,7 +132,32 @@ namespace WildwoodComponents.WebForms.Session
             _store.Remove(RefreshTokenKey);
             _store.Remove(TokenExpiryKey);
             _store.Remove(RequiresPasswordResetKey);
+            _store.Remove(TwoFactorEnrollmentPendingKey);
             _logger.Debug("Wildwood tokens cleared from session.");
+        }
+
+        /// <inheritdoc />
+        public bool IsTwoFactorEnrollmentPending
+        {
+            get { return string.Equals(_store.Get(TwoFactorEnrollmentPendingKey), "true", StringComparison.Ordinal); }
+        }
+
+        /// <inheritdoc />
+        public void SetTwoFactorEnrollmentPending(bool value)
+        {
+            if (!_store.IsAvailable)
+            {
+                return;
+            }
+
+            if (value)
+            {
+                _store.Set(TwoFactorEnrollmentPendingKey, "true");
+            }
+            else
+            {
+                _store.Remove(TwoFactorEnrollmentPendingKey);
+            }
         }
 
         /// <inheritdoc />

@@ -23,6 +23,13 @@ public class AuthenticationViewModel
 
     /// <summary>Host-owned sign-up page; when set the footer link navigates there and the in-component register view is not rendered.</summary>
     public string? RegisterUrl { get; set; }
+
+    /// <summary>
+    /// Host page that hosts <c>&lt;vc:two-factor-settings&gt;</c>, linked from the "two-factor setup
+    /// required" view (rendered as data-two-factor-setup-url). Unset: the view explains the
+    /// requirement and offers only Continue.
+    /// </summary>
+    public string? TwoFactorSetupUrl { get; set; }
 }
 
 // ──────────────────────────────────────────────
@@ -159,6 +166,14 @@ public class AuthResponse
     public bool RequiresDisclaimerAcceptance { get; set; }
 
     /// <summary>
+    /// The app requires two-factor and this user has none: the session holds a token restricted
+    /// to enrollment. Like <see cref="RequiresPasswordReset"/>, the proxy must store the tokens
+    /// but WITHHOLD the app's sign-in until <c>CompleteTwoFactorEnrollmentAsync</c> lifts it.
+    /// The response flag OR the token's <c>tfa_enroll_pending</c> claim.
+    /// </summary>
+    public bool RequiresTwoFactorEnrollment { get; set; }
+
+    /// <summary>
     /// Session ID for 2FA flow — must be passed to VerifyTwoFactorAsync
     /// </summary>
     public string? TwoFactorSessionId { get; set; }
@@ -195,6 +210,8 @@ public class AuthResponse
             DisplayName = string.IsNullOrWhiteSpace(displayName) ? ww.Email : displayName,
             RequiresTwoFactor = ww.RequiresTwoFactor,
             RequiresPasswordReset = ww.RequiresPasswordReset,
+            RequiresTwoFactorEnrollment = WildwoodComponents.Shared.Utilities.TwoFactorEnrollmentState.IsPending(
+                ww.RequiresTwoFactorEnrollment, ww.JwtToken),
             RequiresDisclaimerAcceptance = ww.RequiresDisclaimerAcceptance,
             TwoFactorSessionId = ww.TwoFactorSessionId,
             AvailableTwoFactorMethods = ww.AvailableTwoFactorMethods,

@@ -13,8 +13,11 @@ public class AppTierModel
     public int DisplayOrder { get; set; }
     public bool IsDefault { get; set; }
     public bool IsFreeTier { get; set; }
-    public bool AllowUpgrades { get; set; }
-    public bool AllowDowngrades { get; set; }
+    // Default true: a payload that omits them means "allowed", as JS (`!== false`) and Swift
+    // (decodeIfPresent ?? true) read it. A false default would make TierChangeRules hide every
+    // switch on a tier whose DTO simply did not carry the flags.
+    public bool AllowUpgrades { get; set; } = true;
+    public bool AllowDowngrades { get; set; } = true;
     public string Status { get; set; } = string.Empty;
     public string BadgeColor { get; set; } = string.Empty;
     public string IconClass { get; set; } = string.Empty;

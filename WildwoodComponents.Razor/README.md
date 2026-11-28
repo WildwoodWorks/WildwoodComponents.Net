@@ -1115,11 +1115,12 @@ your app** (`data-proxy-url`), never to WildwoodAPI directly, so the Bearer toke
 server. The proxy forwards to `IWildwoodAuthService`, registered for you by
 `AddWildwoodComponentsRazor`.
 
-Five routes, all `POST`:
+Six routes, all `POST`:
 
 | Path (relative to the proxy base) | Forwards to | Notes |
 |-----------------------------------|-------------|-------|
-| `/login`                          | `LoginAsync` | May answer `requiresTwoFactor` or `requiresPasswordReset` instead of signing in |
+| `/login`                          | `LoginAsync` | May answer `requiresTwoFactor`, `requiresTwoFactorEnrollment` or `requiresPasswordReset` instead of signing in |
+| `/two-factor-enrollment-complete` | `CompleteTwoFactorEnrollmentAsync` | The user set up two-factor after a restricted sign-in; finish the withheld sign-in — see below |
 | `/register`                       | `RegisterAsync` | |
 | `/forgot-password`                | `ForgotPasswordAsync` | Emails a **temporary password**, not a reset link. Always answer the same way, so the response cannot reveal who has an account |
 | `/two-factor-verify`              | `VerifyTwoFactorAsync` | Can also answer `requiresPasswordReset` — see below |
@@ -1134,9 +1135,49 @@ Five routes, all `POST`:
   "requiresTwoFactor": false,     // => show the 2FA view
   "twoFactorSessionId": null,     // echoed back on /two-factor-verify
   "requiresPasswordReset": false, // => show the forced-reset view
+  "requiresTwoFactorEnrollment": false, // => show the "set up two-factor" view
   "redirectUrl": "/"
 }
 ```
+
+### Two-factor enrollment required
+
+When the app **requires** two-factor and the user has none, WildwoodAPI signs them in with a token
+**restricted to enrollment** — every other call answers 403 `TWO_FACTOR_ENROLLMENT_REQUIRED`.
+`AuthResponse.RequiresTwoFactorEnrollment` reports it (the response flag or the token's
+`tfa_enroll_pending` claim), and `IWildwoodSessionManager.IsTwoFactorEnrollmentPending` records it.
+The rule is the forced reset's: **store the tokens, withhold the sign-in.** Answer
+`requiresTwoFactorEnrollment: true`; the component shows a "set up two-factor" view, linking to
+`two-factor-setup-url` (your page with `<vc:two-factor-settings>`, which works off the session the
+proxy holds) when you pass one. Its Continue posts `/two-factor-enrollment-complete`:
+
+```csharp
+// In /login and /two-factor-verify, before the reset check:
+if (result.Response.RequiresTwoFactorEnrollment)
+    return Ok(new { success = false, requiresTwoFactorEnrollment = true });
+
+// POST {proxy}/two-factor-enrollment-complete
+[HttpPost("two-factor-enrollment-complete")]
+public async Task<IActionResult> CompleteTwoFactorEnrollment([FromBody] EnrollmentCompleteRequest request)
+{
+    // Only a session a restricted sign-in left behind has anything to complete.
+    if (!_session.IsTwoFactorEnrollmentPending)
+        return Ok(new { success = false, message = "There is no two-factor setup to finish. Please sign in again." });
+
+    var result = await _auth.CompleteTwoFactorEnrollmentAsync();   // refreshes; fails while still restricted
+    if (!result.Succeeded)
+        return Ok(new { success = false, requiresTwoFactorEnrollment = true, message = result.ErrorMessage });
+
+    if (result.Response!.RequiresPasswordReset)
+        return Ok(new { success = false, requiresPasswordReset = true });
+
+    // Name the cookie from the server's answer, not from what the browser posted.
+    await SignInFromCurrentSessionAsync(result.Response.Email ?? request.Username);
+    return Ok(new { success = true, redirectUrl = LocalReturnUrl(request.ReturnUrl) });
+}
+```
+
+Before this, a restricted user was handed the app's full sign-in while every API call failed.
 
 Answer a **rejected** sign-in with HTTP 200 and `success: false`, not a 4xx. The script treats any
 non-OK status as a transport failure and replaces your message with a generic one, so a 401 would
@@ -1174,6 +1215,10 @@ public async Task<IActionResult> Login([FromBody] LoginRequest request)
 
     if (result.Response!.RequiresTwoFactor)
         return Ok(new { success = false, requiresTwoFactor = true, twoFactorSessionId = result.Response.TwoFactorSessionId });
+
+    // The app requires two-factor and this user has none: restricted token, no app sign-in yet.
+    if (result.Response.RequiresTwoFactorEnrollment)
+        return Ok(new { success = false, requiresTwoFactorEnrollment = true });
 
     // Authenticated, but on a temporary password: no app sign-in yet.
     if (result.Response.RequiresPasswordReset)

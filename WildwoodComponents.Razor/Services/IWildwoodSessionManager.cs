@@ -58,4 +58,15 @@ public interface IWildwoodSessionManager
 
     /// <summary>Records (true) or clears (false) the pending forced-reset flag.</summary>
     void SetRequiresPasswordReset(bool value) { }
+
+    /// <summary>
+    /// The held token is restricted to two-factor enrollment (the app requires 2FA and the user has
+    /// none). Recorded from every response that stores tokens, refresh included — the refresh
+    /// response carries the claim, so unlike the forced-reset flag it is re-derived, not carried
+    /// forward. Defaults to false so existing implementations keep compiling.
+    /// </summary>
+    bool IsTwoFactorEnrollmentPending => false;
+
+    /// <summary>Records (true) or clears (false) the enrollment-pending flag.</summary>
+    void SetTwoFactorEnrollmentPending(bool value) { }
 }

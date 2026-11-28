@@ -32,7 +32,8 @@
         register: document.getElementById('ww-register-view'),
         forgot: document.getElementById('ww-forgot-view'),
         twoFactor: document.getElementById('ww-2fa-view'),
-        reset: document.getElementById('ww-reset-view')
+        reset: document.getElementById('ww-reset-view'),
+        enroll: document.getElementById('ww-enroll-view')
     };
 
     function showView(name) {
@@ -151,10 +152,19 @@
     // The order matters. requiresTwoFactor is checked first because that sign-in is not finished
     // and no token exists yet; requiresPasswordReset carries a real token and must be dealt with
     // before success, or the user is signed in without ever changing the temporary password.
+    // requiresTwoFactorEnrollment comes before the reset: its token is restricted to enrollment,
+    // so the API would refuse the reset call with it. Once enrollment is lifted, the proxy's
+    // completion answer comes back through here and the reset (if still due) follows.
     function routeAuthResult(result) {
         if (result.requiresTwoFactor) {
             twoFactorSessionId = result.twoFactorSessionId;
             showView('twoFactor');
+            return;
+        }
+
+        if (result.requiresTwoFactorEnrollment) {
+            showView('enroll');
+            if (result.message) showMessage(result.message, 'danger');
             return;
         }
 
@@ -302,6 +312,28 @@
             }
         });
     }
+
+    // ===== Two-factor enrollment required =====
+    // Reached only from routeAuthResult. The proxy holds a token restricted to enrollment; once
+    // the user has set up a method, Continue asks it to refresh that session and finish the
+    // sign-in it withheld. Its answer is routed like a login's, so a still-restricted session
+    // stays here with the reason, and a pending forced reset follows on.
+    bindClick('ww-enroll-continue', async function () {
+        const btn = document.getElementById('ww-enroll-continue');
+        setLoading(btn, true);
+        hideMessage();
+        try {
+            const result = await postJson('/two-factor-enrollment-complete', {
+                username: pendingUsername,
+                returnUrl: returnUrl
+            });
+            routeAuthResult(result);
+        } catch (err) {
+            showMessage(err.message || 'An error occurred. Please try again.', 'danger');
+        } finally {
+            setLoading(btn, false);
+        }
+    });
 
     // ===== Forced password reset =====
     // Reached only from routeAuthResult, never from a navigation link: the user signed in with a

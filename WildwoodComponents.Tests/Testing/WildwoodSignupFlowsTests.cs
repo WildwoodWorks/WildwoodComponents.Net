@@ -289,7 +289,7 @@ public class WildwoodSignupFlowsTests
 
         var failure = await Assert.ThrowsAsync<WildwoodContractException>(
             () => WildwoodSignupFlows.AcceptDisclaimersAsync(
-                surface, null, new WildwoodTestingOptions { AcceptAttempts = 2 }));
+                surface, null, new WildwoodTestingOptions { RetryLimit = 2, RetryPauseMs = 0 }));
 
         Assert.Contains("never loaded", failure.Message, StringComparison.Ordinal);
         Assert.Equal(2, surface.Actions.Count(action => action == "click " + Retry));
@@ -305,7 +305,7 @@ public class WildwoodSignupFlowsTests
 
         await Assert.ThrowsAsync<WildwoodContractException>(
             () => WildwoodSignupFlows.AcceptDisclaimersAsync(
-                surface, null, new WildwoodTestingOptions { AcceptAttempts = 1, RetryPauseMs = 9 }));
+                surface, null, new WildwoodTestingOptions { RetryLimit = 1, RetryPauseMs = 9 }));
 
         Assert.Contains("delay 9", surface.Actions);
     }
@@ -412,9 +412,16 @@ public class WildwoodSignupFlowsTests
         await WildwoodSignupFlows.AcceptDisclaimersAsync(
             surface,
             null,
-            new WildwoodTestingOptions { DisclaimerSettleMs = 33, DisclaimerGateTimeoutMs = 44, AcceptPauseMs = 7 });
+            new WildwoodTestingOptions
+            {
+                DisclaimerSettleMs = 33,
+                DisclaimerGateTimeoutMs = 44,
+                AcceptClickTimeoutMs = 55,
+                AcceptPauseMs = 7
+            });
 
-        Assert.Equal(new[] { 33, 44 }, surface.Timeouts);
+        // Settle, then the gate's tick, then the bounded Accept click - in that order.
+        Assert.Equal(new[] { 33, 44, 55 }, surface.Timeouts);
         Assert.Contains("delay 7", surface.Actions);
     }
 
@@ -647,6 +654,105 @@ public class WildwoodSignupFlowsTests
 
         Assert.Equal("Signup processing failed: Your card was declined.", failure.Message);
         Assert.Equal(1, surface.Actions.Count(action => action == "click " + WildwoodTestSelectors.SignupRetrySelector));
+    }
+
+    /// <summary>
+    /// A rate-limited processing failure is waited out without spending a real retry (JS #37).
+    /// </summary>
+    [Fact]
+    public async Task FinishSignup_waits_out_a_rate_limited_failure_without_spending_a_retry()
+    {
+        var surface = SuccessPanel();
+        var steps = new StepScript("failed", "creating", "success");
+        var hook = WildwoodTestSelectors.SignupFailureMessageSelectors[0];
+        surface.Counts[hook] = 1;
+        surface.Texts[hook] = "Too many requests. Please try again later.";
+
+        var options = Quick();
+        options.SignupRetries = 0;
+        options.RateLimitPauseMs = 7;
+
+        await WildwoodSignupFlows.FinishSignupAsync(surface, steps.ReadAsync, null, null, options);
+
+        Assert.Contains("delay 7", surface.Actions);
+        Assert.Equal(1, surface.Actions.Count(action => action == "click " + WildwoodTestSelectors.SignupRetrySelector));
+    }
+
+    /// <summary>The rate-limit waits are bounded too; past them the failure is reported.</summary>
+    [Fact]
+    public async Task FinishSignup_reports_a_rate_limit_that_outlasts_its_waits()
+    {
+        var surface = new FakeSurface();
+        var steps = new StepScript("failed", "creating", "failed", "creating", "failed");
+        var hook = WildwoodTestSelectors.SignupFailureMessageSelectors[0];
+        surface.Counts[hook] = 1;
+        surface.Texts[hook] = "Too many requests";
+
+        var options = Quick();
+        options.SignupRetries = 0;
+        options.RateLimitWaits = 1;
+        options.RateLimitPauseMs = 0;
+
+        var failure = await Assert.ThrowsAsync<WildwoodContractException>(
+            () => WildwoodSignupFlows.FinishSignupAsync(surface, steps.ReadAsync, null, null, options));
+
+        Assert.Equal("Signup processing failed: Too many requests", failure.Message);
+    }
+
+    /// <summary>
+    /// The loop checks for a finished flow before every pass, so it never clicks into a step that
+    /// has already moved on (JS #37).
+    /// </summary>
+    [Fact]
+    public async Task AcceptDisclaimers_returns_before_clicking_when_the_flow_is_already_done()
+    {
+        var surface = OneAcceptWaiting();
+
+        await WildwoodSignupFlows.AcceptDisclaimersAsync(surface, () => Task.FromResult(true), new WildwoodTestingOptions());
+
+        Assert.DoesNotContain("click " + Accept, surface.Actions);
+    }
+
+    /// <summary>
+    /// The retry budget is its own: more retries than accept clicks are allowed (JS #37's
+    /// RETRY_LIMIT), and each retry click is bounded by its own timeout.
+    /// </summary>
+    [Fact]
+    public async Task AcceptDisclaimers_spends_the_retry_budget_independently_of_the_accept_budget()
+    {
+        var surface = new FakeSurface();
+        surface.VisibleSelectors.Add(Retry);
+        surface.VisibleSelectors.Add(AcceptOrRetry);
+
+        await Assert.ThrowsAsync<WildwoodContractException>(
+            () => WildwoodSignupFlows.AcceptDisclaimersAsync(
+                surface, null,
+                new WildwoodTestingOptions { AcceptAttempts = 1, RetryLimit = 4, RetryPauseMs = 0, RetryClickTimeoutMs = 13 }));
+
+        Assert.Equal(4, surface.Actions.Count(action => action == "click " + Retry));
+        Assert.Contains(13, surface.Timeouts);
+    }
+
+    /// <summary>
+    /// An Accept click that could not land (the button went away mid-click) is not a failure: the
+    /// loop re-reads the panel (JS #35).
+    /// </summary>
+    [Fact]
+    public async Task AcceptDisclaimers_recovers_from_an_accept_click_that_did_not_land()
+    {
+        var surface = OneAcceptWaiting();
+        surface.ClickLands = false;
+        var done = false;
+        surface.OnClick = (s, selector) =>
+        {
+            if (selector == Accept) done = true;
+        };
+
+        await WildwoodSignupFlows.AcceptDisclaimersAsync(
+            surface, () => Task.FromResult(done), new WildwoodTestingOptions { AcceptClickTimeoutMs = 21 });
+
+        Assert.Equal(1, surface.Actions.Count(action => action == "click " + Accept));
+        Assert.Contains(21, surface.Timeouts);
     }
 
     /// <summary>
@@ -909,6 +1015,18 @@ public class WildwoodSignupFlowsTests
             OnClick?.Invoke(this, selector);
             return Task.CompletedTask;
         }
+
+        /// <summary>Logged exactly as <see cref="ClickAsync"/> is, so the click counts read the same.</summary>
+        public Task<bool> TryClickAsync(string selector, int timeoutMs)
+        {
+            Actions.Add("click " + selector);
+            Timeouts.Add(timeoutMs);
+            OnClick?.Invoke(this, selector);
+            return Task.FromResult(ClickLands);
+        }
+
+        /// <summary>What <see cref="TryClickAsync"/> answers - false is a click that timed out.</summary>
+        internal bool ClickLands { get; set; } = true;
 
         public Task<int> CountAsync(string selector)
         {

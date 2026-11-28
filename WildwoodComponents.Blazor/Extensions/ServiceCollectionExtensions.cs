@@ -1021,8 +1021,10 @@ namespace WildwoodComponents.Blazor.Extensions
                 var logger = loggerFactory?.CreateLogger<WildwoodComponents.Blazor.Services.WildwoodSessionManager>()
                     ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<WildwoodComponents.Blazor.Services.WildwoodSessionManager>.Instance;
 
+                var apiEvents = serviceProvider.GetService<WildwoodComponents.Shared.Http.IWildwoodApiEvents>();
+
                 return new WildwoodComponents.Blazor.Services.WildwoodSessionManager(
-                    authService, aiService, localStorage, logger, options);
+                    authService, aiService, localStorage, logger, options, apiEvents);
             });
         }
     }

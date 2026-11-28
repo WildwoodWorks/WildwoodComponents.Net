@@ -47,4 +47,15 @@ public interface IWildwoodAuthService
     /// Get the authentication configuration for the current app (social providers, registration settings, etc.)
     /// </summary>
     Task<AuthConfigResponse?> GetAuthConfigAsync();
+
+    /// <summary>
+    /// Call once the user has enrolled a two-factor method after a sign-in that answered
+    /// <see cref="AuthResponse.RequiresTwoFactorEnrollment"/>. Refreshes the held session so the
+    /// restricted token is replaced; succeeds only when the new one is no longer restricted, and
+    /// then the proxy finishes the app sign-in it withheld. Port of JS
+    /// <c>session.completeTwoFactorEnrollment()</c>. Defaults to a failure so existing
+    /// implementations keep compiling.
+    /// </summary>
+    Task<AuthResult> CompleteTwoFactorEnrollmentAsync()
+        => Task.FromResult(AuthResult.Failure("Two-factor enrollment completion is not supported."));
 }

@@ -138,6 +138,15 @@ The loop is bounded (ten clicks by default). An Accept that never goes away is a
 and is reported as one, rather than spinning until the spec's own timeout where it would read
 as a hang with no cause.
 
+Every click it makes is bounded too (5s for Accept, 10s for the retry): an in-flight accept
+disables the button and the flow then removes it, and an unbounded click would wait on the
+vanished element until the spec's timeout. A click that cannot land is not a failure; the loop
+checks whether the flow finished and re-reads the panel. A list that would not load gets its
+own budget, `RetryLimit` (12 retries, 6s apart), sized to outlast the API's one-minute per-IP
+auth limiter rather than burn out inside it. When the signup's processing step itself fails
+with "too many requests", `FinishSignupAsync` waits out the window (`RateLimitPauseMs`, up to
+`RateLimitWaits` times) without spending one of `SignupRetries`.
+
 ### The response watcher, and where it is silent
 
 The 429 back-off and the "refused by the server, HTTP n" diagnostic come from watching the
@@ -172,8 +181,10 @@ await WildwoodSignupFlows.FinishSignupAsync(page, options);
 
 The ones most often worth changing: `ProcessingTimeoutMs` (120s — registering, signing in,
 linking the payment and activating the plan), `SignupRetries` (2), `AcceptAttempts` (10),
-`RateLimitPauseMs` (20s), `DisclaimerSettleMs` (15s) and `ConsentBannerWaitMs` (5s — spent in
-full on every environment that configures no banner).
+`RetryLimit` (12) and `RetryPauseMs` (6s — lower it where nothing is rate-limited and a stuck
+panel should fail fast), `RateLimitWaits` (4), `RateLimitPauseMs` (30s), `DisclaimerSettleMs`
+(15s) and `ConsentBannerWaitMs` (5s — spent in full on every environment that configures no
+banner).
 
 ## Testing the helpers themselves
 
