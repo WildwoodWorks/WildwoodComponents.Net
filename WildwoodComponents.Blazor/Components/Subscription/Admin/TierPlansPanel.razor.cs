@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Components;
 using WildwoodComponents.Blazor.Components.Base;
 using WildwoodComponents.Blazor.Services;
 using WildwoodComponents.Shared.Models;
+using WildwoodComponents.Shared.Utilities;
 
 namespace WildwoodComponents.Blazor.Components.Subscription.Admin
 {
@@ -100,6 +101,26 @@ namespace WildwoodComponents.Blazor.Components.Subscription.Admin
         {
             _selectedBillingCycle = cycle;
             StateHasChanged();
+        }
+
+        /// <summary>The tier of the active subscription, or null when there is none (a first subscription).</summary>
+        private AppTierModel? CurrentTier()
+        {
+            if (_currentSubscription == null || !_currentSubscription.IsActive) return null;
+            foreach (var tier in _tiers)
+            {
+                if (string.Equals(tier.Id, _currentSubscription.AppTierId, StringComparison.OrdinalIgnoreCase)) return tier;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The server refuses a move the current plan does not allow, admins included, so the grid
+        /// offers none (TierChangeRules, the port of JS isTierChangeAllowed).
+        /// </summary>
+        private bool IsSwitchUnavailable(AppTierModel tier, AppTierModel? currentTier)
+        {
+            return !IsTierCurrentPlan(tier) && !TierChangeRules.IsTierChangeAllowed(currentTier, tier);
         }
 
         private bool IsTierCurrentPlan(AppTierModel tier)

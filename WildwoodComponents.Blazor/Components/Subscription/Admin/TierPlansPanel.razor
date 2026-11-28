@@ -33,10 +33,12 @@ else
         </div>
     }
 
+    var currentTier = CurrentTier();
     <div class="ww-tier-grid">
         @foreach (var tier in _tiers)
         {
             var isCurrent = IsTierCurrentPlan(tier);
+            var unavailable = IsSwitchUnavailable(tier, currentTier);
             var pricing = FindPricingForCycle(tier, _selectedBillingCycle);
             var enterprise = IsEnterpriseTier(tier);
 
@@ -154,6 +156,12 @@ else
                                 @onclick="@(() => SelectTier(tier, null))">
                             Contact Sales
                         </button>
+                    }
+                    else if (unavailable && tier.ShowSubscribeButton)
+                    {
+                        @* A switch the current plan does not allow. A marker, not a disabled button:
+                           like "Current Plan" it is not an action, so nothing offers it as one. *@
+                        <span class="ww-btn ww-btn-outline ww-btn-block ww-tier-unavailable" aria-disabled="true">@TierChangeRules.UnavailableText</span>
                     }
                     else if (tier.ShowSubscribeButton)
                     {
