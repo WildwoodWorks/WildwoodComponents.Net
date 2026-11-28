@@ -1619,3 +1619,42 @@
         display: none;
     }
 }
+
+/* Markdown tables in message content (rendered by ChatMarkdownFormatter as injected markup,
+   so the rules reach in with ::deep). The wrapper scrolls sideways on narrow screens instead
+   of squeezing columns or widening the bubble. */
+.ai-chat-message-content ::deep .ai-chat-table-wrap {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 8px 0;
+}
+
+.ai-chat-message-content ::deep .ai-chat-table {
+    border-collapse: collapse;
+    width: auto;
+    min-width: 50%;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--chat-text-primary);
+}
+
+.ai-chat-message-content ::deep .ai-chat-table th,
+.ai-chat-message-content ::deep .ai-chat-table td {
+    border: 1px solid var(--chat-border);
+    padding: 6px 12px;
+    text-align: left;
+    vertical-align: top;
+    min-width: 5em; /* short labels stay on one line; the wrapper scrolls instead */
+}
+
+.ai-chat-message-content ::deep .ai-chat-table th {
+    background: var(--chat-bg-secondary);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ai-chat-message-content ::deep .ai-chat-table tbody tr:nth-child(even) td {
+    background: var(--chat-bg-tertiary);
+}
